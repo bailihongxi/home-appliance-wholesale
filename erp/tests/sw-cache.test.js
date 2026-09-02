@@ -36,7 +36,8 @@ test('sw.js SHELL 包含所有已有页面和核心模块（无遗漏）', () =>
   });
   // 所有业务页面
   ['page-home.js', 'page-product.js', 'page-sale.js', 'page-inventory.js',
-   'page-mine.js', 'page-admin.js', 'page-setting.js', 'page-report.js', 'page-login.js'].forEach((f) => {
+   'page-mine.js', 'page-admin.js', 'page-setting.js', 'page-report.js', 'page-login.js',
+   'page-supplier.js', 'page-customer.js'].forEach((f) => {
     assert.ok(sw.includes(f), 'SHELL 应包含页面 ' + f);
   });
 });
