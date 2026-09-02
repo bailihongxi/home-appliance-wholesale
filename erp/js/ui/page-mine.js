@@ -472,6 +472,7 @@
       { page: 'purchase',  icon: '🚚', text: '进货',     color: 'c-teal' },
       { page: 'product',   icon: '📦', text: '商品',     color: 'c-blue' },
       { page: 'supplier',  icon: '👤', text: '供应商',   color: 'c-yellow' },
+      { page: 'customer',  icon: '🤝', text: '客户',     color: 'c-teal' },
       { page: 'inventory', icon: '🗄️', text: '库存',     color: 'c-teal' },
       { page: 'account',   icon: '📒', text: '记账中心', color: 'c-purple' },
       { page: 'report',    icon: '📈', text: '报表',     color: 'c-pink' },
