@@ -199,5 +199,89 @@
     });
   };
 
+  /** CSV 表头列名映射（兼容中英文） */
+  var CSV_HEADERS = {
+    brand: ['品牌', 'brand'],
+    model: ['型号', 'model'],
+    category: ['类型', '类别', 'category'],
+    unit: ['单位', 'unit'],
+    cost: ['成本', '进价', '进货价', 'cost'],
+    priceWholesale: ['批发价', '批发', 'pricewholesale'],
+    priceRetail: ['零售价', '零售', '售价', 'priceretail'],
+    note: ['备注', 'note'],
+    barcodes: ['原厂条码', '条码', 'barcode', 'barcodes'],
+    openingStock: ['期初库存', '期初', 'openingstock']
+  };
+
+  /** 表头行 → 列名映射 {csvHeaderLower: field} */
+  api.mapHeaders = function mapHeaders(headers) {
+    var map = {};
+    (headers || []).forEach(function (h, idx) {
+      var key = String(h || '').trim().toLowerCase();
+      if (!key) return;
+      var matched = null;
+      Object.keys(CSV_HEADERS).forEach(function (f) {
+        if (matched) return;
+        if (CSV_HEADERS[f].indexOf(key) >= 0) matched = f;
+      });
+      if (matched) map[idx] = matched;
+    });
+    return map;
+  };
+
+  /**
+   * CSV 行导入（电器版）：表头 + 数据行 → 商品
+   * @param rows 二维数组（第一行为表头），与 util.parseCSV 输出同构
+   * @returns {created, updated, errors:[{row,msg}]}
+   */
+  api.importFromRows = function importFromRows(rows, ctx) {
+    var result = { created: 0, updated: 0, errors: [] };
+    if (!rows || !rows.length) return result;
+    var map = api.mapHeaders(rows[0]);
+    var hasKey = Object.keys(map).length > 0;
+    if (!hasKey) {
+      result.errors.push({ row: 1, msg: '表头需包含 品牌、型号、类型 等列' });
+      return result;
+    }
+    function cell(row, field) {
+      var idx = null;
+      Object.keys(map).forEach(function (i) {
+        if (map[i] === field) idx = parseInt(i, 10);
+      });
+      if (idx === null) return '';
+      return row[idx] === null || row[idx] === undefined ? '' : String(row[idx]).trim();
+    }
+
+    for (var i = 1; i < rows.length; i++) {
+      var row = rows[i];
+      if (!row || row.every(function (v) { return v === '' || v === null || v === undefined; })) continue;
+      var brand = cell(row, 'brand');
+      var model = cell(row, 'model');
+      if (!brand || !model) {
+        result.errors.push({ row: i + 1, msg: '品牌和型号必填' });
+        continue;
+      }
+      var r = api.save(ctx, {
+        brand: brand,
+        model: model,
+        category: cell(row, 'category') || '其他',
+        unit: cell(row, 'unit') || '台',
+        cost: cell(row, 'cost'),
+        priceWholesale: cell(row, 'priceWholesale'),
+        priceRetail: cell(row, 'priceRetail'),
+        note: cell(row, 'note'),
+        barcodes: cell(row, 'barcodes'),
+        openingStock: cell(row, 'openingStock')
+      });
+      if (r.ok) {
+        if (r.isNew) result.created += 1;
+        else result.updated += 1;
+      } else {
+        result.errors.push({ row: i + 1, msg: r.error });
+      }
+    }
+    return result;
+  };
+
   return api;
 });
