@@ -523,43 +523,109 @@
 
   /* ---------------- 高层流程 ---------------- */
 
-  /** 一键同步：打包 → gzip 压缩 → 加密 → 上传前大小拦截 → 上传覆盖 */
+  /**
+   * 内容指纹（SHA-256）：对快照业务内容做稳定指纹，排除每次打包的动态 exportedAt。
+   * 用于「本地 vs 云端」变更比对：指纹相同 = 内容一致，无需重新上传/恢复。
+   * @returns {Promise<string>}
+   */
+  sync.fingerprintOfText = function fingerprintOfText(text) {
+    var norm = String(text == null ? '' : text);
+    try {
+      var obj = JSON.parse(norm);
+      if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+        delete obj.exportedAt; // 排除动态时间戳，只对业务内容取指纹
+        norm = JSON.stringify(obj);
+      }
+    } catch (e) { /* 非 JSON：原样取指纹 */ }
+    if (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.subtle) {
+      return globalThis.crypto.subtle
+        .digest('SHA-256', strToBytes(norm))
+        .then(function (buf) {
+          var arr = new Uint8Array(buf);
+          var hex = '';
+          for (var i = 0; i < arr.length; i++) hex += ('0' + arr[i].toString(16)).slice(-2);
+          return hex;
+        });
+    }
+    // 环境不支持 WebCrypto：用「长度 + 规范串」兜底（仍可区分内容差异）
+    return Promise.resolve('s' + norm.length + ':' + norm);
+  };
+
+  /** 拉取云端快照的指纹；云端无快照(404)时返回 null，其他错误原样抛出 */
+  function fetchCloudFingerprint(cfg, fetchImpl) {
+    return sync
+      .pull(cfg, fetchImpl)
+      .then(function (env) {
+        return sync.decrypt(env, cfg.passphrase).then(function (text) {
+          return sync.fingerprintOfText(text);
+        });
+      })
+      .catch(function (err) {
+        if (/云端还没有快照/.test(err && err.message ? err.message : '')) return null;
+        throw err;
+      });
+  }
+
+  /**
+   * 一键同步（智能增量）：先对比本地与云端业务内容指纹。
+   *  - 内容一致 → 跳过上传（skipped:true，不产生新提交）
+   *  - 有差异   → gzip 压缩 → 加密 → 上传前大小拦截 → 上传覆盖
+   */
   sync.syncUp = function syncUp(ctx, cfg, fetchImpl) {
     var v = sync.validateConfig(cfg);
     if (!v.ok) return Promise.resolve({ ok: false, error: v.errors.join('；') });
     var snap = sync.buildSnapshotText(ctx);
-    var plain = strToBytes(snap.text);
-    return sync
-      .gzip(plain)
-      .then(function (compressed) {
-        var usedCompression = !!compressed;
-        var enc = usedCompression
-          ? sync.encrypt(compressed, cfg.passphrase, null, { comp: 'gzip' })
-          : sync.encrypt(snap.text, cfg.passphrase);
-        return enc.then(function (env) {
-          var bodyText = JSON.stringify(env);
-          var envBytes = strToBytes(bodyText).length;
-          // 上传大小控制：超过 GitHub 单文件上限直接拒绝，不发起请求
-          if (envBytes > sync.MAX_UPLOAD_BYTES) {
-            return {
-              ok: false,
-              error: '上传数据过大（约 ' + Math.max(1, Math.round(envBytes / 1024 / 1024)) +
-                'MB），超过 GitHub 单文件 ' + Math.round(sync.MAX_UPLOAD_BYTES / 1024 / 1024) +
-                'MB 限制。请先在「商品 / 进货 / 销售」清理历史数据后重试'
-            };
-          }
-          return sync.push(cfg, bodyText, fetchImpl).then(function (r) {
-            return {
-              ok: true,
-              at: r.at,
-              created: r.created,
-              bytes: snap.bytes,
-              uploadBytes: envBytes,
-              compressed: usedCompression,
-              summary: snap.summary,
-              summaryText: sync.summaryText(snap.summary),
-              url: r.url
-            };
+    return Promise.all([sync.fingerprintOfText(snap.text), fetchCloudFingerprint(cfg, fetchImpl)])
+      .then(function (res) {
+        var localFp = res[0];
+        var cloudFp = res[1];
+        if (cloudFp && cloudFp === localFp) {
+          // 本地与云端内容一致：无需重新上传
+          return {
+            ok: true,
+            skipped: true,
+            at: '',
+            created: false,
+            bytes: snap.bytes,
+            uploadBytes: 0,
+            compressed: false,
+            summary: snap.summary,
+            summaryText: sync.summaryText(snap.summary),
+            url: sync.pagesUrl(cfg),
+            reason: '本地与云端一致，无需重新上传'
+          };
+        }
+        return sync.gzip(strToBytes(snap.text)).then(function (compressed) {
+          var usedCompression = !!compressed;
+          var enc = usedCompression
+            ? sync.encrypt(compressed, cfg.passphrase, null, { comp: 'gzip' })
+            : sync.encrypt(snap.text, cfg.passphrase);
+          return enc.then(function (env) {
+            var bodyText = JSON.stringify(env);
+            var envBytes = strToBytes(bodyText).length;
+            // 上传大小控制：超过 GitHub 单文件上限直接拒绝，不发起请求
+            if (envBytes > sync.MAX_UPLOAD_BYTES) {
+              return {
+                ok: false,
+                error: '上传数据过大（约 ' + Math.max(1, Math.round(envBytes / 1024 / 1024)) +
+                  'MB），超过 GitHub 单文件 ' + Math.round(sync.MAX_UPLOAD_BYTES / 1024 / 1024) +
+                  'MB 限制。请先在「商品 / 进货 / 销售」清理历史数据后重试'
+              };
+            }
+            return sync.push(cfg, bodyText, fetchImpl).then(function (r) {
+              return {
+                ok: true,
+                skipped: false,
+                at: r.at,
+                created: r.created,
+                bytes: snap.bytes,
+                uploadBytes: envBytes,
+                compressed: usedCompression,
+                summary: snap.summary,
+                summaryText: sync.summaryText(snap.summary),
+                url: r.url
+              };
+            });
           });
         });
       })
@@ -568,22 +634,41 @@
       });
   };
 
-  /** 一键恢复：下载 → 解密 → 覆盖本地 */
+  /**
+   * 一键恢复（智能比对）：下载 → 解密 → 对比本地与云端内容指纹。
+   *  - 内容一致 → 无需恢复（skipped:true，不覆盖本地）
+   *  - 有差异   → 用云端快照覆盖本地
+   */
   sync.syncDown = function syncDown(ctx, cfg, fetchImpl) {
     var v = sync.validateConfig(cfg);
     if (!v.ok) return Promise.resolve({ ok: false, error: v.errors.join('；') });
+    var local = sync.buildSnapshotText(ctx);
     return sync
       .pull(cfg, fetchImpl)
       .then(function (env) {
         return sync.decrypt(env, cfg.passphrase).then(function (text) {
-          var r = sync.applySnapshotText(ctx, text);
-          if (!r.ok) throw new Error(r.error);
-          return {
-            ok: true,
-            at: env.at,
-            summary: r.summary,
-            summaryText: sync.summaryText(r.summary)
-          };
+          return Promise.all([sync.fingerprintOfText(text), sync.fingerprintOfText(local.text)]).then(function (fps) {
+            if (fps[0] === fps[1]) {
+              // 本地与云端内容一致：无需恢复
+              return {
+                ok: true,
+                skipped: true,
+                at: env.at,
+                summary: local.summary,
+                summaryText: sync.summaryText(local.summary),
+                reason: '本地与云端一致，无需恢复'
+              };
+            }
+            var r = sync.applySnapshotText(ctx, text);
+            if (!r.ok) throw new Error(r.error);
+            return {
+              ok: true,
+              skipped: false,
+              at: env.at,
+              summary: r.summary,
+              summaryText: sync.summaryText(r.summary)
+            };
+          });
         });
       })
       .catch(function (err) {

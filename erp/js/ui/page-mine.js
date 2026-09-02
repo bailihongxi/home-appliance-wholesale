@@ -148,6 +148,11 @@
             finish(state, '同步失败：' + r.error, 'err');
             return;
           }
+          if (r.skipped) {
+            // 本地与云端内容一致：跳过上传
+            finish(state, '✓ ' + (r.reason || '本地与云端一致，无需重新上传'), 'ok');
+            return;
+          }
           state.cfg.lastPushAt = r.at;
           state.cfg = sync.saveConfig(store(), state.cfg, currentAcctId());
           var up = Math.max(1, Math.round((r.uploadBytes || r.bytes) / 1024));
@@ -179,6 +184,11 @@
           sync.syncDown(ctx, state.cfg).then(function (r) {
             if (!r.ok) {
               finish(state, '恢复失败：' + r.error, 'err');
+              return;
+            }
+            if (r.skipped) {
+              // 本地与云端内容一致：无需恢复
+              finish(state, '✓ ' + (r.reason || '本地与云端一致，无需恢复'), 'ok');
               return;
             }
             state.cfg.lastPullAt = util.nowISO();
