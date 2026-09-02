@@ -1,5 +1,7 @@
 /**
- * ui/page-purchase.js —— 进货管理：色码矩阵批量填数、欠款自动挂账、修改 / 作废留痕
+ * ui/page-purchase.js —— 进货管理（电器版）
+ * 搜索选品 → 「加入」按商品加行（默认带出档案成本可改）→ 批量成本 → 保存挂账。
+ * 保存后最新进价同步回商品档案成本（D1）；修改 / 作废留痕。
  */
 (function (root, factory) {
   root.ERP = root.ERP || {};
@@ -9,9 +11,9 @@
     E.util || (isNode ? require('../core/util.js') : null),
     E.ui || (isNode ? require('./components.js') : null),
     E.schema || (isNode ? require('../core/schema.js') : null),
-    E.inventory || (isNode ? require('../core/inventory.js') : null),
     E.engine || (isNode ? require('../core/engine.js') : null),
     E.debt || (isNode ? require('../core/debt.js') : null),
+    E.product || (isNode ? require('../core/product.js') : null),
     E.repo || (isNode ? require('../store/repo.js') : null),
     E
   );
@@ -19,7 +21,7 @@
   root.ERP = root.ERP || {};
   root.ERP.pages = root.ERP.pages || {};
   root.ERP.pages.purchase = mod;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, inv, engine, debt, repo, ERP) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, engine, debt, product, repo, ERP) {
   'use strict';
 
   var esc = util.escapeHtml;
@@ -32,26 +34,21 @@
       items: [],
       paid: '',
       note: '',
-      styleCode: '',
       keyword: '',
       bulkPrice: '',
       editNo: null
     };
   }
 
-  /**
-   * 批量设置进价（问题4）：把 value 一次性写入全部明细行。
-   * 纯函数，便于单测；返回 {ok, count, price, value, error}
-   * 注意：只改 form.items[*].costPrice（元字符串），逐行仍可再自定义修改。
-   */
+  /** 批量设置成本（原批量进价）：把 value 一次性写入全部明细行 */
   function applyBulkPrice(form, value) {
     var raw = String(value === undefined || value === null ? '' : value).trim();
-    if (!raw) return { ok: false, error: '请先填写要批量应用的进价' };
+    if (!raw) return { ok: false, error: '请先填写要批量应用的成本' };
     if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
-      return { ok: false, error: '进价格式不对：请填 0 或正数，最多两位小数' };
+      return { ok: false, error: '成本格式不对：请填 0 或正数，最多两位小数' };
     }
     if (!form.items || !form.items.length) {
-      return { ok: false, error: '还没有进货明细，先点上方色码格子添加' };
+      return { ok: false, error: '还没有进货明细，先搜索并点「加入」添加' };
     }
     form.items.forEach(function (it) {
       it.costPrice = raw;
@@ -101,24 +98,23 @@
         state.form.keyword = el.value;
       },
 
-      'pick-style': function (ctx, state, el) {
-        state.form.styleCode = el.getAttribute('data-code');
-      },
-
-      /** 点矩阵格子：该色码数量 +1（手机端批量填数） */
-      'add-qty': function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
-        var product = ctx.getProduct(state.form.styleCode);
+      /** 点「加入」：该商品一行，数量 +1 */
+      'add-item': function (ctx, state, el) {
+        var id = el.getAttribute('data-id');
+        var p = product.getById(ctx, id);
+        if (!p) return;
         var it = state.form.items.find(function (x) {
-          return x.skuId === skuId;
+          return x.productId === id;
         });
         if (!it) {
-          // 已填过批量进价 → 新增行直接沿用，省得再点一次「应用到全部」
           var bulk = String(state.form.bulkPrice || '').trim();
           it = {
-            skuId: skuId,
+            productId: id,
+            brand: p.brand,
+            model: p.model,
+            unit: p.unit,
             qty: 0,
-            costPrice: bulk || (product ? util.fenToYuan(product.costPrice || 0) : '0')
+            costPrice: bulk || String(p.cost ? util.fenToYuan(p.cost) : '0')
           };
           state.form.items.push(it);
         }
@@ -126,45 +122,42 @@
       },
 
       qty: function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
+        var id = el.getAttribute('data-id');
         var it = state.form.items.find(function (x) {
-          return x.skuId === skuId;
+          return x.productId === id;
         });
         if (!it) return;
         var v = parseInt(el.value, 10);
         it.qty = isNaN(v) || v < 0 ? 0 : v;
       },
 
-      /** 逐行自定义进价（批量应用后仍可单独改） */
       price: function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
+        var id = el.getAttribute('data-id');
         var it = state.form.items.find(function (x) {
-          return x.skuId === skuId;
+          return x.productId === id;
         });
         if (!it) return;
         it.costPrice = el.value;
       },
 
-      /** 批量进价输入框：只记值，不重渲染（避免打断输入） */
       'bulk-price': function (ctx, state, el) {
         state.form.bulkPrice = el.value;
       },
 
-      /** 批量进价「应用到全部明细」 */
       'apply-bulk-price': function (ctx, state) {
         var r = applyBulkPrice(state.form, state.form.bulkPrice);
         if (!r.ok) {
           ui.toast(r.error, 'err');
           return false;
         }
-        ui.toast('已把进价 ' + ui.money(r.price) + ' 应用到全部 ' + r.count + ' 行明细', 'ok');
+        ui.toast('已把成本 ' + ui.money(r.price) + ' 应用到全部 ' + r.count + ' 行明细', 'ok');
         return true;
       },
 
       'del-item': function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
+        var id = el.getAttribute('data-id');
         state.form.items = state.form.items.filter(function (x) {
-          return x.skuId !== skuId;
+          return x.productId !== id;
         });
       },
 
@@ -190,17 +183,13 @@
           ui.toast(res.error, 'err');
           return false;
         }
-        // 统计本次入库件数，明确告知用户「已加入库存」
         var qty = util.sum(res.doc.items, function (it) {
           return it.qty;
         });
         var debtTip = res.doc.debt > 0
           ? '，欠款 ' + ui.money(res.doc.debt)
           : '，已付清';
-        ui.toast(
-          '✅ 进货单 ' + res.doc.no + ' 已保存，已入库 ' + qty + ' 件' + debtTip + '，库存已更新',
-          'ok'
-        );
+        ui.toast('进货单 ' + res.doc.no + ' 已保存，已入库 ' + qty + ' 件' + debtTip + '，库存已更新', 'ok');
         state.tab = 'list';
         state.form = emptyForm();
         state.lastSavedNo = res.doc.no;
@@ -218,14 +207,16 @@
           newPartner: '',
           items: doc.items.map(function (it) {
             return {
-              skuId: it.skuId,
+              productId: it.productId,
+              brand: it.brand,
+              model: it.model,
+              unit: it.unit,
               qty: it.qty,
               costPrice: util.fenToYuan(it.costPrice)
             };
           }),
           paid: util.fenToYuan(doc.paid),
           note: doc.note || '',
-          styleCode: doc.items.length ? doc.items[0].styleCode : '',
           keyword: '',
           bulkPrice: '',
           editNo: no
@@ -292,7 +283,6 @@
       },
 
       'pay-supplier': function (ctx, state, el) {
-        // 跳转到记账中心处理付款
         if (ERP.app) ERP.app.go('account', { pay: el.getAttribute('data-id') });
       }
     }
@@ -324,7 +314,8 @@
           String(d.partnerName || '').toUpperCase().indexOf(kw) >= 0;
         if (!hit) {
           hit = (d.items || []).some(function (it) {
-            return String(it.styleCode).toUpperCase().indexOf(kw) >= 0;
+            return String(it.brand || '').toUpperCase().indexOf(kw) >= 0 ||
+              String(it.model || '').toUpperCase().indexOf(kw) >= 0;
           });
         }
         if (!hit) return false;
@@ -351,7 +342,7 @@
       '<span class="desc">' + list.length + ' 张单，未结 ' + ui.money(totals.debt) + '</span>' +
       '<div class="actions"><button class="btn btn-primary" data-act="open-new">＋ 新建进货单</button></div></div>';
 
-    h += '<div class="card">' + ui.searchBar({ value: state.keyword, placeholder: '搜索单号 / 供应商 / 款号', scan: false });
+    h += '<div class="card">' + ui.searchBar({ value: state.keyword, placeholder: '搜索单号 / 供应商 / 品牌 / 型号', scan: false });
     h += '<div class="row wrap">' +
       '<input class="input" type="date" data-change="filter" data-name="from" value="' + esc(state.from) + '">' +
       '<input class="input" type="date" data-change="filter" data-name="to" value="' + esc(state.to) + '">' +
@@ -409,10 +400,11 @@
     });
     var h = '<div class="card"><div class="card-title">进货单 ' + esc(doc.no) +
       '<span class="more">' + esc(doc.date) + ' · ' + esc(doc.partnerName || '') + '</span></div>' +
-      '<div class="table-wrap"><table class="tbl"><thead><tr><th>款号</th><th>颜色</th><th>号码</th>' +
-      '<th class="num">数量</th><th class="num">进价</th><th class="num">小计</th></tr></thead><tbody>';
+      '<div class="table-wrap"><table class="tbl"><thead><tr><th>商品</th>' +
+      '<th class="num">数量</th><th class="num">成本</th><th class="num">小计</th></tr></thead><tbody>';
     doc.items.forEach(function (it) {
-      h += '<tr><td class="mono">' + esc(it.styleCode) + '</td><td>' + esc(it.color) + '</td><td>' + esc(it.size) + '</td>' +
+      h += '<tr><td>' + esc(it.brand || '') + ' <b>' + esc(it.model || '') + '</b>' +
+        (it.unit ? ' <span class="weak small">' + esc(it.unit) + '</span>' : '') + '</td>' +
         '<td class="num">' + it.qty + '</td><td class="num">' + ui.money(it.costPrice) + '</td>' +
         '<td class="num">' + ui.money(it.amount) + '</td></tr>';
     });
@@ -428,7 +420,8 @@
   function renderForm(ctx, state) {
     var form = state.form;
     var suppliers = debt.list(ctx, 'supplier');
-    var h = '<div class="page-head"><h2>' + (form.editNo ? '修改进货单 ' + esc(form.editNo) : '新建进货单') + '</h2></div>';
+    var h = '<div class="page-head"><h2>' + (form.editNo ? '修改进货单 ' + esc(form.editNo) : '新建进货单') + '</h2>' +
+      '<span class="desc">保存后最新成本将同步到商品档案</span></div>';
 
     h += '<div class="card">';
     h += '<div class="grid grid-2">' +
@@ -449,50 +442,41 @@
       '<input class="input" data-input="field" data-name="newPartner" placeholder="输入新供应商名称" value="' + esc(form.newPartner) + '"></div>';
     h += '</div>';
 
-    /* 选款 → 矩阵批量填数 */
-    h += '<div class="card"><div class="card-title">按色码批量填数' +
-      '<span class="more">点格子数量 +1</span></div>' +
-      '<div class="row mb8"><input class="input" data-input="form-keyword" data-name="keyword" data-live="1" placeholder="搜索款号 / 名称 / 条码" value="' + esc(form.keyword) + '"></div>';
+    /* 选品加行 */
+    h += '<div class="card"><div class="card-title">按商品加行' +
+      '<span class="more">点「加入」数量 +1</span></div>' +
+      '<div class="row mb8"><input class="input" data-input="form-keyword" data-name="keyword" data-live="1" placeholder="搜索 品牌 / 型号 / 类型 / 条码" value="' + esc(form.keyword) + '"></div>';
 
-    var kw = String(form.keyword || '').toUpperCase();
-    var styles = ctx.data.products.filter(function (p) {
+    var kw = String(form.keyword || '').trim().toUpperCase();
+    var list = ctx.data.products.filter(function (p) {
+      var bc = (Array.isArray(p.barcodes) ? p.barcodes : []).some(function (b) {
+        return String(b || '').toUpperCase().indexOf(kw) >= 0;
+      });
       if (!kw) return p.status !== schema.STATUS.OFF;
-      return (
-        String(p.styleCode).toUpperCase().indexOf(kw) >= 0 ||
-        String(p.name).toUpperCase().indexOf(kw) >= 0 ||
-        String(p.barcode || '').toUpperCase().indexOf(kw) >= 0
-      );
-    }).slice(0, 20);
+      return String(p.brand || '').toUpperCase().indexOf(kw) >= 0 ||
+        String(p.model || '').toUpperCase().indexOf(kw) >= 0 ||
+        String(p.category || '').toUpperCase().indexOf(kw) >= 0 || bc;
+    }).slice(0, 30);
 
-    if (!styles.length) {
+    if (!list.length) {
       h += ui.empty('没有找到商品，先在「商品档案」建档');
     } else {
-      h += '<div class="chips mb8">';
-      styles.forEach(function (p) {
-        h += '<button class="chip' + (p.styleCode === form.styleCode ? ' on' : '') + '" data-act="pick-style" data-code="' + esc(p.styleCode) + '">' +
-          esc(p.name) + ' <span class="weak small mono">' + esc(p.styleCode) + '</span></button>';
-      });
-      h += '</div>';
-    }
-
-    if (form.styleCode) {
-      var m = inv.buildMatrix(ctx, form.styleCode);
-      var product = ctx.getProduct(form.styleCode);
-      if (product && m.colors.length) {
-        h += '<div class="small muted mb8">' + esc(product.name) + '（进价 ' + ui.money(product.costPrice) + ' / 售价 ' + ui.money(product.salePrice) + '）</div>';
-        // 矩阵：显示已填数量
-        var mm = { colors: m.colors, sizes: m.sizes, cells: {} };
-        Object.keys(m.cells).forEach(function (k) {
-          var cell = Object.assign({}, m.cells[k]);
-          var it = form.items.find(function (x) {
-            return x.skuId === cell.skuId;
-          });
-          cell.value = it ? it.qty : '';
-          cell.stock = it && it.qty ? it.qty : cell.stock; // 已填数量高亮
-          mm.cells[k] = cell;
+      h += '<div class="table-wrap"><table class="tbl"><thead><tr>' +
+        '<th>商品</th><th class="num">档案成本</th><th class="num">库存</th><th></th>' +
+        '</tr></thead><tbody>';
+      list.forEach(function (p) {
+        var has = state.form.items.some(function (it) {
+          return it.productId === p.id;
         });
-        h += '<div class="table-wrap">' + matrixWithQty(mm, form) + '</div>';
-      }
+        h += '<tr>' +
+          '<td>' + esc(p.brand) + ' <b>' + esc(p.model) + '</b><br><span class="weak small">' + esc(p.category) + ' / ' + esc(p.unit) + '</span></td>' +
+          '<td class="num">' + ui.money(p.cost) + '</td>' +
+          '<td class="num">' + (p.stock || 0) + '</td>' +
+          '<td class="act"><button class="btn btn-sm btn-primary" data-act="add-item" data-id="' + esc(p.id) + '">' +
+          (has ? '＋ 再加' : '加入') + '</button></td>' +
+          '</tr>';
+      });
+      h += '</tbody></table></div>';
     }
     h += '</div>';
 
@@ -501,30 +485,27 @@
     h += '<div class="card"><div class="card-title">进货明细（' + form.items.length + ' 行）' +
       (form.items.length ? '<button class="btn btn-sm" data-act="clear-items">清空</button>' : '') + '</div>';
 
-    /* 批量进价：一次填好，全部明细同步；逐行仍可单独改 */
     h += '<div class="row mb8" style="align-items:center;gap:6px;flex-wrap:wrap">' +
-      '<span class="small muted">批量进价</span>' +
+      '<span class="small muted">批量成本</span>' +
       '<input class="input" style="width:110px;text-align:right" data-input="bulk-price" data-name="bulkPrice" ' +
-      'inputmode="decimal" placeholder="如 50" value="' + esc(form.bulkPrice || '') + '">' +
+      'inputmode="decimal" placeholder="如 1000" value="' + esc(form.bulkPrice || '') + '">' +
       '<span class="small muted">元</span>' +
       '<button class="btn btn-sm btn-primary" data-act="apply-bulk-price">应用到全部明细</button>' +
       '<span class="small weak">填一次，下面每行都同步；单行也能再改</span>' +
       '</div>';
 
     if (!form.items.length) {
-      h += ui.empty('还没有明细，点上方色码格子添加');
+      h += ui.empty('还没有明细，点上方「加入」添加商品');
     } else {
-      h += '<div class="table-wrap"><table class="tbl"><thead><tr><th>款号</th><th>颜色/号码</th>' +
-        '<th class="num">数量</th><th class="num">进价（元）</th><th class="num">小计</th><th></th></tr></thead><tbody>';
+      h += '<div class="table-wrap"><table class="tbl"><thead><tr><th>商品</th>' +
+        '<th class="num">数量</th><th class="num">成本（元）</th><th class="num">小计</th><th></th></tr></thead><tbody>';
       form.items.forEach(function (it) {
-        var sku = ctx.getSku(it.skuId);
         h += '<tr>' +
-          '<td class="mono">' + esc(sku ? sku.styleCode : '-') + '</td>' +
-          '<td>' + esc(sku ? sku.color + ' / ' + sku.size : it.skuId) + '</td>' +
-          '<td class="num"><input class="input" style="width:70px;text-align:right" data-change="qty" data-sku="' + esc(it.skuId) + '" inputmode="numeric" value="' + it.qty + '"></td>' +
-          '<td class="num"><input class="input" style="width:90px;text-align:right" data-change="price" data-sku="' + esc(it.skuId) + '" inputmode="decimal" value="' + esc(it.costPrice) + '"></td>' +
+          '<td>' + esc(it.brand) + ' <b>' + esc(it.model) + '</b><br><span class="weak small">' + esc(it.unit) + '</span></td>' +
+          '<td class="num"><input class="input" style="width:70px;text-align:right" data-change="qty" data-id="' + esc(it.productId) + '" inputmode="numeric" value="' + it.qty + '"></td>' +
+          '<td class="num"><input class="input" style="width:90px;text-align:right" data-change="price" data-id="' + esc(it.productId) + '" inputmode="decimal" value="' + esc(it.costPrice) + '"></td>' +
           '<td class="num">' + ui.money(util.parseMoney(it.costPrice) * (parseInt(it.qty, 10) || 0)) + '</td>' +
-          '<td class="act"><button data-act="del-item" data-sku="' + esc(it.skuId) + '">删除</button></td></tr>';
+          '<td class="act"><button data-act="del-item" data-id="' + esc(it.productId) + '">删除</button></td></tr>';
       });
       h += '</tbody></table></div>';
       h += '<div class="row between mt8"><span class="strong">合计 ' + ui.money(t) + '</span>' +
@@ -532,7 +513,6 @@
     }
     h += '</div>';
 
-    /* 结算 */
     var paid = util.parseMoney(form.paid);
     h += '<div class="card">' +
       '<div class="field"><label>已付金额（元）</label>' +
@@ -550,32 +530,6 @@
         ? '<button class="btn btn-primary" data-act="update-purchase">保存修改</button>'
         : '<button class="btn btn-primary" data-act="save-purchase">保存进货单</button>') +
       '</div>';
-    return h;
-  }
-
-  /** 进货矩阵：格子可点（+1），显示已填数量 */
-  function matrixWithQty(matrix, form) {
-    var h = '<table class="matrix"><thead><tr><th>颜色\\尺码</th>';
-    matrix.sizes.forEach(function (s) {
-      h += '<th>' + esc(s) + '</th>';
-    });
-    h += '</tr></thead><tbody>';
-    matrix.colors.forEach(function (c) {
-      h += '<tr><th>' + esc(c) + '</th>';
-      matrix.sizes.forEach(function (s) {
-        var cell = matrix.cells[c + '|' + s];
-        if (!cell) {
-          h += '<td class="cell zero">-</td>';
-          return;
-        }
-        var qty = cell.value === '' || cell.value === undefined ? 0 : parseInt(cell.value, 10) || 0;
-        h += '<td class="cell' + (qty ? ' hit' : '') + '" data-act="add-qty" data-sku="' + esc(cell.skuId) + '">' +
-          (qty ? '<b>' + qty + '</b>' : '<span class="weak small">库存' + cell.stock + '</span>') + '</td>';
-      });
-      h += '</tr>';
-    });
-    h += '</tbody></table>';
-    void form;
     return h;
   }
 
