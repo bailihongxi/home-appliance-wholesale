@@ -257,6 +257,8 @@
         // 保存 settings 到库
         var a = app();
         if (a && a.saveSettings) a.saveSettings();
+        // 重渲染：立即刷新 favicon / 顶栏 logo / 网页名称
+        if (a && a.render) a.render();
         state.editShop = false;
         state.msg = '店铺资料已保存';
         state.msgType = 'ok';
@@ -310,7 +312,7 @@
       ? (ctx.settings.scopeCategories.join(' / ')) : '全部分类';
     var avatarHtml = s.avatar
       ? '<img class="avatar-img" src="' + esc(s.avatar) + '" alt="">'
-      : '<div class="avatar">👟</div>';
+      : '<div class="avatar">⚡</div>';
     h += '<div class="shop-info-card" data-act="toggle-shop-edit">' +
       avatarHtml +
       '<div class="info">' +

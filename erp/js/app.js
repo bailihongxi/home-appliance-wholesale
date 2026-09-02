@@ -401,7 +401,8 @@
     html = decorateHtml(page, html);
 
     app.main.innerHTML = html;
-    document.title = (app.ctx.settings.shopName || '电器店') + ' · ' + (page.title || '');
+    document.title = (ERP.branding ? ERP.branding.pageTitle(app.ctx.settings, page.title) : ((app.ctx.settings.shopName || '电器店') + ' · ' + (page.title || '')));
+    applyFavicon();
     if (page.mount) {
       try {
         page.mount(app.ctx, app.main, state);
@@ -489,14 +490,14 @@
         .join('');
     }
     var brand = document.querySelector('.app-header .brand');
-    var brandLogo = (app.ctx.settings.avatar) ? app.ctx.settings.avatar : 'assets/icon-192.png';
+    var brandLogo = (ERP.branding ? ERP.branding.logoHref(app.ctx.settings) : ((app.ctx.settings.avatar) ? app.ctx.settings.avatar : 'assets/icon-192.png'));
     if (brand) brand.innerHTML = '<img class="brand-logo" src="' + brandLogo + '" alt="">' + (app.ctx.settings.shopName || '我的电器店');
     var sbrand = document.querySelector('.app-sidebar .brand');
     if (sbrand) sbrand.innerHTML = '<img class="logo" src="' + brandLogo + '" alt="logo"> <span>' + (app.ctx.settings.shopName || '我的电器店') + '</span>';
 
     /* 电脑端顶栏（v2）：店名 + 铃铛红点（有低库存预警时亮） */
     var topShop = document.getElementById('top-shop-name');
-    if (topShop) topShop.textContent = app.ctx.settings.shopName || '我的电器店';
+    if (topShop) topShop.textContent = (ERP.branding ? ERP.branding.shopName(app.ctx.settings) : (app.ctx.settings.shopName || '我的电器店'));
     var bellDot = document.getElementById('top-bell-dot');
     if (bellDot) {
       var alertCount = 0;
@@ -506,6 +507,18 @@
       } catch (e) { /* 库存引擎未就绪时忽略 */ }
       if (alertCount > 0) bellDot.classList.remove('hidden');
       else bellDot.classList.add('hidden');
+    }
+  }
+
+  /* 动态 favicon：跟随账号自定义头像（settings.avatar）；未设置则用电器版默认图标 */
+  function applyFavicon() {
+    if (typeof document === 'undefined') return;
+    var settings = app.ctx && app.ctx.settings;
+    var href = (ERP.branding ? ERP.branding.logoHref(settings) : ((settings && settings.avatar) || 'assets/icon-192.png'));
+    var links = document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]');
+    for (var i = 0; i < links.length; i++) {
+      var l = links[i];
+      if (l.getAttribute('href') !== href) l.setAttribute('href', href);
     }
   }
 
