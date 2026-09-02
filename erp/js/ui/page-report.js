@@ -157,7 +157,7 @@
     } else {
       h += '<ol class="top-list">';
       list.forEach(function (it) {
-        h += '<li><span class="name">' + esc(it.name || it.styleCode) + ' <span class="weak mono small">' + esc(it.styleCode) + '</span></span>' +
+        h += '<li><span class="name">' + esc(it.name || it.productId) + ' <span class="weak mono small">' + esc(it.productId) + '</span></span>' +
           '<span class="val">' + ui.money(it.grossProfit) + ' <span class="weak small">/ ' + it.qty + ' 件</span></span></li>';
       });
       h += '</ol>';
