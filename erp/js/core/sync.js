@@ -25,9 +25,11 @@
 
   var sync = {};
 
-  sync.ENVELOPE_VERSION = 1;
+  sync.ENVELOPE_VERSION = 2; // v2：快照压缩(gzip)后加密，上传体积显著减小
   sync.KDF_ITERATIONS = 150000;
   sync.CONFIG_KEY = 'erp.sync.config';
+  /** GitHub Contents API 单文件硬上限（100MB）；上传前拦截，超限不发起请求 */
+  sync.MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
   /* ---------------- 配置（只存本机） ---------------- */
 
@@ -222,19 +224,52 @@
   }
 
   /**
-   * 加密：明文字符串 → 信封对象（可直接 JSON.stringify 上传）
-   * 明文部分只暴露同步时间，不含店名/数据量。
+   * gzip 压缩字节（控制上传体积）。当前环境无 CompressionStream 时返回 null（降级为明文上传）。
+   * @returns {Promise<Uint8Array|null>}
    */
-  sync.encrypt = function encrypt(plainText, passphrase, at) {
+  sync.gzip = function gzip(bytes) {
+    if (typeof CompressionStream === 'undefined') return Promise.resolve(null);
+    return Promise.resolve()
+      .then(function () {
+        var cs = new CompressionStream('gzip');
+        var stream = new Blob([bytes]).stream().pipeThrough(cs);
+        return new Response(stream).arrayBuffer();
+      })
+      .then(function (ab) {
+        return new Uint8Array(ab);
+      })
+      .catch(function () {
+        return null; // 压缩失败 → 降级明文上传
+      });
+  };
+
+  /** gzip 解压（无 DecompressionStream 时返回 null，由调用方处理） */
+  sync.gunzip = function gunzip(bytes) {
+    if (typeof DecompressionStream === 'undefined') return Promise.resolve(null);
+    var ds = new DecompressionStream('gzip');
+    var stream = new Blob([bytes]).stream().pipeThrough(ds);
+    return new Response(stream).arrayBuffer().then(function (ab) {
+      return new Uint8Array(ab);
+    });
+  };
+
+  /**
+   * 加密：data 为明文字符串 或 已压缩的 Uint8Array（传字节且 opts.comp==='gzip' 时标记压缩）。
+   * 信封对象可直接 JSON.stringify 上传；明文部分只暴露同步时间。
+   */
+  sync.encrypt = function encrypt(data, passphrase, at, opts) {
+    var isBytes = data instanceof Uint8Array;
+    var bytes = isBytes ? data : strToBytes(data);
+    var comp = (opts && opts.comp) || (isBytes ? 'gzip' : '');
     var salt = randomBytes(16);
     var iv = randomBytes(12);
     var iter = sync.KDF_ITERATIONS;
     return deriveKey(passphrase, salt, iter)
       .then(function (key) {
-        return subtle().encrypt({ name: 'AES-GCM', iv: iv }, key, strToBytes(plainText));
+        return subtle().encrypt({ name: 'AES-GCM', iv: iv }, key, bytes);
       })
       .then(function (ct) {
-        return {
+        var env = {
           app: 'appliance-erp',
           kind: 'sync-snapshot',
           v: sync.ENVELOPE_VERSION,
@@ -246,6 +281,8 @@
           ct: bytesToB64(new Uint8Array(ct)),
           at: at || util.nowISO()
         };
+        if (comp) env.comp = comp; // v2：快照为 gzip 压缩
+        return env;
       });
   };
 
@@ -269,7 +306,7 @@
     return { ok: true, envelope: env };
   };
 
-  /** 解密：信封 → 明文字符串（口令错误会给出明确提示） */
+  /** 解密：信封 → 明文字符串（口令错误会给出明确提示；v2 压缩快照自动解压） */
   sync.decrypt = function decrypt(env, passphrase) {
     var v = sync.validateEnvelope(env);
     if (!v.ok) return Promise.reject(new Error(v.error));
@@ -279,7 +316,14 @@
         return subtle().decrypt({ name: 'AES-GCM', iv: b64ToBytes(e.iv) }, key, b64ToBytes(e.ct));
       })
       .then(function (buf) {
-        return bytesToStr(new Uint8Array(buf));
+        var bytes = new Uint8Array(buf);
+        if (e.comp === 'gzip') {
+          return sync.gunzip(bytes).then(function (out) {
+            if (!out) throw new Error('解密失败：当前环境不支持解压 gzip 快照');
+            return bytesToStr(out);
+          });
+        }
+        return bytesToStr(bytes);
       })
       .catch(function () {
         throw new Error('解密失败：同步口令不对，或云端快照已损坏');
@@ -479,26 +523,45 @@
 
   /* ---------------- 高层流程 ---------------- */
 
-  /** 一键同步：打包 → 加密 → 上传覆盖 */
+  /** 一键同步：打包 → gzip 压缩 → 加密 → 上传前大小拦截 → 上传覆盖 */
   sync.syncUp = function syncUp(ctx, cfg, fetchImpl) {
     var v = sync.validateConfig(cfg);
     if (!v.ok) return Promise.resolve({ ok: false, error: v.errors.join('；') });
     var snap = sync.buildSnapshotText(ctx);
+    var plain = strToBytes(snap.text);
     return sync
-      .encrypt(snap.text, cfg.passphrase)
-      .then(function (env) {
-        return sync.push(cfg, JSON.stringify(env), fetchImpl);
-      })
-      .then(function (r) {
-        return {
-          ok: true,
-          at: r.at,
-          created: r.created,
-          bytes: snap.bytes,
-          summary: snap.summary,
-          summaryText: sync.summaryText(snap.summary),
-          url: r.url
-        };
+      .gzip(plain)
+      .then(function (compressed) {
+        var usedCompression = !!compressed;
+        var enc = usedCompression
+          ? sync.encrypt(compressed, cfg.passphrase, null, { comp: 'gzip' })
+          : sync.encrypt(snap.text, cfg.passphrase);
+        return enc.then(function (env) {
+          var bodyText = JSON.stringify(env);
+          var envBytes = strToBytes(bodyText).length;
+          // 上传大小控制：超过 GitHub 单文件上限直接拒绝，不发起请求
+          if (envBytes > sync.MAX_UPLOAD_BYTES) {
+            return {
+              ok: false,
+              error: '上传数据过大（约 ' + Math.max(1, Math.round(envBytes / 1024 / 1024)) +
+                'MB），超过 GitHub 单文件 ' + Math.round(sync.MAX_UPLOAD_BYTES / 1024 / 1024) +
+                'MB 限制。请先在「商品 / 进货 / 销售」清理历史数据后重试'
+            };
+          }
+          return sync.push(cfg, bodyText, fetchImpl).then(function (r) {
+            return {
+              ok: true,
+              at: r.at,
+              created: r.created,
+              bytes: snap.bytes,
+              uploadBytes: envBytes,
+              compressed: usedCompression,
+              summary: snap.summary,
+              summaryText: sync.summaryText(snap.summary),
+              url: r.url
+            };
+          });
+        });
       })
       .catch(function (err) {
         return { ok: false, error: err && err.message ? err.message : String(err) };

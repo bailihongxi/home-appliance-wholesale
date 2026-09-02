@@ -6,6 +6,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const sync = require('../js/core/sync.js');
+const { newCtx } = require('./helpers/ctx.js');
+const product = require('../js/core/product.js');
 
 const BASE = {
   owner: 'bailihongxi',
@@ -115,4 +117,84 @@ test('checkAuth-请求携带 Authorization Bearer Token', async () => {
   };
   await sync.checkAuth(BASE, fetchImpl);
   assert.strictEqual(captured, 'Bearer ghp_x');
+});
+
+/* ===== 上传大小控制：gzip 压缩 + 超限拦截 ===== */
+test('gzip-压缩/解压往返：内容完整还原', async () => {
+  const raw = '一级能效，含安装，质保十年，送货上门，颜色白色，能效等级一级，制冷量3500W'.repeat(20);
+  const bytes = new TextEncoder().encode(raw);
+  const gz = await sync.gzip(bytes);
+  assert.ok(gz && gz.length > 0, '压缩产物存在');
+  assert.ok(gz.length < bytes.length, '压缩后变小（JSON 文本可压缩）');
+  const out = await sync.gunzip(gz);
+  assert.strictEqual(new TextDecoder().decode(out), raw, '解压还原原文');
+});
+
+test('v2 压缩信封：encrypt(压缩字节) → decrypt 自动解压还原', async () => {
+  const raw = '品牌=海尔,型号=BCD-200,类型=冰箱'.repeat(30);
+  const gz = await sync.gzip(new TextEncoder().encode(raw));
+  const env = await sync.encrypt(gz, 'pass123456', '2026-09-03T00:00:00Z', { comp: 'gzip' });
+  assert.strictEqual(env.v, 2, '信封版本 v2');
+  assert.strictEqual(env.comp, 'gzip', '标记压缩');
+  assert.ok(env.salt && env.iv && env.ct);
+  const chk = sync.validateEnvelope(env);
+  assert.strictEqual(chk.ok, true, 'v2 信封校验通过');
+  const text = await sync.decrypt(env, 'pass123456');
+  assert.strictEqual(text, raw, '解密+解压还原原文');
+  // 口令错误 → 明确报错
+  await assert.rejects(() => sync.decrypt(env, 'wrong-pass'), /解密失败/);
+});
+
+test('v1 无压缩信封：decrypt 兼容还原明文', async () => {
+  const raw = 'v1 明文快照内容';
+  const env = await sync.encrypt(raw, 'pass123456'); // 明文路径：无 comp
+  env.v = 1; // 模拟旧版信封
+  const chk = sync.validateEnvelope(env);
+  assert.strictEqual(chk.ok, true, 'v1 信封校验通过');
+  const text = await sync.decrypt(env, 'pass123456');
+  assert.strictEqual(text, raw, 'v1 明文解密兼容');
+});
+
+test('syncUp-压缩上传：返回 uploadBytes/compressed，上传体小于明文', async () => {
+  const ctx = newCtx();
+  product.save(ctx, {
+    brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
+    cost: '1000', priceWholesale: '1200', priceRetail: '1399', note: '一级能效，含安装'.repeat(5)
+  });
+  let putBody = null;
+  const fetchImpl = (url, opt) => {
+    if (opt.method === 'GET') return Promise.resolve(res(404, {}));
+    if (opt.method === 'PUT') {
+      putBody = JSON.parse(opt.body);
+      return Promise.resolve(res(201, { commit: { sha: 'abc123' } }));
+    }
+    return Promise.resolve(res(500, {}));
+  };
+  const r = await sync.syncUp(ctx, BASE, fetchImpl);
+  assert.strictEqual(r.ok, true, '同步成功');
+  assert.strictEqual(r.compressed, true, '启用压缩');
+  assert.ok(r.uploadBytes > 0, '有上传字节数');
+  const envPut = JSON.parse(sync.base64ToText(putBody.content));
+  assert.strictEqual(envPut.kind, 'sync-snapshot', 'PUT 信封合法');
+  assert.strictEqual(envPut.comp, 'gzip', '信封标记压缩');
+});
+
+test('syncUp-超限拦截：超过上限直接拒绝且不发起请求', async () => {
+  const ctx = newCtx();
+  product.save(ctx, {
+    brand: '美的', model: 'KFR-35', category: '空调', unit: '台',
+    cost: '1800', priceWholesale: '2200', priceRetail: '2599'
+  });
+  const origMax = sync.MAX_UPLOAD_BYTES;
+  sync.MAX_UPLOAD_BYTES = 10; // 人为调小以触发拦截
+  let called = false;
+  try {
+    const r = await sync.syncUp(ctx, BASE, () => { called = true; return Promise.resolve(); });
+    assert.strictEqual(r.ok, false, '超限拒绝');
+    assert.ok(r.error.includes('上传数据过大'), '明确提示过大: ' + r.error);
+    assert.ok(r.error.includes('MB'), '提示大小与上限');
+    assert.strictEqual(called, false, '未发起任何网络请求');
+  } finally {
+    sync.MAX_UPLOAD_BYTES = origMax;
+  }
 });

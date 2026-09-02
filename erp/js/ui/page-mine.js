@@ -150,9 +150,11 @@
           }
           state.cfg.lastPushAt = r.at;
           state.cfg = sync.saveConfig(store(), state.cfg, currentAcctId());
+          var up = Math.max(1, Math.round((r.uploadBytes || r.bytes) / 1024));
           finish(
             state,
-            '☁️ 已同步到云端（' + r.summaryText + '，' + Math.max(1, Math.round(r.bytes / 1024)) + ' KB），云端历史已被覆盖',
+            '☁️ 已同步到云端（' + r.summaryText + '，上传 ' + up + ' KB' +
+            (r.compressed ? ' · 已压缩' : '') + '），云端历史已被覆盖',
             'ok'
           );
         });
