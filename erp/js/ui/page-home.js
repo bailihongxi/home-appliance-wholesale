@@ -97,7 +97,7 @@
     if (last && util.diffDays(String(last).slice(0, 10), todayStr()) === 0) return '';
     var days = last ? util.diffDays(String(last).slice(0, 10), todayStr()) : '从未';
     return C.notice(
-      '📦 你已 ' + (typeof days === 'number' ? days + ' 天' : days) + '未备份，建议每天导出一份账本（存电脑 + 网盘各一份）',
+      '📦 你已 ' + (typeof days === 'number' ? days + ' 天未' : '从未') + '备份，建议每天导出一份账本（存电脑 + 网盘各一份）',
       'warn',
       { act: 'go', page: 'setting', text: '去备份' }
     );
