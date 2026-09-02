@@ -312,7 +312,7 @@
       return h;
     }
 
-    h += '<div class="card"><div class="table-wrap"><table class="tbl"><thead><tr>' +
+    h += '<div class="card"><div class="table-wrap"><table class="tbl tbl-striped"><thead><tr>' +
       '<th>品牌</th><th>型号</th><th>类型</th><th>单位</th>' +
       '<th class="num">成本</th><th class="num">批发价</th><th class="num">零售价</th>' +
       '<th class="num">库存</th><th>备注</th><th>状态</th><th>操作</th>' +

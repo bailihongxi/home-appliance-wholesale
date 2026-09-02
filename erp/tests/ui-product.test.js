@@ -252,3 +252,20 @@ test('备注列优化-超长备注：省略显示且 title 保留完整内容（
   assert.ok(html2.includes('cell-note'), '无备注行同样带 cell-note');
   assert.ok(html2.includes('title=""'), '无备注时 title 为空串');
 });
+
+/* ===== 斑马纹：交替行底色，避免长列表看错行（手机版/电脑版） ===== */
+const fs = require('node:fs');
+const path = require('node:path');
+
+test('斑马纹-商品档案表格应用 tbl-striped 类', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('tbl tbl-striped'), '表格带斑马纹类（手机版/电脑版共用同一列表）');
+});
+
+test('斑马纹-基础样式含交替行底色规则', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
+  assert.ok(css.includes('tbl-striped'), 'CSS 含斑马纹规则');
+  assert.ok(css.includes('nth-child(even)'), '偶数行交替底色');
+});
