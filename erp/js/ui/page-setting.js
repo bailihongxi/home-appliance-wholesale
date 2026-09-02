@@ -133,7 +133,7 @@
       },
 
       'save-settings': function (ctx, state) {
-        ctx.settings.shopName = util.cleanText(state.shopName) || '我的鞋服店';
+        ctx.settings.shopName = util.cleanText(state.shopName) || '我的电器店';
         ctx.settings.label = Object.assign({}, ctx.settings.label, {
           widthMm: util.parseMoney(state.widthMm) / 100 || ctx.settings.label.widthMm,
           heightMm: util.parseMoney(state.heightMm) / 100 || ctx.settings.label.heightMm,

@@ -215,11 +215,11 @@
       '<div class="page-head"><h2>' + (f.id ? '编辑供应商' : '新增供应商') + '</h2></div>' +
       '<div class="card mb8">' +
       '<div class="field"><label class="req">名称</label>' +
-      '<input class="input" data-input="field" data-name="name" placeholder="如：温州鞋厂" value="' + esc(f.name) + '"></div>' +
+      '<input class="input" data-input="field" data-name="name" placeholder="如：西安电器批发" value="' + esc(f.name) + '"></div>' +
       '<div class="field"><label>电话</label>' +
       '<input class="input" data-input="field" data-name="phone" placeholder="选填" value="' + esc(f.phone) + '"></div>' +
       '<div class="field"><label>备注</label>' +
-      '<textarea class="input" data-input="field" data-name="note" placeholder="选填，如：主营运动鞋">' + esc(f.note) + '</textarea></div>' +
+      '<textarea class="input" data-input="field" data-name="note" placeholder="选填，如：主营大家电">' + esc(f.note) + '</textarea></div>' +
       err +
       '<div class="row mt8" style="gap:8px">' +
       '<button class="btn btn-primary" data-act="save-supplier">保存</button>' +

@@ -55,7 +55,7 @@
     return out;
   };
 
-  /** 备份文件名：鞋服店账本_20260831_1030.json */
+  /** 备份文件名：电器店账本_20260831_1030.json */
   backup.fileName = function fileName(ctx) {
     var shop = (ctx && ctx.settings && ctx.settings.shopName) || '账本';
     var safe = String(shop).replace(/[\\/:*?"<>|]/g, '_');

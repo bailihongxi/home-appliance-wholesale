@@ -285,7 +285,7 @@
   function desktopMine(ctx, state) {
     var s = ctx.settings || {};
     var h = '<div class="page-head"><h2>我的</h2>' +
-      '<span class="desc">' + esc(s.shopName || '我的鞋服店') + ' · 进销存记账</span></div>';
+      '<span class="desc">' + esc(s.shopName || '我的电器店') + ' · 进销存记账</span></div>';
     h += '<div class="mine-desktop">' + mobileMine(ctx, state, true) + '</div>';
     return h;
   }
@@ -314,7 +314,7 @@
     h += '<div class="shop-info-card" data-act="toggle-shop-edit">' +
       avatarHtml +
       '<div class="info">' +
-        '<div class="name">' + esc(s.shopName || '我的鞋服店') + '</div>' +
+        '<div class="name">' + esc(s.shopName || '我的电器店') + '</div>' +
         '<div class="sub">经营：' + esc(scopeText) + '</div>' +
       '</div>' +
       '<div class="arrow">›</div>' +
@@ -325,7 +325,7 @@
       h += '<div class="card mt8 shop-edit-box">' +
         '<div class="card-title">店铺资料</div>' +
         '<div class="field"><label>店铺名称</label>' +
-        '<input class="input" data-input="shop-name-edit" data-live="1" value="' + esc(state.shopNameEdit) + '" placeholder="如 我的鞋店"></div>' +
+        '<input class="input" data-input="shop-name-edit" data-live="1" value="' + esc(state.shopNameEdit) + '" placeholder="如 我的电器店"></div>' +
         '<div class="field"><label>店铺头像</label>' +
         '<div class="row wrap"><input type="file" accept="image/*" data-change="pick-avatar" style="max-width:220px">' +
         (state.avatarDataUrl ? '<img class="avatar-preview" src="' + esc(state.avatarDataUrl) + '" alt="">' : '') +

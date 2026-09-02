@@ -45,7 +45,7 @@
 
     var h = '<div class="login-page">' +
       '<div class="login-card">' +
-      '<div class="login-brand"><img src="assets/icon-192.png" alt="logo"><div class="login-title">我的鞋服店</div>' +
+      '<div class="login-brand"><img src="assets/icon-192.png" alt="logo"><div class="login-title">我的电器店</div>' +
       '<div class="login-sub">V3 多店铺进销存 · 请选择店铺登录</div></div>';
 
     // 账号列表

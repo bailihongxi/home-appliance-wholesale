@@ -2,7 +2,7 @@
  * ui/page-home.js —— 首页经营看板（v2 薄荷绿 UI 重设计）
  *
  * 设计图1（手机）+ 设计图4（电脑）合并：
- * - 手机端：薄荷绿 banner「我的鞋服店」+「经营概览」大标题 + 醒目「开单」按钮
+ * - 手机端：薄荷绿 banner「我的电器店」+「经营概览」大标题 + 醒目「开单」按钮
  *          + 2x2 stat-card（营收/单数/毛利/预警）+ 6 格圆形彩色快捷入口
  * - 电脑端：保持原有 desktop-only 区域（月度营收、6 月趋势、TOP5）
  *          + 升级为 stat-card + 折线图 + 排行榜
@@ -150,8 +150,8 @@
   /** v2 共享 6 格圆形彩色快捷入口（进货/商品/库存/退换/记账/报表） */
   function quickGrid(extraCls) {
     var items = [
-      { page: 'purchase',  icon: '🛍️', text: '进货', color: 'c-green' },
-      { page: 'product',   icon: '👕', text: '商品', color: 'c-blue' },
+      { page: 'purchase',  icon: '🚚', text: '进货', color: 'c-green' },
+      { page: 'product',   icon: '📦', text: '商品', color: 'c-blue' },
       { page: 'inventory', icon: '🗄️', text: '库存', color: 'c-teal' },
       { page: 'exchange',  icon: '🔁', text: '退换', color: 'c-peach' },
       { page: 'account',   icon: '📒', text: '记账', color: 'c-purple' },
@@ -179,7 +179,7 @@
     var dateObj = new Date(today + 'T00:00:00');
     var cnDate = dateObj.getFullYear() + '年' + (dateObj.getMonth() + 1) + '月' + dateObj.getDate() + '日';
     var brandLogo = (ctx.settings.avatar) ? ctx.settings.avatar : 'assets/icon-192.png';
-    var shopName = ctx.settings.shopName || '我的鞋服店';
+    var shopName = ctx.settings.shopName || '我的电器店';
 
     return (
       '<div class="page-banner">' +
@@ -205,7 +205,7 @@
     var dateObj = new Date(today + 'T00:00:00');
     var cnDate = dateObj.getFullYear() + '年' + (dateObj.getMonth() + 1) + '月' + dateObj.getDate() + '日';
     var brandLogo = (ctx.settings.avatar) ? ctx.settings.avatar : 'assets/icon-192.png';
-    var shopName = ctx.settings.shopName || '我的鞋服店';
+    var shopName = ctx.settings.shopName || '我的电器店';
 
     return (
       '<div class="page-banner">' +
@@ -315,12 +315,12 @@
       return '<div class="empty-state"><div class="icon-disc">📦</div><div class="text">暂无销售数据</div></div>';
     }
     var h = '<ul class="rank-list" style="list-style:none;padding:0;margin:0">';
-    var emojis = ['👟', '👕', '🧥', '👖', '🧢'];
+    var emojis = ['📺', '❄️', '🧺', '🔊', '📻'];
     top.forEach(function (t, i) {
       h += '<li class="rank-row">' +
         '<div class="rank-num">' + (i + 1) + '</div>' +
         '<div class="rank-thumb">' + (emojis[i] || '📦') + '</div>' +
-        '<div class="rank-name">' + esc(t.name || t.styleCode) + '</div>' +
+        '<div class="rank-name">' + esc(t.name || t.productId) + '</div>' +
         '<div class="rank-qty">' + t.qty + ' ' + (t.unit || '件') + '</div>' +
         '<div class="rank-money">' + C.money(t.grossProfit || t.revenue || 0) + '</div>' +
       '</li>';
