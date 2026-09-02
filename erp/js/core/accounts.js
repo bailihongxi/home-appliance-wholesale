@@ -142,7 +142,7 @@
       id: api.nextId(list),
       username: username,
       shopName: shopName,
-      avatar: '',
+      avatar: typeof input.avatar === 'string' ? input.avatar : '',
       scopeCategories: input.scopeCategories && input.scopeCategories.length ? input.scopeCategories.slice() : ALL_CATEGORIES.slice(),
       hash: util.hashPassword(pwd),
       createdAt: new Date().toISOString().slice(0, 10)

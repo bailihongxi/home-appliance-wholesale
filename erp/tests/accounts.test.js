@@ -83,3 +83,31 @@ test('updateProfile：改店名不影响密码', () => {
   assert.strictEqual(accounts.getById(updated, 'acct1').shopName, '大家电中心');
   assert.strictEqual(accounts.verify(accounts.getById(updated, 'acct1'), '000000'), true, '密码不变');
 });
+
+/* ===== 问题4：创建账号可设定头像 ===== */
+test('问题4-创建账号：支持自定义头像 dataURL', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const r = accounts.create(store, {
+    username: 'myav', password: '123456', shopName: '头像店',
+    avatar: 'data:image/png;base64,AAAA'
+  });
+  assert.ok(r.ok, '创建成功：' + (r.error || ''));
+  const acct = accounts.getById(accounts.load(store), r.account.id);
+  assert.strictEqual(acct.avatar, 'data:image/png;base64,AAAA', '头像已存储');
+  // publicList 也应带出头像（登录页展示）
+  const pub = accounts.publicList(accounts.load(store)).find(a => a.id === r.account.id);
+  assert.strictEqual(pub.avatar, 'data:image/png;base64,AAAA');
+  // 未传头像默认空
+  const r2 = accounts.create(store, { username: 'noav', password: '123456', shopName: '无头像店' });
+  assert.strictEqual(accounts.getById(accounts.load(store), r2.account.id).avatar, '');
+});
+
+test('问题4-多店铺数据隔离：不同账号库名独立，数据不共有', () => {
+  const schema = require('../js/core/schema.js');
+  assert.strictEqual(schema.dbNameFor('acct1'), 'erp_acct1');
+  assert.strictEqual(schema.dbNameFor('acct2'), 'erp_acct2');
+  assert.notStrictEqual(schema.dbNameFor('acct1'), schema.dbNameFor('acct2'), '两账号库名不同');
+  // 自建账号也有独立库名
+  assert.strictEqual(schema.dbNameFor('acct_myShop'), 'erp_acct_myShop');
+});

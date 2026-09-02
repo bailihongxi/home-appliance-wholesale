@@ -30,7 +30,7 @@
         selectedId: null,
         pwd: '',
         showCreate: false,
-        create: { username: '', shopName: '', password: '', password2: '' },
+        create: { username: '', shopName: '', password: '', password2: '', avatar: '' },
         error: '',
         msg: ''
       };
@@ -76,6 +76,17 @@
     if (state.showCreate) {
       h += '<div class="card mt8 create-box">' +
         '<div class="card-title">新建店铺账号</div>' +
+        '<div class="field"><label>店铺头像（选填）</label>' +
+        '<div class="row" style="gap:10px;align-items:center">' +
+          (state.create.avatar
+            ? '<img class="avatar-img" src="' + esc(state.create.avatar) + '" alt="头像预览" style="width:48px;height:48px;border-radius:50%;object-fit:cover">'
+            : '<div class="avatar">⚡</div>') +
+          '<label class="btn btn-sm" style="margin:0">📷 选择图片' +
+            '<input type="file" accept="image/*" data-input="create.avatar" style="display:none">' +
+          '</label>' +
+          (state.create.avatar ? '<button class="btn btn-sm" data-act="clear-create-avatar">清除</button>' : '') +
+        '</div>' +
+        '<div class="small muted mt4">仅本机保存，用于登录页与「我的」页展示</div></div>' +
         '<div class="field"><label>登录账号（2-20 位字母/数字/下划线）</label>' +
         '<input class="input" data-input="create.username" data-live="1" placeholder="如 myShop" value="' + esc(state.create.username) + '"></div>' +
         '<div class="field"><label>店铺名称</label>' +
@@ -127,6 +138,23 @@
     'create.shopName': function (ctx, state, el) { state.create.shopName = el.value; },
     'create.password': function (ctx, state, el) { state.create.password = el.value; },
     'create.password2': function (ctx, state, el) { state.create.password2 = el.value; },
+    /** 头像文件选择 → 读为 dataURL 预览（创建时写入账号 avatar） */
+    'create.avatar': function (ctx, state, el) {
+      var f = el.files && el.files[0];
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        state.create.avatar = String(reader.result || '');
+        var g = (typeof globalThis !== 'undefined' ? globalThis : null) || (typeof self !== 'undefined' ? self : null);
+        if (g && g.ERP && g.ERP.app && g.ERP.app.render) g.ERP.app.render();
+      };
+      reader.readAsDataURL(f);
+    },
+    'clear-create-avatar': function (ctx, state) {
+      state.create.avatar = '';
+      var g = (typeof globalThis !== 'undefined' ? globalThis : null) || (typeof self !== 'undefined' ? self : null);
+      if (g && g.ERP && g.ERP.app && g.ERP.app.render) g.ERP.app.render();
+    },
 
     'create-account': function (ctx, state) {
       if (state.create.password !== state.create.password2) {
@@ -136,11 +164,12 @@
       var r = accounts.create(state.store, {
         username: state.create.username,
         shopName: state.create.shopName,
-        password: state.create.password
+        password: state.create.password,
+        avatar: state.create.avatar
       });
       if (!r.ok) { state.error = r.error || '创建失败'; return false; }
       state.showCreate = false;
-      state.create = { username: '', shopName: '', password: '', password2: '' };
+      state.create = { username: '', shopName: '', password: '', password2: '', avatar: '' };
       state.selectedId = r.account.id;
       state.msg = '账号已创建，请设置登录密码进入';
       return true;
