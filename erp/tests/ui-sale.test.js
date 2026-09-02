@@ -1,0 +1,163 @@
+const test = require('node:test');
+const assert = require('node:assert');
+const page = require('../js/ui/page-sale.js');
+const { newCtx } = require('./helpers/ctx.js');
+const product = require('../js/core/product.js');
+
+function seed(ctx) {
+  const p1 = product.save(ctx, {
+    brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
+    cost: '1000', priceWholesale: '1200', priceRetail: '1399'
+  });
+  const p2 = product.save(ctx, {
+    brand: '格力', model: 'KFR-35', category: '空调', unit: '台',
+    cost: '1800', priceWholesale: '2200', priceRetail: '2599',
+    barcodes: '6923456789012'
+  });
+  return { p1: p1.product, p2: p2.product };
+}
+
+function fresh(ctx) {
+  return page.init();
+}
+
+test('页面元数据与初始状态', () => {
+  assert.strictEqual(page.name, 'sale');
+  assert.strictEqual(page.title, '销售开单');
+  const ctx = newCtx();
+  const state = fresh(ctx);
+  assert.strictEqual(state.tab, 'new');
+  assert.deepStrictEqual(state.form.items, []);
+});
+
+test('init：跨页预选 pendingSaleProduct', () => {
+  const ctx = newCtx();
+  const { p1 } = seed(ctx);
+  global.__sale = page;
+  const E = globalThis.ERP;
+  const orig = globalThis.ERP;
+  if (!globalThis.ERP) globalThis.ERP = {};
+  globalThis.ERP.pendingSaleProduct = p1.id;
+  const state = page.init();
+  assert.strictEqual(state.form.productId, p1.id);
+  globalThis.ERP = orig;
+});
+
+test('pick-product：加入商品，默认零售价', () => {
+  const ctx = newCtx();
+  const { p1 } = seed(ctx);
+  const state = fresh(ctx);
+  page.actions['pick-product'](ctx, state, { getAttribute: () => p1.id });
+  assert.strictEqual(state.form.items.length, 1);
+  const it = state.form.items[0];
+  assert.strictEqual(it.productId, p1.id);
+  assert.strictEqual(it.qty, 1);
+  assert.strictEqual(it.price, p1.priceRetail, '默认零售价');
+  assert.strictEqual(it.priceType, 'retail');
+  // 再次点击 → 数量累加
+  page.actions['pick-product'](ctx, state, { getAttribute: () => p1.id });
+  assert.strictEqual(state.form.items[0].qty, 2);
+});
+
+test('toggle-price：零售 ↔ 批发 切换', () => {
+  const ctx = newCtx();
+  const { p1 } = seed(ctx);
+  const state = fresh(ctx);
+  page.actions['pick-product'](ctx, state, { getAttribute: () => p1.id });
+  // 切批发
+  page.actions['toggle-price'](ctx, state, { getAttribute: () => p1.id });
+  assert.strictEqual(state.form.items[0].priceType, 'wholesale');
+  assert.strictEqual(state.form.items[0].price, p1.priceWholesale);
+  // 切回零售
+  page.actions['toggle-price'](ctx, state, { getAttribute: () => p1.id });
+  assert.strictEqual(state.form.items[0].priceType, 'retail');
+  assert.strictEqual(state.form.items[0].price, p1.priceRetail);
+});
+
+test('cart-qty / cart-price / del-item', () => {
+  const ctx = newCtx();
+  const { p1 } = seed(ctx);
+  const state = fresh(ctx);
+  page.actions['pick-product'](ctx, state, { getAttribute: () => p1.id });
+  page.actions['cart-qty'](ctx, state, { getAttribute: () => p1.id, value: '3' });
+  assert.strictEqual(state.form.items[0].qty, 3);
+  page.actions['cart-price'](ctx, state, { getAttribute: () => p1.id, value: '1300' });
+  assert.strictEqual(state.form.items[0].price, 130000);
+  page.actions['del-item'](ctx, state, { getAttribute: () => p1.id });
+  assert.strictEqual(state.form.items.length, 0);
+});
+
+test('save-sale：出单成功，库存扣减，批发价落单', () => {
+  const ctx = newCtx();
+  const { p1, p2 } = seed(ctx);
+  // 先加库存
+  const inv = require('../js/core/inventory.js');
+  inv.applyPurchase(ctx, { date: '2026-09-01', items: [{ productId: p1.id, qty: 10, cost: 100000 }], supplier: '测试' });
+  inv.applyPurchase(ctx, { date: '2026-09-01', items: [{ productId: p2.id, qty: 10, cost: 180000 }], supplier: '测试' });
+
+  const state = fresh(ctx);
+  page.actions['pick-product'](ctx, state, { getAttribute: () => p1.id });
+  page.actions['toggle-price'](ctx, state, { getAttribute: () => p1.id }); // 批发
+  page.actions['pick-product'](ctx, state, { getAttribute: () => p2.id }); // 零售
+  page.actions['field'](ctx, state, { getAttribute: () => 'pay.cash', value: '4000' });
+
+  const ok = page.actions['save-sale'](ctx, state);
+  assert.strictEqual(ok, true);
+  const doc = ctx.data.sales[0];
+  assert.ok(doc);
+  assert.strictEqual(doc.items[0].priceType, 'wholesale');
+  assert.strictEqual(doc.items[0].price, p1.priceWholesale);
+  assert.strictEqual(doc.items[1].priceType, 'retail');
+  // 库存扣减
+  assert.strictEqual(product.getById(ctx, p1.id).stock, 9);
+  assert.strictEqual(product.getById(ctx, p2.id).stock, 9);
+});
+
+test('save-sale：欠款需选客户；未收齐未开欠款则拦截', () => {
+  const ctx = newCtx();
+  const { p1 } = seed(ctx);
+  const inv = require('../js/core/inventory.js');
+  inv.applyPurchase(ctx, { date: '2026-09-01', items: [{ productId: p1.id, qty: 5, cost: 100000 }], supplier: '测试' });
+
+  const state = fresh(ctx);
+  page.actions['pick-product'](ctx, state, { getAttribute: () => p1.id });
+  // 未收齐且不开欠款
+  const ok1 = page.actions['save-sale'](ctx, state);
+  assert.strictEqual(ok1, false, '未收齐应拦截');
+  // 开欠款但未选客户
+  page.actions['toggle-debt'](ctx, state);
+  const ok2 = page.actions['save-sale'](ctx, state);
+  assert.strictEqual(ok2, false, '欠款未选客户应拦截');
+});
+
+test('列表渲染：销售记录含品牌型号', () => {
+  const ctx = newCtx();
+  const { p1 } = seed(ctx);
+  const inv = require('../js/core/inventory.js');
+  inv.applyPurchase(ctx, { date: '2026-09-01', items: [{ productId: p1.id, qty: 3, cost: 100000 }], supplier: '测试' });
+  const state = fresh(ctx);
+  state.tab = 'list';
+  state.form = page.init().form;
+  page.actions['pick-product'](ctx, state, { getAttribute: () => p1.id });
+  page.actions['field'](ctx, state, { getAttribute: () => 'pay.cash', value: '1399' });
+  page.actions['save-sale'](ctx, state);
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('销售记录'));
+  assert.ok(html.includes('S2026'), '含销售单号');
+  // 查看详情 → 弹层显示品牌型号
+  const doc = ctx.data.sales[0];
+  page.actions['view-doc'](ctx, state, { getAttribute: () => doc.no });
+  const detail = page.render(ctx, state);
+  assert.ok(detail.includes('海尔'));
+  assert.ok(detail.includes('BCD-200'));
+  assert.ok(detail.includes('零售'), '详情显示价格类型');
+});
+
+test('扫码加单：scan-input 按条码定位商品', () => {
+  const ctx = newCtx();
+  const { p2 } = seed(ctx);
+  const state = fresh(ctx);
+  page.actions['scan-input'](ctx, state, { value: '6923456789012' });
+  assert.strictEqual(state.form.items.length, 1);
+  assert.strictEqual(state.form.items[0].productId, p2.id);
+});

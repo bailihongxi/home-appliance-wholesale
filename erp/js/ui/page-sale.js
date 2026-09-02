@@ -1,5 +1,6 @@
 /**
- * ui/page-sale.js —— 销售开单（搜索选品 → 色码矩阵 → 数量）、单行改价、
+ * ui/page-sale.js —— 销售开单（电器版单层商品）
+ * 搜索选品 → 点「加入」按商品加单；每行可切换 批发/零售 价或直接改价；
  * 整单折扣、组合收款（微信/现金/支付宝/欠款）、赠送、退货红冲、销售记录。
  */
 (function (root, factory) {
@@ -14,6 +15,7 @@
     E.cart || (isNode ? require('../core/cart.js') : null),
     E.engine || (isNode ? require('../core/engine.js') : null),
     E.debt || (isNode ? require('../core/debt.js') : null),
+    E.product || (isNode ? require('../core/product.js') : null),
     E.repo || (isNode ? require('../store/repo.js') : null),
     E
   );
@@ -21,16 +23,17 @@
   root.ERP = root.ERP || {};
   root.ERP.pages = root.ERP.pages || {};
   root.ERP.pages.sale = mod;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, inv, cart, engine, debt, repo, ERP) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, inv, cart, engine, debt, product, repo, ERP) {
   'use strict';
 
   var esc = util.escapeHtml;
   var PAY = schema.PAY_METHODS;
+  var PRICE = schema.PRICE_TYPE;
 
   function emptyForm() {
     return {
       keyword: '',
-      styleCode: '',
+      productId: '',
       items: [],
       discount: '',
       pay: { wechat: '', cash: '', alipay: '' },
@@ -48,10 +51,10 @@
 
     init: function () {
       var form = emptyForm();
-      // 来自「商品卡 / 扫码」的跨页预选款号
-      if (ERP && ERP.pendingSaleStyle) {
-        form.styleCode = ERP.pendingSaleStyle;
-        ERP.pendingSaleStyle = null;
+      // 来自「商品卡 / 扫码」的跨页预选商品
+      if (ERP && ERP.pendingSaleProduct) {
+        form.productId = ERP.pendingSaleProduct;
+        ERP.pendingSaleProduct = null;
       }
       return {
         tab: 'new',
@@ -98,54 +101,65 @@
       keyword: function (ctx, state, el) {
         state.form.keyword = el.value;
       },
-      'pick-style': function (ctx, state, el) {
-        state.form.styleCode = el.getAttribute('data-code');
+      'pick-product': function (ctx, state, el) {
+        var id = el.getAttribute('data-id');
+        state.form.productId = id;
+        addItem(ctx, state, id);
       },
       'clear-pick': function (ctx, state) {
-        state.form.styleCode = '';
-      },
-
-      /* 点矩阵格子 → 加入销售单 */
-      'add-sale': function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
-        addItem(ctx, state, skuId);
+        state.form.productId = '';
       },
 
       'cart-qty': function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
-        var it = findItem(state, skuId);
+        var id = el.getAttribute('data-id');
+        var it = findItem(state, id);
         if (!it) return;
         var v = parseInt(el.value, 10);
         it.qty = isNaN(v) || v < 1 ? 1 : v;
       },
       'cart-price': function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
-        var it = findItem(state, skuId);
+        var id = el.getAttribute('data-id');
+        var it = findItem(state, id);
         if (!it) return;
         it.price = util.parseMoney(el.value);
       },
+      /** 切换批发 / 零售价 */
+      'toggle-price': function (ctx, state, el) {
+        var id = el.getAttribute('data-id');
+        var it = findItem(state, id);
+        if (!it) return;
+        var p = product.getById(ctx, id);
+        if (!p) return;
+        if (it.priceType === PRICE.WHOLESALE) {
+          it.priceType = PRICE.RETAIL;
+          it.price = p.priceRetail || 0;
+        } else {
+          it.priceType = PRICE.WHOLESALE;
+          it.price = p.priceWholesale || 0;
+        }
+      },
       'toggle-gift': function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
-        var it = findItem(state, skuId);
+        var id = el.getAttribute('data-id');
+        var it = findItem(state, id);
         if (!it) return;
         it.type = it.type === schema.DOC.GIFT ? schema.DOC.SALE : schema.DOC.GIFT;
         if (it.type === schema.DOC.GIFT) {
           it.price = 0;
           it.giftReason = schema.GIFT_REASONS[0];
         } else {
-          var sku = ctx.getSku(skuId);
-          it.price = sku ? inv.salePriceOf(ctx, sku) : 0;
+          var p = product.getById(ctx, id);
+          it.price = p ? (it.priceType === PRICE.WHOLESALE ? p.priceWholesale || 0 : p.priceRetail || 0) : 0;
         }
       },
       'gift-reason': function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
-        var it = findItem(state, skuId);
+        var id = el.getAttribute('data-id');
+        var it = findItem(state, id);
         if (it) it.giftReason = el.value;
       },
       'del-item': function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
+        var id = el.getAttribute('data-id');
         state.form.items = state.form.items.filter(function (x) {
-          return x.skuId !== skuId;
+          return x.productId !== id;
         });
       },
       'clear-items': function (ctx, state) {
@@ -196,10 +210,10 @@
         state.refundQty = {};
       },
       'refund-qty': function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
+        var id = el.getAttribute('data-id');
         state.refundQty = state.refundQty || {};
         var v = parseInt(el.value, 10);
-        state.refundQty[skuId] = isNaN(v) || v < 0 ? 0 : v;
+        state.refundQty[id] = isNaN(v) || v < 0 ? 0 : v;
       },
       'do-refund': function (ctx, state) {
         var no = state.refundNo;
@@ -208,7 +222,7 @@
             return state.refundQty[k] > 0;
           })
           .map(function (k) {
-            return { skuId: k, qty: state.refundQty[k] };
+            return { productId: k, qty: state.refundQty[k] };
           });
         var r = engine.refundSale(ctx, { originalNo: no, items: items });
         if (!r.ok) {
@@ -229,26 +243,17 @@
         state.refundQty = {};
       },
 
-      /* 扫码 / 扫码枪输入条码 → 定位该款并展开矩阵 */
+      /** 扫码 / 扫码枪输入 → 匹配商品并加入开单 */
       'scan-input': function (ctx, state, payload) {
-        var code = String((payload && payload.value) || '').trim().toUpperCase();
+        var code = String((payload && payload.value) || '').trim();
         if (!code) return;
-        var p = ctx.data.products.find(function (x) {
-          return (x.barcode || '').toUpperCase() === code || x.styleCode.toUpperCase() === code;
-        });
-        if (!p) {
-          // 退一步：按 SKU id 反查款
-          var sku = ctx.data.skus.find(function (s) {
-            return s.id.toUpperCase() === code;
-          });
-          if (sku) p = ctx.getProduct(sku.styleCode);
-        }
-        if (p) {
+        var r = scanResolve(ctx, code);
+        if (r.found) {
+          addItem(ctx, state, r.product.id);
           state.form.keyword = '';
-          state.form.styleCode = p.styleCode;
-          ui.toast('已定位：' + p.name, 'ok');
+          ui.toast('已加入：' + product.displayName(r.product), 'ok');
         } else {
-          ui.toast('未找到此条码：' + code, 'err');
+          ui.toast('未找到此条码/型号：' + code, 'err');
         }
       },
 
@@ -273,30 +278,35 @@
 
   /* ---------------- 工具 ---------------- */
 
-  function findItem(state, skuId) {
+  function scanResolve(ctx, code) {
+    if (ERP.scan && ERP.scan.resolve) return ERP.scan.resolve(ctx, code);
+    var p = ctx.getProductByCode(code);
+    return p ? { found: true, product: p } : { found: false };
+  }
+
+  function findItem(state, productId) {
     return state.form.items.find(function (x) {
-      return x.skuId === skuId;
+      return x.productId === productId;
     });
   }
 
-  function addItem(ctx, state, skuId) {
-    var sku = ctx.getSku(skuId);
-    if (!sku) return;
-    var it = findItem(state, skuId);
+  function addItem(ctx, state, productId) {
+    var p = product.getById(ctx, productId);
+    if (!p) return;
+    var it = findItem(state, p.id);
     if (it) {
       it.qty += 1;
       return;
     }
-    var product = ctx.getProduct(sku.styleCode);
     state.form.items.push({
-      skuId: sku.id,
-      styleCode: sku.styleCode,
-      color: sku.color,
-      size: sku.size,
+      productId: p.id,
+      brand: p.brand,
+      model: p.model,
+      unit: p.unit,
       qty: 1,
-      price: inv.salePriceOf(ctx, sku),
-      costSnapshot: sku.costPrice !== undefined && sku.costPrice !== null ? sku.costPrice
-        : (product ? product.costPrice || 0 : 0),
+      price: p.priceRetail || 0,
+      priceType: PRICE.RETAIL,
+      costSnapshot: p.cost || 0,
       type: schema.DOC.SALE,
       giftReason: null
     });
@@ -326,75 +336,78 @@
     var calc = totals(ctx, state);
 
     var h = '<div class="page-head"><h2>销售开单</h2>' +
-      '<span class="desc">搜索选品 → 点色码加单 → 收款保存</span></div>';
+      '<span class="desc">搜索选品 → 点「加入」加单 → 每行可切批发/零售价 → 收款保存</span></div>';
 
     h += '<div class="sale-three-col">';
 
-    /* ---------- 左列：选货区（搜索 + 款 chips + 色码矩阵） ---------- */
+    /* ---------- 左列：选货区 ---------- */
     h += '<div class="sale-col-pick">';
     h += '<div class="card"><div class="card-title">选货区</div>' +
-      ui.searchBar({ value: form.keyword, placeholder: '搜索名称 / 款号 / 条码', scan: true });
-    var kw = String(form.keyword || '').toUpperCase();
-    var styles = ctx.data.products.filter(function (p) {
-      // V3 经营范围：非本账号分类商品不出现在选货区
+      ui.searchBar({ value: form.keyword, placeholder: '搜索 品牌 / 型号 / 类型 / 条码', scan: true });
+    var kw = String(form.keyword || '').trim().toUpperCase();
+    var list = ctx.data.products.filter(function (p) {
       if (!schema.inScope(ctx.settings, p.category)) return false;
-      if (!kw) return p.status !== schema.STATUS.OFF;
-      return (
-        String(p.styleCode).toUpperCase().indexOf(kw) >= 0 ||
-        String(p.name).toUpperCase().indexOf(kw) >= 0 ||
-        String(p.barcode || '').toUpperCase().indexOf(kw) >= 0
-      );
-    }).slice(0, 20);
-    if (styles.length) {
-      h += '<div class="chips mb8">';
-      styles.forEach(function (p) {
-        h += '<button class="chip' + (p.styleCode === form.styleCode ? ' on' : '') + '" data-act="pick-style" data-code="' + esc(p.styleCode) + '">' +
-          esc(p.name) + ' <span class="weak small mono">' + esc(p.styleCode) + '</span></button>';
+      var bc = (Array.isArray(p.barcodes) ? p.barcodes : []).some(function (b) {
+        return String(b || '').toUpperCase().indexOf(kw) >= 0;
       });
-      h += '</div>';
-    }
-
-    if (form.styleCode) {
-      var product = ctx.getProduct(form.styleCode);
-      var m = inv.buildMatrix(ctx, form.styleCode);
-      if (product && m.colors.length) {
-        h += '<div class="small muted mb4">点击色码格子加入销售单（数字为当前库存）</div>';
-        h += '<div class="table-wrap">' + ui.matrixTable(m, { act: 'add-sale' }) + '</div>';
-        h += '<div class="row mt8"><button class="btn btn-sm" data-act="clear-pick">收起</button></div>';
-      }
+      if (!kw) return p.status !== schema.STATUS.OFF;
+      return String(p.brand || '').toUpperCase().indexOf(kw) >= 0 ||
+        String(p.model || '').toUpperCase().indexOf(kw) >= 0 ||
+        String(p.category || '').toUpperCase().indexOf(kw) >= 0 || bc;
+    }).slice(0, 30);
+    if (!list.length) {
+      h += ui.empty('没有匹配的商品，请先到「商品档案」建档');
+    } else {
+      h += '<div class="table-wrap"><table class="tbl"><thead><tr>' +
+        '<th>商品</th><th class="num">批发</th><th class="num">零售</th><th class="num">库存</th><th></th>' +
+        '</tr></thead><tbody>';
+      list.forEach(function (p) {
+        var low = (p.stock || 0) < (ctx.settings.defaultThreshold == null ? 3 : ctx.settings.defaultThreshold);
+        h += '<tr>' +
+          '<td>' + esc(p.brand) + ' <b>' + esc(p.model) + '</b><br><span class="weak small">' + esc(p.category) + ' / ' + esc(p.unit) + '</span></td>' +
+          '<td class="num">' + ui.money(p.priceWholesale) + '</td>' +
+          '<td class="num">' + ui.money(p.priceRetail) + '</td>' +
+          '<td class="num' + (low ? ' low' : '') + '">' + (p.stock || 0) + '</td>' +
+          '<td class="act"><button class="btn btn-sm btn-primary" data-act="pick-product" data-id="' + esc(p.id) + '">加入</button></td>' +
+          '</tr>';
+      });
+      h += '</tbody></table></div>';
     }
     h += '</div>';
     h += '</div>';
 
-    /* ---------- 中列：当前订单（明细 + 折扣 + 合计 + 出单） ---------- */
+    /* ---------- 中列：当前订单 ---------- */
     h += '<div class="sale-col-order">';
     var t = calc;
     h += '<div class="card"><div class="card-title">当前订单（' + form.items.length + ' 行）' +
       (form.items.length ? '<button class="btn btn-sm" data-act="clear-items">清空</button>' : '') + '</div>';
     if (!form.items.length) {
-      h += ui.empty('还没有商品，先搜索并点色码加入');
+      h += ui.empty('还没有商品，先搜索并点「加入」');
     } else {
       h += '<div class="table-wrap"><table class="tbl"><thead><tr><th>商品</th><th class="num">数量</th>' +
-        '<th class="num">单价</th><th>类型</th><th class="num">小计</th><th></th></tr></thead><tbody>';
+        '<th class="num">单价</th><th>价格</th><th>类型</th><th class="num">小计</th><th></th></tr></thead><tbody>';
       form.items.forEach(function (it) {
-        var product = ctx.getProduct(it.styleCode);
         var line = (it.type === schema.DOC.GIFT ? 0 : it.price) * it.qty;
+        var isWholesale = it.priceType === PRICE.WHOLESALE;
         h += '<tr>' +
-          '<td>' + esc(product ? product.name : it.styleCode) + '<br><span class="weak small">' +
-          esc(it.color) + ' / ' + esc(it.size) + '</span></td>' +
-          '<td class="num"><input class="input" style="width:54px;text-align:right" data-change="cart-qty" data-sku="' + esc(it.skuId) + '" inputmode="numeric" value="' + it.qty + '"></td>' +
-          '<td class="num"><input class="input" style="width:72px;text-align:right" data-change="cart-price" data-sku="' + esc(it.skuId) + '" inputmode="decimal" value="' + esc(util.fenToYuan(it.price)) + '"' + (it.type === schema.DOC.GIFT ? ' disabled' : '') + '></td>' +
+          '<td>' + esc(it.brand) + ' <b>' + esc(it.model) + '</b><br><span class="weak small">' + esc(it.unit) + '</span></td>' +
+          '<td class="num"><input class="input" style="width:54px;text-align:right" data-change="cart-qty" data-id="' + esc(it.productId) + '" inputmode="numeric" value="' + it.qty + '"></td>' +
+          '<td class="num"><input class="input" style="width:72px;text-align:right" data-change="cart-price" data-id="' + esc(it.productId) + '" inputmode="decimal" value="' + esc(util.fenToYuan(it.price)) + '"' + (it.type === schema.DOC.GIFT ? ' disabled' : '') + '></td>' +
           '<td>' +
-          '<button class="btn btn-sm ' + (it.type === schema.DOC.GIFT ? 'btn-warn' : '') + '" data-act="toggle-gift" data-sku="' + esc(it.skuId) + '">' +
+          '<button class="btn btn-sm ' + (isWholesale ? 'btn-primary' : '') + '" data-act="toggle-price" data-id="' + esc(it.productId) + '">' +
+          (isWholesale ? '批发' : '零售') + '</button>' +
+          '</td>' +
+          '<td>' +
+          '<button class="btn btn-sm ' + (it.type === schema.DOC.GIFT ? 'btn-warn' : '') + '" data-act="toggle-gift" data-id="' + esc(it.productId) + '">' +
           (it.type === schema.DOC.GIFT ? '赠送' : '销售') + '</button>' +
           (it.type === schema.DOC.GIFT
             ? ui.select({ name: 'gr', value: it.giftReason, on: 'gift-reason', options: schema.GIFT_REASONS.map(function (r) {
               return { value: r, text: r };
-            }), attrs: 'data-sku="' + esc(it.skuId) + '"' })
+            }), attrs: 'data-id="' + esc(it.productId) + '"' })
             : '') +
           '</td>' +
           '<td class="num">' + ui.money(line) + '</td>' +
-          '<td class="act"><button data-act="del-item" data-sku="' + esc(it.skuId) + '">删除</button></td></tr>';
+          '<td class="act"><button data-act="del-item" data-id="' + esc(it.productId) + '">删除</button></td></tr>';
       });
       h += '</tbody></table></div>';
     }
@@ -410,7 +423,7 @@
     h += '</div>';
     h += '</div>';
 
-    /* ---------- 右列：收款（支付方式 + 实收 + 欠款处理） ---------- */
+    /* ---------- 右列：收款 ---------- */
     h += '<div class="sale-col-pay">';
     h += '<div class="card"><div class="card-title">收款</div>';
     h += '<div class="field"><label>收款（元）</label>' +
@@ -442,7 +455,6 @@
     h += '<div class="field mt8"><label>备注</label>' +
       '<input class="input" data-input="field" data-name="note" placeholder="选填" value="' + esc(form.note) + '"></div>';
 
-    /* 收款栏底部：取消 + 保存并出单（手机端位于收款之后，顺序正确） */
     h += '<div class="row mt8">' +
       '<button class="btn" data-act="cancel-form">取消</button>' +
       '<div class="spacer"></div>' +
@@ -509,7 +521,8 @@
         if (String(d.no).toUpperCase().indexOf(kw) < 0 &&
           String(d.partnerName || '').toUpperCase().indexOf(kw) < 0 &&
           !(d.items || []).some(function (it) {
-            return String(it.styleCode).toUpperCase().indexOf(kw) >= 0;
+            return String(it.brand || '').toUpperCase().indexOf(kw) >= 0 ||
+              String(it.model || '').toUpperCase().indexOf(kw) >= 0;
           })) return false;
       }
       return true;
@@ -525,7 +538,7 @@
       '<span class="desc">' + list.length + ' 张单</span>' +
       '<div class="actions"><button class="btn btn-primary" data-act="open-new">＋ 开单</button></div></div>';
 
-    h += '<div class="card">' + ui.searchBar({ value: state.keyword, placeholder: '搜索单号 / 客户 / 款号', scan: false });
+    h += '<div class="card">' + ui.searchBar({ value: state.keyword, placeholder: '搜索单号 / 客户 / 品牌 / 型号', scan: false });
     h += '<div class="row wrap">' +
       '<input class="input" type="date" data-change="filter" data-name="from" value="' + esc(state.from) + '">' +
       '<input class="input" type="date" data-change="filter" data-name="to" value="' + esc(state.to) + '">' +
@@ -588,11 +601,14 @@
     var h = '<div class="card"><div class="card-title">' + (isRefund ? '退货单 ' : '销售单 ') + esc(doc.no) +
       (doc.voided ? '（已作废）' : '') +
       '<span class="more">' + esc(doc.date) + ' · ' + esc(doc.partnerName || '散客') + '</span></div>' +
-      '<div class="table-wrap"><table class="tbl"><thead><tr><th>款号</th><th>颜色/号码</th>' +
+      '<div class="table-wrap"><table class="tbl"><thead><tr><th>商品</th><th>价格类型</th>' +
       '<th>类型</th><th class="num">数量</th><th class="num">单价</th><th class="num">小计</th></tr></thead><tbody>';
     doc.items.forEach(function (it) {
       var line = (it.type === schema.DOC.GIFT ? 0 : it.price) * it.qty;
-      h += '<tr><td class="mono">' + esc(it.styleCode) + '</td><td>' + esc(it.color) + ' / ' + esc(it.size) + '</td>' +
+      var pt = it.priceType === schema.PRICE_TYPE.WHOLESALE ? '批发' : '零售';
+      h += '<tr><td>' + esc(it.brand || '') + ' ' + esc(it.model || '') +
+        (it.unit ? ' <span class="weak small">' + esc(it.unit) + '</span>' : '') + '</td>' +
+        '<td>' + (it.type === schema.DOC.GIFT ? '—' : pt) + '</td>' +
         '<td>' + (it.type === schema.DOC.GIFT ? ui.badge('赠送', 'warn') + (it.giftReason ? ' ' + esc(it.giftReason) : '') : '销售') + '</td>' +
         '<td class="num">' + it.qty + '</td><td class="num">' + ui.money(it.price) + '</td>' +
         '<td class="num">' + ui.money(line) + '</td></tr>';
@@ -607,27 +623,26 @@
   }
 
   function refundModal(ctx, state, doc) {
-    // 已退数量（同原单的退货单）
     var returnedOf = {};
     (ctx.data.sales || []).forEach(function (s) {
       if (s.type !== schema.DOC.REFUND || s.voided) return;
       if (s.refNo !== doc.no) return;
       s.items.forEach(function (ri) {
-        returnedOf[ri.skuId] = (returnedOf[ri.skuId] || 0) + ri.qty;
+        returnedOf[ri.productId] = (returnedOf[ri.productId] || 0) + ri.qty;
       });
     });
     state.refundQty = state.refundQty || {};
     var h = '<div class="card"><div class="card-title">退货 · 红冲 ' + esc(doc.no) +
-      '<span class="more">选择要退的色码与数量</span></div>' +
+      '<span class="more">选择要退的商品与数量</span></div>' +
       '<div class="table-wrap"><table class="tbl"><thead><tr><th>商品</th><th class="num">可退</th><th class="num">退几件</th></tr></thead><tbody>';
     doc.items.forEach(function (it) {
-      var maxQty = it.qty - (returnedOf[it.skuId] || 0);
+      var maxQty = it.qty - (returnedOf[it.productId] || 0);
       if (maxQty <= 0) return;
-      var product = ctx.getProduct(it.styleCode);
-      var def = state.refundQty[it.skuId] !== undefined ? state.refundQty[it.skuId] : maxQty;
-      h += '<tr><td>' + esc(product ? product.name : it.styleCode) + ' <span class="weak small">' + esc(it.color) + '/' + esc(it.size) + '</span></td>' +
+      var def = state.refundQty[it.productId] !== undefined ? state.refundQty[it.productId] : maxQty;
+      h += '<tr><td>' + esc(it.brand || '') + ' ' + esc(it.model || '') +
+        (it.unit ? ' <span class="weak small">' + esc(it.unit) + '</span>' : '') + '</td>' +
         '<td class="num">' + maxQty + '</td>' +
-        '<td class="num"><input class="input" style="width:60px;text-align:right" data-change="refund-qty" data-sku="' + esc(it.skuId) + '" inputmode="numeric" value="' + def + '"></td></tr>';
+        '<td class="num"><input class="input" style="width:60px;text-align:right" data-change="refund-qty" data-id="' + esc(it.productId) + '" inputmode="numeric" value="' + def + '"></td></tr>';
     });
     h += '</tbody></table></div>' +
       '<div class="row"><button class="btn" data-act="close-refund">取消</button>' +
