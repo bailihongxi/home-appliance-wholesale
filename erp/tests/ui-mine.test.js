@@ -1,0 +1,108 @@
+/**
+ * 我的页（ui/page-mine.js）—— 问题2：云同步 403 诊断「测试连接」按钮
+ * - 同步设置面板含「测试连接」按钮
+ * - test-sync-conn：配置不全提示补全；checkAuth 成功/失败(403细分)分支
+ */
+const test = require('node:test');
+const assert = require('node:assert');
+const page = require('../js/ui/page-mine.js');
+const sync = require('../js/core/sync.js');
+const { newCtx } = require('./helpers/ctx.js');
+
+function fresh() {
+  const ctx = newCtx();
+  const state = page.init(ctx);
+  return { ctx, state };
+}
+
+function fullCfg(state) {
+  state.cfg.owner = 'bailihongxi';
+  state.cfg.repo = 'home-appliance-wholesale';
+  state.cfg.branch = 'gh-pages';
+  state.cfg.path = 'data/erp-snapshot.json';
+  state.cfg.token = 'ghp_test';
+  state.cfg.passphrase = '12345678';
+  return state.cfg;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test('页面元数据与云同步卡片渲染', () => {
+  assert.strictEqual(page.name, 'mine');
+  const { ctx, state } = fresh();
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('云同步'));
+  assert.ok(html.includes('同步到云端'));
+  assert.ok(html.includes('从云端恢复'));
+  assert.ok(html.includes('同步设置'));
+});
+
+test('同步设置展开：含「测试连接」与「保存同步设置」按钮', () => {
+  const { ctx, state } = fresh();
+  state.syncOpen = true;
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('data-act="test-sync-conn"'), '渲染测试连接按钮');
+  assert.ok(html.includes('data-act="save-sync-cfg"'), '保留保存同步设置按钮');
+});
+
+test('测试连接-配置不全：提示补全同步设置', () => {
+  const { ctx, state } = fresh();
+  state.cfg.token = ''; // 缺 Token
+  page.actions['test-sync-conn'](ctx, state);
+  assert.ok(state.msg.includes('补全同步设置'), '提示补全: ' + state.msg);
+  assert.strictEqual(state.msgType, 'err');
+});
+
+test('测试连接-成功：提示仓库可访问，busy 复位', async () => {
+  const { ctx, state } = fresh();
+  fullCfg(state);
+  const orig = sync.checkAuth;
+  sync.checkAuth = () => Promise.resolve({ ok: true, repo: 'bailihongxi/home-appliance-wholesale', private: false });
+  try {
+    page.actions['test-sync-conn'](ctx, state);
+    assert.strictEqual(state.busy, true, '请求中 busy=true');
+    await sleep(30);
+    assert.ok(state.msg.includes('连接成功'), '成功提示: ' + state.msg);
+    assert.ok(state.msg.includes('home-appliance-wholesale'), '显示仓库名');
+    assert.strictEqual(state.msgType, 'ok');
+    assert.strictEqual(state.busy, false, 'busy 复位');
+  } finally {
+    sync.checkAuth = orig;
+  }
+});
+
+test('测试连接-失败(403 权限不足)：显示细分原因', async () => {
+  const { ctx, state } = fresh();
+  fullCfg(state);
+  const orig = sync.checkAuth;
+  sync.checkAuth = () => Promise.resolve({
+    ok: false,
+    error: 'GitHub 权限不足（403）：该 Token 缺少本仓库 Contents 写权限。请重新生成 Token 并勾选「Contents: Read and write」'
+  });
+  try {
+    page.actions['test-sync-conn'](ctx, state);
+    await sleep(30);
+    assert.ok(state.msg.includes('连接失败'), '失败前缀: ' + state.msg);
+    assert.ok(state.msg.includes('权限不足'), '细分原因');
+    assert.strictEqual(state.msgType, 'err');
+    assert.strictEqual(state.busy, false, 'busy 复位');
+  } finally {
+    sync.checkAuth = orig;
+  }
+});
+
+test('测试连接-失败(401 Token 无效)：显示细分原因', async () => {
+  const { ctx, state } = fresh();
+  fullCfg(state);
+  const orig = sync.checkAuth;
+  sync.checkAuth = () => Promise.resolve({ ok: false, error: 'GitHub Token 无效或已过期（401），请重新生成' });
+  try {
+    page.actions['test-sync-conn'](ctx, state);
+    await sleep(30);
+    assert.ok(state.msg.includes('连接失败'));
+    assert.ok(state.msg.includes('Token 无效或已过期'), '401 细分');
+    assert.strictEqual(state.msgType, 'err');
+  } finally {
+    sync.checkAuth = orig;
+  }
+});

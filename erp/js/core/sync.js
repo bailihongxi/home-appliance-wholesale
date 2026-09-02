@@ -341,7 +341,7 @@
       if (res.status === 404) return null;
       if (!res.ok) {
         return res.text().then(function (t) {
-          throw new Error(githubError(res.status, t));
+          throw new Error(githubError(res, t));
         });
       }
       return res.json().then(function (j) {
@@ -350,7 +350,31 @@
     });
   };
 
-  function githubError(status, body) {
+  /** 细分 403：限流 vs 权限不足 vs 其他 */
+  function describe403(res, msg) {
+    var low = String(msg || '').toLowerCase();
+    var rl = -1;
+    try {
+      if (res && res.headers && typeof res.headers.get === 'function') {
+        var v = res.headers.get('X-RateLimit-Remaining');
+        if (v !== null && v !== undefined) rl = parseInt(String(v), 10);
+      }
+    } catch (e) {
+      rl = -1;
+    }
+    var rateLimited = rl === 0 || low.indexOf('rate limit') >= 0 || low.indexOf('rate_limit') >= 0;
+    if (rateLimited) {
+      return 'GitHub 限流（403）：API 调用次数已达上限，请等待重置后再试（通常每小时重置；若 Token 无效会按匿名限额计算、更容易触发）。可先在下方「测试连接」确认 Token 是否有效';
+    }
+    if (/resource not accessible|not authorized|push access|must have|permission/i.test(low)) {
+      return 'GitHub 权限不足（403）：该 Token 缺少本仓库 Contents 写权限。请重新生成 Token 并勾选「Contents: Read and write」（classic Token 勾选 repo 权限），且 Token 的 owner/repo 需与填写的仓库一致';
+    }
+    return 'GitHub 拒绝访问（403）：' + (msg || 'Token 权限不足或触发限流，请检查 Token 与仓库权限');
+  }
+
+  /** 把 GitHub 响应转成中文错误提示（细分 401/403/404/409/422） */
+  function githubError(res, body) {
+    var status = res && res.status ? res.status : res;
     var msg = '';
     try {
       var j = JSON.parse(body);
@@ -358,8 +382,8 @@
     } catch (e) {
       msg = String(body || '').slice(0, 160);
     }
-    if (status === 401) return 'GitHub 拒绝访问（401）：Token 无效或已过期，请重新生成';
-    if (status === 403) return 'GitHub 拒绝访问（403）：Token 权限不足（需要该仓库 Contents 读写）或触发限流';
+    if (status === 401) return 'GitHub 拒绝访问（401）：Token 无效或已过期，请重新生成并重新填写';
+    if (status === 403) return describe403(res, msg);
     if (status === 404) return '找不到仓库或分支（404）：请检查用户名 / 仓库名 / 分支名';
     if (status === 409) return '提交冲突（409）：云端刚被改过，请再点一次同步';
     if (status === 422) return '提交被拒绝（422）：' + (msg || '路径或分支不合法');
@@ -367,6 +391,30 @@
   }
 
   sync._githubError = githubError;
+  sync._describe403 = describe403;
+
+  /**
+   * 预检：验证 Token 是否有效、对目标仓库是否可访问（用于「测试连接」/同步前的快速诊断）。
+   * @returns {Promise<{ok, error?, repo?, private?}>}
+   */
+  sync.checkAuth = function checkAuth(cfg, fetchImpl) {
+    var f = pickFetch(fetchImpl);
+    var owner = String((cfg && cfg.owner) || '').trim();
+    var repo = String((cfg && cfg.repo) || '').trim();
+    var token = String((cfg && cfg.token) || '').trim();
+    if (!token) return Promise.resolve({ ok: false, error: '未填写 GitHub Token' });
+    if (!owner || !repo) return Promise.resolve({ ok: false, error: '请先填写 GitHub 用户名（owner）与仓库名（repo）' });
+    var url = 'https://api.github.com/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo);
+    return f(url, { method: 'GET', headers: headers(cfg) }).then(function (res) {
+      if (res.status === 401) return { ok: false, error: 'GitHub Token 无效或已过期（401），请重新生成' };
+      if (res.status === 403) return { ok: false, error: githubError(res, '') };
+      if (res.status === 404) return { ok: false, error: '找不到仓库（404）：请检查用户名 / 仓库名，或该 Token 无权查看此仓库' };
+      if (!res.ok) return { ok: false, error: githubError(res, '') };
+      return res.json().then(function (j) {
+        return { ok: true, repo: j.full_name || (owner + '/' + repo), private: !!j.private };
+      });
+    });
+  };
 
   /**
    * 上传（覆盖历史）：先取 sha，再 PUT 同一路径。
@@ -391,7 +439,7 @@
       }).then(function (res) {
         if (!res.ok) {
           return res.text().then(function (t) {
-            throw new Error(githubError(res.status, t));
+            throw new Error(githubError(res, t));
           });
         }
         return res.json().then(function (j) {
@@ -417,7 +465,7 @@
       if (res.status === 404) throw new Error('云端还没有快照，请先在手机上点一次「同步到云端」');
       if (!res.ok) {
         return res.text().then(function (t) {
-          throw new Error(githubError(res.status, t));
+          throw new Error(githubError(res, t));
         });
       }
       return res.json().then(function (j) {

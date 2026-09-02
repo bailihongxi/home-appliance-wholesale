@@ -195,6 +195,36 @@
         return true;
       },
 
+      /** 测试连接：用 checkAuth 快速诊断 Token 有效性 / 仓库可访问性 / 权限 */
+      'test-sync-conn': function (ctx, state) {
+        if (state.busy) return false;
+        state.cfg = sync.saveConfig(store(), state.cfg, currentAcctId());
+        var v = sync.validateConfig(state.cfg);
+        if (!v.ok) {
+          state.syncOpen = true;
+          state.msg = '请先补全同步设置：' + v.errors.join('；');
+          state.msgType = 'err';
+          ui.toast(v.errors[0], 'err');
+          return true;
+        }
+        state.busy = true;
+        state.msg = '正在连接 GitHub 验证 Token 与仓库…';
+        state.msgType = 'ok';
+        sync.checkAuth(state.cfg).then(function (r) {
+          if (r.ok) {
+            finish(
+              state,
+              '✅ 连接成功：可访问仓库 ' + r.repo + (r.private ? '（私有）' : '（公开）') +
+              '。若点「同步到云端」仍报权限错误，说明该 Token 还缺「Contents: Read and write」写权限',
+              'ok'
+            );
+          } else {
+            finish(state, '连接失败：' + r.error, 'err');
+          }
+        });
+        return false;
+      },
+
       /** 跳转店铺设置 */
       'go-shop-edit': function (ctx, state) {
         if (ERP.app && ERP.app.go) ERP.app.go('setting');
@@ -406,7 +436,9 @@
         field('快照路径', 'path', cfg.path, 'data/erp-snapshot.json') +
         field('GitHub Token', 'token', cfg.token, 'github_pat_… 仅存本机', 'password') +
         field('同步口令', 'passphrase', cfg.passphrase, '至少 6 位，换设备恢复要用同一口令', 'password') +
-        '<div class="row mt8"><button class="btn btn-primary btn-sm" data-act="save-sync-cfg">保存同步设置</button></div>' +
+        '<div class="row mt8">' +
+        '<button class="btn btn-primary btn-sm" data-act="save-sync-cfg">保存同步设置</button>' +
+        '<button class="btn btn-sm" data-act="test-sync-conn">测试连接</button></div>' +
         '<ul class="about-list small mt8">' +
         '<li>Token 去 GitHub → Settings → Developer settings → Fine-grained tokens 生成，' +
         '只勾这一个仓库的 <b>Contents: Read and write</b>。</li>' +
