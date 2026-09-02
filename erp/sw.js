@@ -3,7 +3,7 @@
  * 作用：缓存应用外壳，断网后仍可打开使用（PRD 7 / 开发计划 Sprint 8）。
  * 更新策略：外壳走 cache-first，页面导航也优先缓存；后台静默更新。
  */
-var CACHE = 'shoe-erp-v7';
+var CACHE = 'appliance-erp-v1';
 var SHELL = [
   './',
   './index.html',
@@ -13,14 +13,13 @@ var SHELL = [
   './css/print.css',
   './js/core/util.js',
   './js/core/schema.js',
-  './js/core/coding.js',
   './js/core/docNo.js',
+  './js/core/product.js',
   './js/core/inventory.js',
   './js/core/ledger.js',
   './js/core/debt.js',
   './js/core/profit.js',
   './js/core/backup.js',
-  './js/core/barcode.js',
   './js/core/sync.js',
   './js/core/cart.js',
   './js/core/engine.js',
@@ -42,10 +41,7 @@ var SHELL = [
   './js/ui/page-mine.js',
   './js/ui/page-supplier.js',
   './js/ui/page-login.js',
-  './js/barcode/render.js',
-  './js/barcode/label.js',
   './js/barcode/scan.js',
-  './js/barcode/print-bt.js',
   './js/app.js'
 ];
 

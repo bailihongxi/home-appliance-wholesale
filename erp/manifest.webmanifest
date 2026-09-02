@@ -1,7 +1,7 @@
 {
-  "name": "鞋服店进销存记账",
-  "short_name": "鞋服记账",
-  "description": "零部署、可离线的鞋服店进货/销售/库存/记账工具",
+  "name": "电器批发进销存",
+  "short_name": "电器记账",
+  "description": "零部署、可离线的电器批发进销存：进货/销售/库存/批发零售双价/扫码",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
