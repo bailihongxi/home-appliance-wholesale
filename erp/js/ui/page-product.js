@@ -330,7 +330,7 @@
         '<td class="num">' + ui.money(p.priceWholesale) + '</td>' +
         '<td class="num">' + ui.money(p.priceRetail) + '</td>' +
         '<td class="' + stockCls + '">' + stock + '</td>' +
-        '<td class="small weak">' + esc(p.note || '-') + '</td>' +
+        '<td class="small weak cell-note" title="' + esc(p.note || '') + '">' + esc(p.note || '-') + '</td>' +
         '<td>' + ui.badge(p.status === schema.STATUS.OFF ? '停售' : '在售', p.status === schema.STATUS.OFF ? 'off' : 'on') + '</td>' +
         '<td class="act">' +
         '<button data-act="edit-product" data-id="' + esc(p.id) + '">编辑</button>' +

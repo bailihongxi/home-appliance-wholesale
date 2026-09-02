@@ -230,3 +230,25 @@ test('问题2-列表展示所有本店商品（不受经营范围过滤隐藏）
   assert.ok(html.includes('方太'), '经营范围外的已保存商品也必须显示');
   assert.ok(html.includes('厨电'));
 });
+
+/* ===== 问题：备注列过长优化 ===== */
+test('备注列优化-超长备注：省略显示且 title 保留完整内容（悬停可查看全文）', () => {
+  const { ctx, state } = fresh();
+  const longNote = '一级能效，含安装，质保十年，支持以旧换新，送货上门，颜色白色，能效等级一级，制冷量3500W';
+  product.save(ctx, {
+    brand: '海尔', model: 'BCD-500', category: '冰箱', unit: '台',
+    cost: '1000', priceWholesale: '1200', priceRetail: '1399', note: longNote
+  });
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('cell-note'), '备注列带 cell-note 样式类（省略号/宽度限制）');
+  assert.ok(html.includes('title="' + longNote + '"'), 'title 保留完整备注（悬停查看全文）');
+  assert.ok(html.includes(longNote), '备注文本仍渲染');
+  // 空备注显示占位符，不丢 cell-note
+  product.save(ctx, {
+    brand: '格力', model: 'KFR-35', category: '空调', unit: '台',
+    cost: '1800', priceWholesale: '2200', priceRetail: '2599'
+  });
+  const html2 = page.render(ctx, state);
+  assert.ok(html2.includes('cell-note'), '无备注行同样带 cell-note');
+  assert.ok(html2.includes('title=""'), '无备注时 title 为空串');
+});

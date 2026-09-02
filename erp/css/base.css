@@ -346,6 +346,16 @@ textarea.input { min-height: 72px; resize: vertical; }
 
 .checkline { display: flex; align-items: center; gap: 6px; font-size: 14px; }
 
+/* 商品档案备注列：超长备注省略显示，悬停 title 查看完整内容 */
+.cell-note {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+  vertical-align: middle;
+}
+
 /* ---------- 表格 ---------- */
 
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
