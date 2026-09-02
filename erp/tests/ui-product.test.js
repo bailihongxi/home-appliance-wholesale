@@ -155,3 +155,44 @@ test('导入模板：包含电器版表头', () => {
     assert.ok(captured.csv.includes('品牌,型号,类型,单位,成本,批发价,零售价'));
   }
 });
+
+/* ===== 问题1：类型可选择也可自定义填写 ===== */
+test('问题1-新建表单：类型为可输入 input，含预设 datalist 建议', () => {
+  const { ctx, state } = fresh();
+  state.tab = 'new';
+  state.form = Object.assign({}, state.form, { category: '' });
+  const html = page.render(ctx, state);
+  // 类型字段是可输入 input（可自由填写），而非只读下拉
+  assert.ok(html.includes('data-name="category"'));
+  assert.ok(/<input[^>]*data-name="category"[^>]*list="category-datalist"/.test(html), '类型为可输入 input 并绑定 datalist');
+  // datalist 含预设类型建议
+  assert.ok(html.includes('<datalist id="category-datalist"'));
+  assert.ok(html.includes('>冰箱<'), 'datalist 含冰箱');
+  assert.ok(html.includes('>洗衣机<'), 'datalist 含洗衣机');
+  assert.ok(html.includes('>其他<'), 'datalist 含其他');
+});
+
+test('问题1-自定义类型：非预设类型可保存成功并正确落库', () => {
+  const { ctx, state } = fresh();
+  state.tab = 'new';
+  state.form = {
+    id: null, brand: '安吉尔', model: 'J2815', category: '净水器', unit: '台',
+    cost: '1500', priceWholesale: '1800', priceRetail: '2099',
+    note: '', barcodes: '', openingStock: ''
+  };
+  const ok = page.actions['save-product'](ctx, state);
+  assert.strictEqual(ok, true, '自定义类型应保存成功');
+  assert.strictEqual(ctx.data.products.length, 1);
+  assert.strictEqual(ctx.data.products[0].category, '净水器');
+  assert.strictEqual(state.tab, 'list', '保存后回到列表');
+});
+
+test('问题1-datalist 建议：包含账号内已用过的类型', () => {
+  const { ctx, state } = fresh();
+  seed(ctx); // 已建 冰箱/空调
+  state.tab = 'new';
+  state.form = Object.assign({}, state.form, { category: '' });
+  const html = page.render(ctx, state);
+  // 已用类型（冰箱、空调）也在建议中，便于再次选择
+  assert.ok(html.includes('>空调<'));
+});

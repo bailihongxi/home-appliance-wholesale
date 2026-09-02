@@ -212,6 +212,15 @@
 
   /* ---------------- 保存 ---------------- */
 
+  /** 账号内商品已用过的类型（去重，用于类型下拉建议） */
+  function usedCategories(ctx) {
+    var set = {};
+    (ctx.data.products || []).forEach(function (p) {
+      if (p && p.category) set[p.category] = 1;
+    });
+    return Object.keys(set);
+  }
+
   function save(ctx, state) {
     var form = state.form;
     var input = {
@@ -348,14 +357,13 @@
       '</div>';
     h += '<div class="grid grid-2">' +
       '<div class="field"><label class="req">类型</label>' +
-      ui.select({
-        name: 'category',
-        value: form.category,
-        on: 'field',
-        options: schema.categoriesFor(ctx.settings).map(function (c) {
-          return { value: c, text: c };
-        })
-      }) + '</div>' +
+      '<input class="input" data-input="field" data-name="category" list="category-datalist" placeholder="选择或输入类型（如：冰箱 / 净水器）" value="' + esc(form.category) + '">' +
+      '<datalist id="category-datalist">' +
+      schema.categoriesFor(ctx.settings).concat(usedCategories(ctx)).map(function (c) {
+        return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+      }).join('') +
+      '</datalist>' +
+      '<div class="small muted mt4">可从预设选择，也可直接输入自定义类型</div></div>' +
       '<div class="field"><label>单位</label>' +
       '<input class="input" data-input="field" data-name="unit" placeholder="如：台" value="' + esc(form.unit) + '"></div>' +
       '</div>';
