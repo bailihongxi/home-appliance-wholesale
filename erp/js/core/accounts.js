@@ -90,15 +90,22 @@
   };
 
   /**
-   * 确保预置账号存在（首次初始化写入；已存在则不重复创建）。
-   * 预置账号初始密码 DEFAULT_PASSWORD，仅在首次创建时生效。
+   * 确保预置账号存在（仅首次初始化时写入；已存在则不重复创建）。
+   * 注：只在「从未初始化」时写入全部预置账号；用户删除任意账号（含预置）后
+   * 不会再被自动补回，保证登录页的删除操作真实生效。
    */
   api.ensurePreset = function ensurePreset(store) {
+    if (!store || !store.getItem) return [];
+    var raw = null;
+    try {
+      raw = store.getItem(ACCOUNTS_KEY);
+    } catch (e) {
+      raw = null;
+    }
     var list = api.load(store);
-    var changed = false;
-    api.PRESET.forEach(function (p) {
-      var found = api.getById(list, p.id);
-      if (!found) {
+    var firstInit = (raw === null || raw === undefined || raw === '');
+    if (firstInit) {
+      api.PRESET.forEach(function (p) {
         list.push({
           id: p.id,
           username: p.username,
@@ -108,10 +115,9 @@
           hash: util.hashPassword(p.password),
           createdAt: new Date().toISOString().slice(0, 10)
         });
-        changed = true;
-      }
-    });
-    if (changed) api.save(store, list);
+      });
+      api.save(store, list);
+    }
     return list;
   };
 
@@ -165,6 +171,64 @@
     if (typeof patch.avatar === 'string') acct.avatar = patch.avatar;
     api.save(store, list);
     return { ok: true, account: api.strip(acct) };
+  };
+
+  /**
+   * 更新账号（登录页「编辑账号」）。
+   * patch 可选字段：username（唯一性校验）、password（留空/不传则不修改）、
+   * shopName、avatar、scopeCategories。返回 {ok, error?, account?}。
+   */
+  api.update = function update(store, id, patch) {
+    var list = api.load(store);
+    var acct = api.getById(list, id);
+    if (!acct) return { ok: false, error: '账号不存在' };
+    patch = patch || {};
+
+    // 登录账号：可选修改，格式 + 唯一性（排除自身）
+    if (patch.username !== undefined && patch.username !== null) {
+      var username = String(patch.username).trim();
+      if (!username) return { ok: false, error: '请输入登录账号' };
+      if (!/^[A-Za-z0-9_]{2,20}$/.test(username)) {
+        return { ok: false, error: '登录账号需为 2-20 位字母/数字/下划线' };
+      }
+      var dup = api.findByUsername(list, username);
+      if (dup && dup.id !== id) return { ok: false, error: '该登录账号已存在' };
+      acct.username = username;
+    }
+
+    // 密码：可选修改（空串/不传 = 不改）
+    if (patch.password !== undefined && patch.password !== null && String(patch.password) !== '') {
+      var pwd = String(patch.password);
+      if (pwd.length < 4) return { ok: false, error: '密码至少 4 位' };
+      acct.hash = util.hashPassword(pwd);
+    }
+
+    if (typeof patch.shopName === 'string' && String(patch.shopName).trim()) {
+      acct.shopName = String(patch.shopName).trim();
+    }
+    if (typeof patch.avatar === 'string') acct.avatar = patch.avatar;
+    if (patch.scopeCategories !== undefined && Array.isArray(patch.scopeCategories)) {
+      acct.scopeCategories = patch.scopeCategories.slice();
+    }
+    api.save(store, list);
+    return { ok: true, account: api.strip(acct) };
+  };
+
+  /**
+   * 删除账号（登录页「删除账号」）。返回 {ok, error?, account?}。
+   * 仅从账号列表移除；对应数据空间 erp_<id> 的清理由 app 层负责。
+   */
+  api.remove = function remove(store, id) {
+    var list = api.load(store);
+    var idx = -1;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === id) { idx = i; break; }
+    }
+    if (idx < 0) return { ok: false, error: '账号不存在' };
+    var removed = list[idx];
+    list.splice(idx, 1);
+    api.save(store, list);
+    return { ok: true, account: api.strip(removed) };
   };
 
   /** 去掉敏感字段（hash）后的公开账号视图 */

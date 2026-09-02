@@ -148,6 +148,18 @@
     renderLogin();
   };
 
+  /** 删除账号数据空间（IndexedDB 库 erp_<acctId>），尽力而为，失败忽略 */
+  app.deleteAccountDb = function deleteAccountDb(acctId) {
+    try {
+      var idb = (typeof indexedDB !== 'undefined') ? indexedDB : null;
+      if (!idb || !acctId || !ERP.schema) return;
+      var req = idb.deleteDatabase(ERP.schema.dbNameFor(acctId));
+      req.onerror = function () {};
+      req.onsuccess = function () {};
+      req.onblocked = function () {};
+    } catch (e) { /* ignore */ }
+  };
+
   function enter() {
     router().start();
     router().onChange(function () {

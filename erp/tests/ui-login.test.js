@@ -73,3 +73,100 @@ test('问题4-登录校验：正确密码通过，错误拒绝', () => {
   const bad = page.loginWith(store, 'acct1', 'wrong');
   assert.strictEqual(bad.ok, false, '错误密码拒绝');
 });
+
+/* ===== 登录账户管理：编辑（UI） ===== */
+test('登录账户管理-渲染：每个账号卡片含编辑/删除按钮', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const state = page.init(null, store);
+  const html = page.render(null, state);
+  assert.ok(html.includes('data-act="edit-account"'), '含编辑按钮');
+  assert.ok(html.includes('data-act="del-account"'), '含删除按钮');
+  // 3 个预置账号 × 各 2 个管理按钮
+  const editCount = (html.match(/data-act="edit-account"/g) || []).length;
+  const delCount = (html.match(/data-act="del-account"/g) || []).length;
+  assert.strictEqual(editCount, 3);
+  assert.strictEqual(delCount, 3);
+});
+
+test('登录账户管理-edit-account：点击编辑预填店名/登录名，打开编辑表单', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const state = page.init(null, store);
+  const el = { getAttribute: (k) => (k === 'data-id' ? 'acct1' : '') };
+  page.actions['edit-account'](state, state, el);
+  assert.strictEqual(state.editId, 'acct1');
+  assert.strictEqual(state.edit.shopName, '大家电店');
+  assert.strictEqual(state.edit.username, 'appliance');
+  assert.strictEqual(state.edit.password, '', '密码不预填');
+  const html = page.render(null, state);
+  assert.ok(html.includes('编辑店铺账号'), '编辑表单渲染');
+  assert.ok(html.includes('data-input="edit.shopName"'), '店名输入框');
+  assert.ok(html.includes('data-input="edit.password"'), '新密码输入框');
+});
+
+test('登录账户管理-save-account：修改店名+登录账号+密码保存成功', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const state = page.init(null, store);
+  state.editId = 'acct1';
+  state.edit = { username: 'appliance_new', shopName: '西安电器总店', password: '9999', password2: '9999', avatar: '' };
+  const ok = page.actions['save-account'](state, state);
+  assert.strictEqual(ok, true);
+  const acct = accounts.getById(accounts.load(store), 'acct1');
+  assert.strictEqual(acct.shopName, '西安电器总店');
+  assert.strictEqual(acct.username, 'appliance_new');
+  assert.strictEqual(accounts.verify(acct, '9999'), true, '新密码生效');
+  assert.strictEqual(state.editId, null, '保存后关闭编辑');
+});
+
+test('登录账户管理-save-account：两次密码不一致被拦截', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const state = page.init(null, store);
+  state.editId = 'acct1';
+  state.edit = { username: 'appliance', shopName: '大家电店', password: '1111', password2: '2222', avatar: '' };
+  const ok = page.actions['save-account'](state, state);
+  assert.strictEqual(ok, false);
+  assert.ok(state.error.includes('不一致'));
+});
+
+/* ===== 登录账户管理：删除（UI） ===== */
+test('登录账户管理-del-account：点击删除进入确认态', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const state = page.init(null, store);
+  const el = { getAttribute: (k) => (k === 'data-id' ? 'acct2' : '') };
+  page.actions['del-account'](state, state, el);
+  assert.strictEqual(state.pendingDeleteId, 'acct2');
+  const html = page.render(null, state);
+  assert.ok(html.includes('确定删除账号'), '渲染删除确认');
+  assert.ok(html.includes('data-act="confirm-del-account"'), '含确认删除按钮');
+  assert.ok(html.includes('data-act="cancel-del-account"'), '含取消按钮');
+});
+
+test('登录账户管理-confirm-del-account：确认后账号被删除并清除选中', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  accounts.create(store, { username: 'delshop', password: '123456', shopName: '待删电器' });
+  const target = accounts.findByUsername(accounts.load(store), 'delshop');
+  const state = page.init(null, store);
+  state.selectedId = target.id;
+  const el = { getAttribute: (k) => (k === 'data-id' ? target.id : '') };
+  const ok = page.actions['confirm-del-account'](state, state, el);
+  assert.strictEqual(ok, true);
+  assert.strictEqual(accounts.findByUsername(accounts.load(store), 'delshop'), null, '账号已删除');
+  assert.strictEqual(state.selectedId, null, '选中态已清除');
+  assert.strictEqual(state.pendingDeleteId, null, '确认态关闭');
+  assert.ok(state.msg.includes('已删除'));
+});
+
+test('登录账户管理-cancel-del-account：取消不删除', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const state = page.init(null, store);
+  state.pendingDeleteId = 'acct1';
+  page.actions['cancel-del-account'](state, state);
+  assert.strictEqual(state.pendingDeleteId, null);
+  assert.strictEqual(accounts.getById(accounts.load(store), 'acct1') !== null, true, '账号仍在');
+});

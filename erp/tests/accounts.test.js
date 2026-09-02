@@ -111,3 +111,95 @@ test('问题4-多店铺数据隔离：不同账号库名独立，数据不共有
   // 自建账号也有独立库名
   assert.strictEqual(schema.dbNameFor('acct_myShop'), 'erp_acct_myShop');
 });
+
+/* ===== 登录账户管理：编辑（update） ===== */
+test('登录账户管理-update：修改店名/头像，密码不变', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const r = accounts.update(store, 'acct1', {
+    shopName: '西安大家电',
+    avatar: 'data:image/png;base64,CCCC'
+  });
+  assert.strictEqual(r.ok, true);
+  const acct = accounts.getById(accounts.load(store), 'acct1');
+  assert.strictEqual(acct.shopName, '西安大家电');
+  assert.strictEqual(acct.avatar, 'data:image/png;base64,CCCC');
+  assert.strictEqual(accounts.verify(acct, '000000'), true, '未改密码，原密码仍可登录');
+});
+
+test('登录账户管理-update：修改登录账号成功（唯一性排除自身）', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const r = accounts.update(store, 'acct1', { username: 'appliance2' });
+  assert.strictEqual(r.ok, true, '改名成功：' + (r.error || ''));
+  assert.strictEqual(accounts.getById(accounts.load(store), 'acct1').username, 'appliance2');
+  // 重复用户名被拦截（占用已有其它账号）
+  const dup = accounts.update(store, 'acct2', { username: 'appliance2' });
+  assert.strictEqual(dup.ok, false, '用户名冲突被拦截');
+  // 非法格式被拦截
+  const bad = accounts.update(store, 'acct2', { username: 'x' });
+  assert.strictEqual(bad.ok, false, '过短用户名被拦截');
+});
+
+test('登录账户管理-update：修改密码后旧密码失效、新密码可登录', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const r = accounts.update(store, 'acct2', { password: 'newpass88' });
+  assert.strictEqual(r.ok, true);
+  const acct = accounts.getById(accounts.load(store), 'acct2');
+  assert.strictEqual(accounts.verify(acct, 'newpass88'), true, '新密码可登录');
+  assert.strictEqual(accounts.verify(acct, '000000'), false, '旧密码失效');
+  // 密码过短被拦截
+  const short = accounts.update(store, 'acct2', { password: '12' });
+  assert.strictEqual(short.ok, false, '过短密码被拦截');
+});
+
+test('登录账户管理-update：空密码=不改密码', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const r = accounts.update(store, 'acct1', { password: '', shopName: '只改店名' });
+  assert.strictEqual(r.ok, true);
+  const acct = accounts.getById(accounts.load(store), 'acct1');
+  assert.strictEqual(accounts.verify(acct, '000000'), true, '空密码不修改原密码');
+});
+
+test('登录账户管理-update：可调整经营范围', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const r = accounts.update(store, 'acct3', { scopeCategories: ['电视', '冰箱'] });
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(accounts.getById(accounts.load(store), 'acct3').scopeCategories, ['电视', '冰箱']);
+});
+
+/* ===== 登录账户管理：删除（remove） ===== */
+test('登录账户管理-remove：删除自建账号成功', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  accounts.create(store, { username: 'toDel', password: '123456', shopName: '待删店' });
+  const list0 = accounts.load(store);
+  const target = accounts.findByUsername(list0, 'toDel');
+  const r = accounts.remove(store, target.id);
+  assert.strictEqual(r.ok, true, '删除成功：' + (r.error || ''));
+  assert.strictEqual(r.account.shopName, '待删店');
+  assert.strictEqual(accounts.findByUsername(accounts.load(store), 'toDel'), null, '已从列表移除');
+});
+
+test('登录账户管理-remove：删除不存在的账号返回错误', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const r = accounts.remove(store, 'acct999');
+  assert.strictEqual(r.ok, false);
+  assert.ok(r.error.includes('不存在'));
+});
+
+test('登录账户管理-remove：删除预置账号后 ensurePreset 不再自动恢复', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  assert.strictEqual(accounts.getById(accounts.load(store), 'acct3') !== null, true);
+  const r = accounts.remove(store, 'acct3');
+  assert.strictEqual(r.ok, true);
+  // 再次 ensurePreset（模拟刷新/重渲染）不应把被删的预置账号补回
+  const list = accounts.ensurePreset(store);
+  assert.strictEqual(accounts.getById(list, 'acct3'), null, '删除后不被自动恢复');
+  assert.strictEqual(list.length, 2, '剩余 2 个账号');
+});
