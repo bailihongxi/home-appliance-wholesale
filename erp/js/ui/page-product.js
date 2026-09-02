@@ -248,15 +248,18 @@
     state.tab = 'list';
     state.editing = null;
     state.form = emptyForm();
+    // 若保存时类型自动并入经营范围，则持久化设置（保证刷新后依旧显示与建议）
+    if (ERP.app && ERP.app.saveSettings) {
+      ERP.app.saveSettings().catch(function () {});
+    }
     return true;
   }
 
   /* ---------------- 列表 ---------------- */
 
   function renderList(ctx, state) {
-    var list = ctx.data.products.filter(function (p) {
-      return schema.inScope(ctx.settings, p.category);
-    });
+    // 显示本账号全部商品（用户已创建的商品必须可见；自定义类型也一并显示）
+    var list = (ctx.data.products || []).slice();
     var kw = String(state.keyword || '').trim().toUpperCase();
     if (kw) {
       list = list.filter(function (p) {

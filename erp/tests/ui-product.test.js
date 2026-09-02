@@ -196,3 +196,37 @@ test('问题1-datalist 建议：包含账号内已用过的类型', () => {
   // 已用类型（冰箱、空调）也在建议中，便于再次选择
   assert.ok(html.includes('>空调<'));
 });
+
+/* ===== 问题2：新建商品后档案列表必须同步显示 ===== */
+test('问题2-保存经营范围外的自定义类型：列表仍显示该商品', () => {
+  const { ctx, state } = fresh();
+  // 模拟账号经营范围不含「净水器」
+  ctx.settings.scopeCategories = ['冰箱', '洗衣机', '空调', '电视'];
+  state.tab = 'new';
+  state.form = {
+    id: null, brand: '安吉尔', model: 'J2815', category: '净水器', unit: '台',
+    cost: '1500', priceWholesale: '1800', priceRetail: '2099',
+    note: '', barcodes: '', openingStock: ''
+  };
+  const ok = page.actions['save-product'](ctx, state);
+  assert.strictEqual(ok, true, '范围外自定义类型应保存成功');
+  // 列表渲染必须包含该商品
+  const html = page.render(ctx, Object.assign({}, state, { tab: 'list' }));
+  assert.ok(html.includes('安吉尔'), '新建商品应显示在档案列表');
+  assert.ok(html.includes('净水器'), '自定义类型应显示在列表');
+  // 类型自动并入经营范围
+  assert.ok(ctx.settings.scopeCategories.indexOf('净水器') >= 0, '新类型自动并入经营范围');
+});
+
+test('问题2-列表展示所有本店商品（不受经营范围过滤隐藏）', () => {
+  const { ctx, state } = fresh();
+  // 直接造一个经营范围外的商品
+  product.save(ctx, {
+    brand: '方太', model: 'JZT-B', category: '厨电', unit: '台',
+    cost: '1200', priceWholesale: '1500', priceRetail: '1799'
+  });
+  ctx.settings.scopeCategories = ['冰箱', '洗衣机']; // 不包含「厨电」
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('方太'), '经营范围外的已保存商品也必须显示');
+  assert.ok(html.includes('厨电'));
+});

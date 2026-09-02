@@ -142,8 +142,7 @@
       }
       if (input.status === schema.STATUS.OFF || input.status === schema.STATUS.ON) {
         rec.status = input.status;
-      }
-      rec.updatedAt = util.nowISO();
+      }      rec.updatedAt = util.nowISO();
     }
     ctx.touch('products', rec);
 
@@ -167,8 +166,21 @@
       }
     }
 
+    // 问题2：新类型自动并入账号经营范围，保证列表可见且下拉建议持续包含该类型
+    ensureScopeCategory(ctx, category);
+
     return { ok: true, product: rec, isNew: isNew };
   };
+
+  /** 若类型不在账号经营范围（scope 非空时），自动并入 scopeCategories */
+  function ensureScopeCategory(ctx, category) {
+    if (!ctx || !ctx.settings || !category) return false;
+    var sc = ctx.settings.scopeCategories;
+    if (!sc || !sc.length) return false; // 空 scope=不限制，无需并入
+    if (sc.indexOf(category) >= 0) return false;
+    sc.push(category);
+    return true;
+  }
 
   /** 停售 / 恢复在售（不删除数据） */
   api.setStatus = function setStatus(ctx, id, status) {
