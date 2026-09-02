@@ -23,7 +23,7 @@ const USER_CTX = { currentAccount: { id: 'acct1', username: 'appliance', role: '
 
 test('页面元数据', () => {
   assert.strictEqual(page.name, 'admin');
-  assert.strictEqual(page.title, '权限管理');
+  assert.strictEqual(page.title, '账户权限管理');
 });
 
 test('isAdmin：管理员 true，普通账号 false', () => {
@@ -153,4 +153,163 @@ test('我的页：普通账号不显示「权限管理」入口', () => {
   const html = mine.render(mineCtx({ id: 'acct1', username: 'appliance', role: 'user', shopName: '大家电店' }), state);
   assert.ok(!html.includes('权限管理'), '普通账号无权限管理入口');
   assert.ok(!html.includes('data-page="admin"'), '普通账号无跳转入口');
+});
+
+/* ===== 账户管理（管理员统一新建/修改/删除，登录页已移除） ===== */
+test('账户管理-渲染：含新建账号按钮，店铺账号含修改/删除按钮，admin 自身无', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const state = page.init(null, store);
+  const html = page.render(ADMIN_CTX, state);
+  assert.ok(html.includes('admin-new-toggle'), '含新建账号按钮');
+  // 每个店铺账号（acct1/acct2/acct3）有 修改 + 删除
+  ['acct1', 'acct2', 'acct3'].forEach((id) => {
+    assert.ok(html.includes('data-act="admin-edit-account" data-id="' + id + '"'), id + ' 含修改按钮');
+    assert.ok(html.includes('data-act="admin-del-account" data-id="' + id + '"'), id + ' 含删除按钮');
+  });
+  // admin 自身无修改/删除按钮
+  assert.ok(!html.includes('data-act="admin-edit-account" data-id="admin"'), 'admin 无修改按钮');
+  assert.ok(!html.includes('data-act="admin-del-account" data-id="admin"'), 'admin 无删除按钮');
+  // 登录页不再提供管理按钮
+  const login = require('../js/ui/page-login.js');
+  const lstate = login.init(null, store);
+  const lhtml = login.render(null, lstate);
+  assert.ok(!lhtml.includes('edit-account'), '登录页无编辑按钮');
+  assert.ok(!lhtml.includes('del-account'), '登录页无删除按钮');
+  assert.ok(!lhtml.includes('toggle-create'), '登录页无新建按钮');
+});
+
+test('账户管理-新建：createAccount 创建成功（含头像）并计入勾选态', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const state = page.init(null, store);
+  state.edits = {};
+  state.newForm = { username: 'myshop', shopName: '我的电器行', password: '8888', password2: '8888', avatar: 'data:image/png;base64,AA' };
+  const ok = page.actions['admin-create-account'](ADMIN_CTX, state);
+  assert.strictEqual(ok, true);
+  const acct = accounts.findByUsername(accounts.load(store), 'myshop');
+  assert.ok(acct, '账号已创建');
+  assert.strictEqual(acct.role, 'user', '新账号默认普通用户');
+  assert.strictEqual(acct.avatar, 'data:image/png;base64,AA', '头像已保存');
+  assert.ok(state.edits[acct.id], '新账号纳入经营范围勾选态');
+  assert.strictEqual(state.showNew, false, '创建后关闭表单');
+  assert.ok(state.msg.includes('已创建'));
+});
+
+test('账户管理-新建：密码不一致被拦截', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const r = page.createAccount(store, { username: 'x', shopName: 'X', password: '1111', password2: '2222', avatar: '' });
+  assert.strictEqual(r.ok, false);
+  assert.ok(r.error.includes('不一致'));
+  assert.strictEqual(accounts.findByUsername(accounts.load(store), 'x'), null, '未创建');
+});
+
+test('账户管理-修改：updateAccount 改店名/登录名/密码/头像成功', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const r = page.updateAccount(store, 'acct1', {
+    username: 'appliance_new', shopName: '西安电器总店', password: '9999', password2: '9999', avatar: 'data:image/png;base64,BB'
+  });
+  assert.strictEqual(r.ok, true);
+  const acct = accounts.getById(accounts.load(store), 'acct1');
+  assert.strictEqual(acct.shopName, '西安电器总店');
+  assert.strictEqual(acct.username, 'appliance_new');
+  assert.strictEqual(acct.avatar, 'data:image/png;base64,BB');
+  assert.strictEqual(accounts.verify(acct, '9999'), true, '新密码生效');
+});
+
+test('账户管理-修改：admin 不可修改；密码不一致被拦截', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const r1 = page.updateAccount(store, 'admin', { username: 'admin', shopName: '改', password: '', password2: '', avatar: '' });
+  assert.strictEqual(r1.ok, false, 'admin 不可修改');
+  assert.ok(r1.error.includes('管理员'));
+  const r2 = page.updateAccount(store, 'acct1', { username: 'a', shopName: 'b', password: '1111', password2: '2222', avatar: '' });
+  assert.strictEqual(r2.ok, false, '密码不一致拦截');
+  assert.ok(r2.error.includes('不一致'));
+});
+
+test('账户管理-修改流程：action 预填表单 → 保存生效', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const state = page.init(null, store);
+  const el = { getAttribute: (k) => (k === 'data-id' ? 'acct2' : '') };
+  page.actions['admin-edit-account'](ADMIN_CTX, state, el);
+  assert.strictEqual(state.editId, 'acct2');
+  assert.strictEqual(state.editForm.shopName, '小家电店');
+  assert.strictEqual(state.editForm.username, 'smallapp');
+  const html = page.render(ADMIN_CTX, state);
+  assert.ok(html.includes('修改账号'), '编辑表单渲染');
+  assert.ok(html.includes('data-input="admin-edit.shopName"'), '店名输入框');
+  state.editForm = { username: 'smallapp2', shopName: '小家电旗舰店', password: '', password2: '', avatar: '' };
+  const ok = page.actions['admin-save-edit'](ADMIN_CTX, state, { getAttribute: (k) => (k === 'data-id' ? 'acct2' : '') });
+  assert.strictEqual(ok, true);
+  const acct = accounts.getById(accounts.load(store), 'acct2');
+  assert.strictEqual(acct.shopName, '小家电旗舰店');
+  assert.strictEqual(acct.username, 'smallapp2');
+  assert.strictEqual(state.editId, null, '保存后关闭编辑');
+});
+
+test('账户管理-删除：removeAccount 删除成功；admin 不可删除', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  accounts.create(store, { username: 'delshop', password: '123456', shopName: '待删电器' });
+  const target = accounts.findByUsername(accounts.load(store), 'delshop');
+  const r = page.removeAccount(store, target.id);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(accounts.findByUsername(accounts.load(store), 'delshop'), null, '账号已删除');
+  const r2 = page.removeAccount(store, 'admin');
+  assert.strictEqual(r2.ok, false, 'admin 不可删除');
+  assert.ok(r2.error.includes('管理员'));
+});
+
+test('账户管理-删除流程：进入确认 → 确认删除 → 账号移除并清数据空间', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  accounts.create(store, { username: 'delshop2', password: '123456', shopName: '待删电器2' });
+  const target = accounts.findByUsername(accounts.load(store), 'delshop2');
+  const state = page.init(null, store);
+  state.edits = {};
+  state.edits[target.id] = [];
+  // 进入确认态
+  let deleted = 0;
+  page.actions['admin-del-account'](ADMIN_CTX, state, { getAttribute: (k) => (k === 'data-id' ? target.id : '') });
+  assert.strictEqual(state.delId, target.id);
+  const html = page.render(ADMIN_CTX, state);
+  assert.ok(html.includes('确定删除账号'), '渲染删除确认');
+  assert.ok(html.includes('data-act="admin-confirm-del"'), '含确认删除按钮');
+  // 确认删除
+  const ok = page.actions['admin-confirm-del'](ADMIN_CTX, state, { getAttribute: (k) => (k === 'data-id' ? target.id : '') });
+  assert.strictEqual(ok, true);
+  assert.strictEqual(accounts.findByUsername(accounts.load(store), 'delshop2'), null, '账号已删除');
+  assert.strictEqual(state.delId, null, '确认态关闭');
+  assert.ok(state.msg.includes('已删除'));
+  assert.ok(!state.edits[target.id], '勾选态已清理');
+});
+
+test('账户管理-删除：admin 不可删（action 拦截）', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const state = page.init(null, store);
+  const ok = page.actions['admin-del-account'](ADMIN_CTX, state, { getAttribute: (k) => (k === 'data-id' ? 'admin' : '') });
+  assert.strictEqual(ok, false);
+  assert.strictEqual(state.delId, null, '不进入删除确认');
+  assert.ok(state.error.includes('管理员'));
+});
+
+test('账户管理-取消：新建/修改/删除取消不生效', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const state = page.init(null, store);
+  state.showNew = true;
+  page.actions['admin-new-cancel'](ADMIN_CTX, state);
+  assert.strictEqual(state.showNew, false);
+  state.editId = 'acct1';
+  page.actions['admin-edit-cancel'](ADMIN_CTX, state);
+  assert.strictEqual(state.editId, null);
+  state.delId = 'acct1';
+  page.actions['admin-del-cancel'](ADMIN_CTX, state);
+  assert.strictEqual(state.delId, null);
+  assert.strictEqual(accounts.getById(accounts.load(store), 'acct1') !== null, true, '账号仍在');
 });
