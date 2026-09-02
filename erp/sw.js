@@ -3,7 +3,7 @@
  * 作用：缓存应用外壳，断网后仍可打开使用（PRD 7 / 开发计划 Sprint 8）。
  * 更新策略：外壳走 cache-first，页面导航也优先缓存；后台静默更新。
  */
-var CACHE = 'appliance-erp-v2';
+var CACHE = 'appliance-erp-v3';
 var SHELL = [
   './',
   './index.html',
@@ -39,6 +39,7 @@ var SHELL = [
   './js/ui/page-report.js',
   './js/ui/page-setting.js',
   './js/ui/page-mine.js',
+  './js/ui/page-admin.js',
   './js/ui/page-supplier.js',
   './js/ui/page-login.js',
   './js/barcode/scan.js',
