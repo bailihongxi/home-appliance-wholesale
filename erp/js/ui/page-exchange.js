@@ -1,7 +1,7 @@
 /**
- * ui/page-exchange.js —— 退换货（退 & 换）
+ * ui/page-exchange.js —— 退换货（电器版）
  * 与「原销售单」直接链接：先选原单 → 退货（红冲）/ 换货（退旧 + 换新收差价）。
- * 入口挂在首页「常用入口 · 退换」磁贴；退/换都会生成与原单双向关联的单据。
+ * 退/换都会生成与原单双向关联的单据。
  */
 (function (root, factory) {
   root.ERP = root.ERP || {};
@@ -11,10 +11,9 @@
     E.util || (isNode ? require('../core/util.js') : null),
     E.ui || (isNode ? require('./components.js') : null),
     E.schema || (isNode ? require('../core/schema.js') : null),
-    E.inventory || (isNode ? require('../core/inventory.js') : null),
     E.cart || (isNode ? require('../core/cart.js') : null),
     E.engine || (isNode ? require('../core/engine.js') : null),
-    E.debt || (isNode ? require('../core/debt.js') : null),
+    E.product || (isNode ? require('../core/product.js') : null),
     E.repo || (isNode ? require('../store/repo.js') : null),
     E
   );
@@ -22,35 +21,35 @@
   root.ERP = root.ERP || {};
   root.ERP.pages = root.ERP.pages || {};
   root.ERP.pages.exchange = mod;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, inv, cart, engine, debt, repo, ERP) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, cart, engine, product, repo, ERP) {
   'use strict';
 
   var esc = util.escapeHtml;
   var D = schema.DOC;
   var PAY = schema.PAY_METHODS;
+  var PRICE = schema.PRICE_TYPE;
 
   function emptyState() {
     return {
       tab: 'pick',          // pick | return | exchange
       originalNo: null,
       keyword: '',
-      returnQty: {},        // 退货：skuId -> 数量
-      exchReturnQty: {},    // 换货：skuId -> 退出的数量
+      returnQty: {},        // 退货：productId -> 数量
+      exchReturnQty: {},    // 换货：productId -> 退出的数量
       replKeyword: '',      // 换货商品搜索
-      replStyle: '',        // 选中的换货款
       replItems: [],        // 换货迷你购物车
       replPay: { wechat: '', cash: '', alipay: '' }
     };
   }
 
-  /** 原单已退数量（按 skuId 汇总其所有退货单） */
+  /** 原单已退数量（按 productId 汇总其所有退货单） */
   function returnedOf(ctx, originalNo) {
     var map = {};
     (ctx.data.sales || []).forEach(function (s) {
       if (s.type !== D.REFUND || s.voided) return;
       if (s.refNo !== originalNo) return;
       s.items.forEach(function (ri) {
-        map[ri.skuId] = (map[ri.skuId] || 0) + ri.qty;
+        map[ri.productId] = (map[ri.productId] || 0) + ri.qty;
       });
     });
     return map;
@@ -73,7 +72,6 @@
     },
 
     actions: {
-      /* 通用字段（搜索框等，支持 data-name="a.b" 嵌套写入） */
       field: function (ctx, state, el) {
         var n = el.getAttribute('data-name');
         if (!n) return;
@@ -87,13 +85,12 @@
         }
       },
 
-      /* 选原单 */
       'select-original': function (ctx, state, el) {
         state.originalNo = el.getAttribute('data-no');
         state.returnQty = {};
         state.exchReturnQty = {};
         state.replItems = [];
-        state.replStyle = '';
+        state.replKeyword = '';
         state.replPay = { wechat: '', cash: '', alipay: '' };
         state.tab = 'return';
       },
@@ -110,18 +107,17 @@
 
       /* 退货流程 */
       'return-qty': function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
+        var id = el.getAttribute('data-id');
         var v = parseInt(el.value, 10);
-        state.returnQty[skuId] = isNaN(v) || v < 0 ? 0 : v;
+        state.returnQty[id] = isNaN(v) || v < 0 ? 0 : v;
       },
       'do-return': function (ctx, state) {
         var no = state.originalNo;
         if (!no) { ui.toast('请先选择原销售单', 'err'); return false; }
-        // 兜底：用户没改 input 时 state 仍为空，必须从 DOM 同步（issue12 修复）
         syncQtyFromDom(state, 'return-qty', 'returnQty');
         var items = Object.keys(state.returnQty || {})
           .filter(function (k) { return state.returnQty[k] > 0; })
-          .map(function (k) { return { skuId: k, qty: state.returnQty[k] }; });
+          .map(function (k) { return { productId: k, qty: state.returnQty[k] }; });
         if (!items.length) { ui.toast('请填写要退的商品数量', 'err'); return false; }
         var r = engine.refundSale(ctx, { originalNo: no, items: items });
         if (!r.ok) { ui.toast(r.error, 'err'); return false; }
@@ -135,32 +131,43 @@
 
       /* 换货流程 */
       'exch-return-qty': function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
+        var id = el.getAttribute('data-id');
         var v = parseInt(el.value, 10);
-        state.exchReturnQty[skuId] = isNaN(v) || v < 0 ? 0 : v;
-      },
-      'repl-pick': function (ctx, state, el) {
-        state.replStyle = el.getAttribute('data-code');
+        state.exchReturnQty[id] = isNaN(v) || v < 0 ? 0 : v;
       },
       'repl-add': function (ctx, state, el) {
-        addRepl(ctx, state, el.getAttribute('data-sku'));
+        addRepl(ctx, state, el.getAttribute('data-id'));
       },
       'repl-qty': function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
-        var it = findRepl(state, skuId);
+        var id = el.getAttribute('data-id');
+        var it = findRepl(state, id);
         if (!it) return;
         var v = parseInt(el.value, 10);
         it.qty = isNaN(v) || v < 1 ? 1 : v;
       },
       'repl-price': function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
-        var it = findRepl(state, skuId);
+        var id = el.getAttribute('data-id');
+        var it = findRepl(state, id);
         if (!it) return;
         it.price = util.parseMoney(el.value);
       },
+      'repl-price-type': function (ctx, state, el) {
+        var id = el.getAttribute('data-id');
+        var it = findRepl(state, id);
+        if (!it) return;
+        var p = product.getById(ctx, id);
+        if (!p) return;
+        if (it.priceType === PRICE.WHOLESALE) {
+          it.priceType = PRICE.RETAIL;
+          it.price = p.priceRetail || 0;
+        } else {
+          it.priceType = PRICE.WHOLESALE;
+          it.price = p.priceWholesale || 0;
+        }
+      },
       'repl-del': function (ctx, state, el) {
-        var skuId = el.getAttribute('data-sku');
-        state.replItems = state.replItems.filter(function (x) { return x.skuId !== skuId; });
+        var id = el.getAttribute('data-id');
+        state.replItems = state.replItems.filter(function (x) { return x.productId !== id; });
       },
       'repl-clear': function (ctx, state) {
         state.replItems = [];
@@ -168,15 +175,14 @@
       'do-exchange': function (ctx, state) {
         var no = state.originalNo;
         if (!no) { ui.toast('请先选择原销售单', 'err'); return false; }
-        // 兜底：用户没改 input 时 state 仍为空，必须从 DOM 同步（issue12 修复）
         syncQtyFromDom(state, 'exch-return-qty', 'exchReturnQty');
         var returns = Object.keys(state.exchReturnQty || {})
           .filter(function (k) { return state.exchReturnQty[k] > 0; })
-          .map(function (k) { return { skuId: k, qty: state.exchReturnQty[k] }; });
+          .map(function (k) { return { productId: k, qty: state.exchReturnQty[k] }; });
         if (!returns.length) { ui.toast('请填写要退/换出的商品数量', 'err'); return false; }
 
         var replacements = state.replItems.map(function (it) {
-          return { skuId: it.skuId, qty: it.qty, price: util.fenToYuan(it.price) };
+          return { productId: it.productId, qty: it.qty, price: util.fenToYuan(it.price), priceType: it.priceType };
         });
         if (!replacements.length) { ui.toast('请添加换货的新商品', 'err'); return false; }
 
@@ -201,12 +207,12 @@
         state.originalNo = null;
         state.exchReturnQty = {};
         state.replItems = [];
-        state.replStyle = '';
+        state.replKeyword = '';
         state.replPay = { wechat: '', cash: '', alipay: '' };
         return true;
       },
 
-      /** 扫码定位原单（支持单号 / 条码 / 款号） */
+      /** 扫码定位原单（支持单号 / 条码 / 品牌型号） */
       'scan-input': function (ctx, state, payload) {
         var code = String((payload && payload.value) || '').trim().toUpperCase();
         if (!code) return;
@@ -216,11 +222,11 @@
             String(s.partnerName || '').toUpperCase().indexOf(code) >= 0;
         });
         if (!hit) {
-          // 退一步：按款号搜原单
           hit = (ctx.data.sales || []).find(function (s) {
             if (s.voided || s.type === D.REFUND) return false;
             return (s.items || []).some(function (it) {
-              return String(it.styleCode || '').toUpperCase().indexOf(code) >= 0;
+              return String(it.brand || '').toUpperCase().indexOf(code) >= 0 ||
+                String(it.model || '').toUpperCase().indexOf(code) >= 0;
             });
           });
         }
@@ -236,46 +242,36 @@
 
   /* ---------------- 工具 ---------------- */
 
-  function findRepl(state, skuId) {
-    return state.replItems.find(function (x) { return x.skuId === skuId; });
+  function findRepl(state, productId) {
+    return state.replItems.find(function (x) { return x.productId === productId; });
   }
 
-  /**
-   * 兜底：把当前视图里 [data-change="<dataChangeName>"] 的 input value
-   * 同步到 state[stateKey]（覆盖对应 skuId 的数量）。
-   *
-   * 必要性：input 的 value 是渲染时写死的默认值（如 maxQty），只有用户
-   * 实际改动时 `data-change` action 才会把值写回 state。如果用户直接
-   * 点「确认退货/换货」不改数量，state 里就是空的，校验会误报
-   * 「请填写数量」。本函数让 DOM 成为提交时的真值来源。
-   */
   function syncQtyFromDom(state, dataChangeName, stateKey) {
     if (typeof document === 'undefined' || !state[stateKey]) return;
     var inputs = document.querySelectorAll('input[data-change="' + dataChangeName + '"]');
     for (var i = 0; i < inputs.length; i++) {
       var el = inputs[i];
-      var skuId = el.getAttribute('data-sku');
-      if (!skuId) continue;
+      var id = el.getAttribute('data-id');
+      if (!id) continue;
       var v = parseInt(el.value, 10);
-      state[stateKey][skuId] = isNaN(v) || v < 0 ? 0 : v;
+      state[stateKey][id] = isNaN(v) || v < 0 ? 0 : v;
     }
   }
 
-  function addRepl(ctx, state, skuId) {
-    var sku = ctx.getSku(skuId);
-    if (!sku) return;
-    var it = findRepl(state, skuId);
+  function addRepl(ctx, state, productId) {
+    var p = product.getById(ctx, productId);
+    if (!p) return;
+    var it = findRepl(state, p.id);
     if (it) { it.qty += 1; return; }
-    var product = ctx.getProduct(sku.styleCode);
     state.replItems.push({
-      skuId: sku.id,
-      styleCode: sku.styleCode,
-      color: sku.color,
-      size: sku.size,
+      productId: p.id,
+      brand: p.brand,
+      model: p.model,
+      unit: p.unit,
       qty: 1,
-      price: inv.salePriceOf(ctx, sku),
-      costSnapshot: sku.costPrice !== undefined && sku.costPrice !== null ? sku.costPrice
-        : (product ? product.costPrice || 0 : 0)
+      price: p.priceRetail || 0,
+      priceType: PRICE.RETAIL,
+      costSnapshot: p.cost || 0
     });
   }
 
@@ -285,12 +281,13 @@
     var kw = String(state.keyword || '').toUpperCase();
     var list = (ctx.data.sales || []).filter(function (d) {
       if (d.voided) return false;
-      if (d.type === D.REFUND) return false; // 退货单不能再退换
+      if (d.type === D.REFUND) return false;
       if (!kw) return true;
       return String(d.no).toUpperCase().indexOf(kw) >= 0 ||
         String(d.partnerName || '').toUpperCase().indexOf(kw) >= 0 ||
         (d.items || []).some(function (it) {
-          return String(it.styleCode || '').toUpperCase().indexOf(kw) >= 0;
+          return String(it.brand || '').toUpperCase().indexOf(kw) >= 0 ||
+            String(it.model || '').toUpperCase().indexOf(kw) >= 0;
         });
     });
     list = util.sortBy(list, function (d) { return d.no; }, true).slice(0, 60);
@@ -298,7 +295,7 @@
     var h = '<div class="page-head"><h2>退换货</h2>' +
       '<span class="desc">先选「原销售单」，再退或换</span></div>';
 
-    h += '<div class="card">' + ui.searchBar({ value: state.keyword, placeholder: '搜索单号 / 客户 / 款号', scan: false }) + '</div>';
+    h += '<div class="card">' + ui.searchBar({ value: state.keyword, placeholder: '搜索单号 / 客户 / 品牌 / 型号', scan: false }) + '</div>';
 
     if (!list.length) {
       h += '<div class="card">' + ui.empty('没有可退换的销售单') + '</div>';
@@ -320,20 +317,20 @@
     return h;
   }
 
-  /* ---------------- 原单卡片（与原单链接的展示） ---------------- */
+  /* ---------------- 原单卡片 ---------------- */
 
   function originalCard(ctx, original) {
     var ret = returnedOf(ctx, original.no);
     var h = '<div class="notice notice-info"><span>已关联原销售单 <b class="mono">' + esc(original.no) +
       '</b> · ' + esc(original.date) + ' · ' + esc(original.partnerName || '散客') + '</span></div>';
     h += '<div class="card"><div class="card-title">原单明细</div><div class="table-wrap"><table class="tbl">' +
-      '<thead><tr><th>款号</th><th>颜色/尺码</th><th class="num">数量</th><th class="num">单价</th><th class="num">已退</th><th class="num">可退</th></tr></thead><tbody>';
+      '<thead><tr><th>商品</th><th class="num">数量</th><th class="num">单价</th><th class="num">已退</th><th class="num">可退</th></tr></thead><tbody>';
     original.items.forEach(function (it) {
-      var maxQty = it.qty - (ret[it.skuId] || 0);
-      var product = ctx.getProduct(it.styleCode);
-      h += '<tr><td class="mono">' + esc(it.styleCode) + '</td><td>' + esc(it.color) + ' / ' + esc(it.size) + '</td>' +
+      var maxQty = it.qty - (ret[it.productId] || 0);
+      h += '<tr><td>' + esc(it.brand || '') + ' <b>' + esc(it.model || '') + '</b>' +
+        (it.unit ? ' <span class="weak small">' + esc(it.unit) + '</span>' : '') + '</td>' +
         '<td class="num">' + it.qty + '</td><td class="num">' + ui.money(it.price) + '</td>' +
-        '<td class="num">' + (ret[it.skuId] || 0) + '</td>' +
+        '<td class="num">' + (ret[it.productId] || 0) + '</td>' +
         '<td class="num">' + (maxQty > 0 ? maxQty : '—') + '</td></tr>';
     });
     h += '</tbody></table></div></div>';
@@ -360,13 +357,13 @@
     h += '<div class="card"><div class="card-title">选择要退的商品</div><div class="table-wrap"><table class="tbl">' +
       '<thead><tr><th>商品</th><th class="num">可退</th><th class="num">退几件</th></tr></thead><tbody>';
     original.items.forEach(function (it) {
-      var maxQty = it.qty - (ret[it.skuId] || 0);
+      var maxQty = it.qty - (ret[it.productId] || 0);
       if (maxQty <= 0) return;
-      var product = ctx.getProduct(it.styleCode);
-      var def = state.returnQty[it.skuId] !== undefined ? state.returnQty[it.skuId] : maxQty;
-      h += '<tr><td>' + esc(product ? product.name : it.styleCode) + ' <span class="weak small">' + esc(it.color) + '/' + esc(it.size) + '</span></td>' +
+      var def = state.returnQty[it.productId] !== undefined ? state.returnQty[it.productId] : maxQty;
+      h += '<tr><td>' + esc(it.brand || '') + ' <b>' + esc(it.model || '') + '</b>' +
+        (it.unit ? ' <span class="weak small">' + esc(it.unit) + '</span>' : '') + '</td>' +
         '<td class="num">' + maxQty + '</td>' +
-        '<td class="num"><input class="input" style="width:60px;text-align:right" data-change="return-qty" data-live="1" data-sku="' + esc(it.skuId) + '" inputmode="numeric" value="' + def + '"></td></tr>';
+        '<td class="num"><input class="input" style="width:60px;text-align:right" data-change="return-qty" data-live="1" data-id="' + esc(it.productId) + '" inputmode="numeric" value="' + def + '"></td></tr>';
     });
     h += '</tbody></table></div>' +
       '<div class="row mt8"><button class="btn" data-act="back-pick">重新选单</button>' +
@@ -397,40 +394,42 @@
     h += '<div class="card"><div class="card-title">① 要退/换出的原单商品</div><div class="table-wrap"><table class="tbl">' +
       '<thead><tr><th>商品</th><th class="num">可退</th><th class="num">退几件</th></tr></thead><tbody>';
     original.items.forEach(function (it) {
-      var maxQty = it.qty - (ret[it.skuId] || 0);
+      var maxQty = it.qty - (ret[it.productId] || 0);
       if (maxQty <= 0) return;
-      var product = ctx.getProduct(it.styleCode);
-      var def = state.exchReturnQty[it.skuId] !== undefined ? state.exchReturnQty[it.skuId] : maxQty;
-      h += '<tr><td>' + esc(product ? product.name : it.styleCode) + ' <span class="weak small">' + esc(it.color) + '/' + esc(it.size) + '</span></td>' +
+      var def = state.exchReturnQty[it.productId] !== undefined ? state.exchReturnQty[it.productId] : maxQty;
+      h += '<tr><td>' + esc(it.brand || '') + ' <b>' + esc(it.model || '') + '</b>' +
+        (it.unit ? ' <span class="weak small">' + esc(it.unit) + '</span>' : '') + '</td>' +
         '<td class="num">' + maxQty + '</td>' +
-        '<td class="num"><input class="input" style="width:60px;text-align:right" data-change="exch-return-qty" data-live="1" data-sku="' + esc(it.skuId) + '" inputmode="numeric" value="' + def + '"></td></tr>';
+        '<td class="num"><input class="input" style="width:60px;text-align:right" data-change="exch-return-qty" data-live="1" data-id="' + esc(it.productId) + '" inputmode="numeric" value="' + def + '"></td></tr>';
     });
     h += '</tbody></table></div></div>';
 
     /* 换新商品选择 */
     h += '<div class="card"><div class="card-title">② 选换新商品</div>';
-    h += '<div class="row mb8"><input class="input" data-input="field" data-name="replKeyword" data-live="1" placeholder="搜索名称 / 款号 / 条码" value="' + esc(state.replKeyword) + '"></div>';
-    var kw = String(state.replKeyword || '').toUpperCase();
+    h += '<div class="row mb8"><input class="input" data-input="field" data-name="replKeyword" data-live="1" placeholder="搜索 品牌 / 型号 / 类型 / 条码" value="' + esc(state.replKeyword) + '"></div>';
+    var kw = String(state.replKeyword || '').trim().toUpperCase();
     var styles = ctx.data.products.filter(function (p) {
-      if (!kw) return p.status !== schema.STATUS.OFF;
-      return String(p.styleCode).toUpperCase().indexOf(kw) >= 0 ||
-        String(p.name).toUpperCase().indexOf(kw) >= 0 ||
-        String(p.barcode || '').toUpperCase().indexOf(kw) >= 0;
-    }).slice(0, 20);
-    if (styles.length) {
-      h += '<div class="chips mb8">';
-      styles.forEach(function (p) {
-        h += '<button class="chip' + (p.styleCode === state.replStyle ? ' on' : '') + '" data-act="repl-pick" data-code="' + esc(p.styleCode) + '">' +
-          esc(p.name) + ' <span class="weak small mono">' + esc(p.styleCode) + '</span></button>';
+      var bc = (Array.isArray(p.barcodes) ? p.barcodes : []).some(function (b) {
+        return String(b || '').toUpperCase().indexOf(kw) >= 0;
       });
-      h += '</div>';
-    }
-    if (state.replStyle) {
-      var m = inv.buildMatrix(ctx, state.replStyle);
-      if (m.colors.length) {
-        h += '<div class="small muted mb4">点击色码格子加入换货清单（数字为当前库存）</div>';
-        h += '<div class="table-wrap">' + ui.matrixTable(m, { act: 'repl-add' }) + '</div>';
-      }
+      if (!kw) return p.status !== schema.STATUS.OFF;
+      return String(p.brand || '').toUpperCase().indexOf(kw) >= 0 ||
+        String(p.model || '').toUpperCase().indexOf(kw) >= 0 ||
+        String(p.category || '').toUpperCase().indexOf(kw) >= 0 || bc;
+    }).slice(0, 30);
+    if (styles.length) {
+      h += '<div class="table-wrap"><table class="tbl"><thead><tr><th>商品</th>' +
+        '<th class="num">批发</th><th class="num">零售</th><th class="num">库存</th><th></th></tr></thead><tbody>';
+      styles.forEach(function (p) {
+        h += '<tr>' +
+          '<td>' + esc(p.brand) + ' <b>' + esc(p.model) + '</b><br><span class="weak small">' + esc(p.category) + ' / ' + esc(p.unit) + '</span></td>' +
+          '<td class="num">' + ui.money(p.priceWholesale) + '</td>' +
+          '<td class="num">' + ui.money(p.priceRetail) + '</td>' +
+          '<td class="num">' + (p.stock || 0) + '</td>' +
+          '<td class="act"><button class="btn btn-sm btn-primary" data-act="repl-add" data-id="' + esc(p.id) + '">加入</button></td>' +
+          '</tr>';
+      });
+      h += '</tbody></table></div>';
     }
     h += '</div>';
 
@@ -439,18 +438,20 @@
     h += '<div class="card"><div class="card-title">换货清单（' + state.replItems.length + ' 行）' +
       (state.replItems.length ? '<button class="btn btn-sm" data-act="repl-clear" id="repl-clear-btn">清空</button>' : '') + '</div>';
     if (!state.replItems.length) {
-      h += ui.empty('还没有换新商品，先搜索并点色码加入');
+      h += ui.empty('还没有换新商品，先搜索并点「加入」');
     } else {
-      h += '<div class="table-wrap"><table class="tbl"><thead><tr><th>商品</th><th class="num">数量</th><th class="num">单价</th><th class="num">小计</th><th></th></tr></thead><tbody>';
+      h += '<div class="table-wrap"><table class="tbl"><thead><tr><th>商品</th><th class="num">数量</th><th class="num">单价</th><th>价格</th><th class="num">小计</th><th></th></tr></thead><tbody>';
       state.replItems.forEach(function (it) {
-        var product = ctx.getProduct(it.styleCode);
         var line = it.price * it.qty;
         vp += line;
-        h += '<tr><td>' + esc(product ? product.name : it.styleCode) + ' <span class="weak small">' + esc(it.color) + ' / ' + esc(it.size) + '</span></td>' +
-          '<td class="num"><input class="input" style="width:54px;text-align:right" data-change="repl-qty" data-sku="' + esc(it.skuId) + '" inputmode="numeric" value="' + it.qty + '"></td>' +
-          '<td class="num"><input class="input" style="width:72px;text-align:right" data-change="repl-price" data-sku="' + esc(it.skuId) + '" inputmode="decimal" value="' + esc(util.fenToYuan(it.price)) + '"></td>' +
+        var isWholesale = it.priceType === PRICE.WHOLESALE;
+        h += '<tr><td>' + esc(it.brand) + ' <b>' + esc(it.model) + '</b><br><span class="weak small">' + esc(it.unit) + '</span></td>' +
+          '<td class="num"><input class="input" style="width:54px;text-align:right" data-change="repl-qty" data-id="' + esc(it.productId) + '" inputmode="numeric" value="' + it.qty + '"></td>' +
+          '<td class="num"><input class="input" style="width:72px;text-align:right" data-change="repl-price" data-id="' + esc(it.productId) + '" inputmode="decimal" value="' + esc(util.fenToYuan(it.price)) + '"></td>' +
+          '<td><button class="btn btn-sm ' + (isWholesale ? 'btn-primary' : '') + '" data-act="repl-price-type" data-id="' + esc(it.productId) + '">' +
+          (isWholesale ? '批发' : '零售') + '</button></td>' +
           '<td class="num">' + ui.money(line) + '</td>' +
-          '<td class="act"><button data-act="repl-del" data-sku="' + esc(it.skuId) + '">删除</button></td></tr>';
+          '<td class="act"><button data-act="repl-del" data-id="' + esc(it.productId) + '">删除</button></td></tr>';
       });
       h += '</tbody></table></div>';
     }
@@ -459,10 +460,9 @@
     /* 收款 + 差价 */
     var vr = 0;
     original.items.forEach(function (it) {
-      var maxQty = it.qty - (ret[it.skuId] || 0);
-      // 退几件默认值 = 可退数（maxQty），退货额应与默认输入框内容关联；state 无记录时按默认值计
-      var q = state.exchReturnQty[it.skuId] !== undefined
-        ? Math.min(state.exchReturnQty[it.skuId], maxQty > 0 ? maxQty : 0)
+      var maxQty = it.qty - (ret[it.productId] || 0);
+      var q = state.exchReturnQty[it.productId] !== undefined
+        ? Math.min(state.exchReturnQty[it.productId], maxQty > 0 ? maxQty : 0)
         : (maxQty > 0 ? maxQty : 0);
       vr += (it.price || 0) * (q > 0 ? q : 0);
     });
