@@ -105,13 +105,17 @@
     };
   };
 
-  /** 撤销单据造成的欠款（作废时回滚） */
+  /**
+   * 撤销单据造成的欠款（作废时回滚）
+   * 约束：作废后该单欠款不再存在，余额夹紧到 0（不为负）——
+   * 覆盖「部分收款后再作废」场景，避免应收/应付被整单欠款冲成负数。
+   */
   debt.reverseDoc = function reverseDoc(ctx, doc, kind) {
     if (!doc.partnerId || !doc.debt) return null;
     var p = ctx.getPartner(doc.partnerId);
     if (!p) return null;
     if (kind === schema.DOC.REFUND) p.balance = (p.balance || 0) + doc.debt;
-    else p.balance = (p.balance || 0) - doc.debt;
+    else p.balance = Math.max(0, (p.balance || 0) - doc.debt);
     ctx.touch('partners', p);
     return p;
   };

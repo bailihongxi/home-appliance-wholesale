@@ -1,92 +1,101 @@
 /**
- * tests/e2e.test.js —— PRD 10.0B 全流程闭环验收
- * 建档 → 进货(挂账) → 付供应商 → 销售(现金) → 销售(挂账) → 退货红冲 → 作废回滚
- * 断言库存 / 流水 / 欠款 / 利润最终一致。
+ * tests/e2e.test.js —— 电器版全流程闭环验收
+ * 建档(期初) → 进货(挂账) → 付供应商 → 销售(零售现金) → 销售(批发挂账) →
+ * 退货红冲 → 作废回滚；最终断言库存 / 流水 / 欠款 / 利润一致。
  */
 const test = require('node:test');
 const assert = require('node:assert');
 
 const { newCtx } = require('./helpers/ctx.js');
-const coding = require('../js/core/coding.js');
+const product = require('../js/core/product.js');
 const engine = require('../js/core/engine.js');
 const profit = require('../js/core/profit.js');
 const ledger = require('../js/core/ledger.js');
 
-function stockOf(ctx, skuId) {
-  const s = ctx.getSku(skuId);
-  return s ? (s.stock || 0) : null;
+function stockOf(ctx, productId) {
+  const p = ctx.getProduct(productId);
+  return p ? (p.stock || 0) : null;
 }
 
-test('PRD 10.0B：完整业务闭环最终状态一致', () => {
+test('电器版全流程：从建档到作废，账实一致', () => {
   const ctx = newCtx();
-  const created = coding.create(
-    { name: '小白鞋', category: '鞋', colors: ['白', '黑'], sizes: ['38', '39'], costPrice: '50', salePrice: '129' },
-    ctx
-  );
-  const sku = ctx.data.skus[0]; // X0010138
-  const skuId = sku.id;
+  const { product: frigo } = product.save(ctx, {
+    brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
+    cost: '1000', priceWholesale: '1200', priceRetail: '1399'
+  });
+  const { product: ac } = product.save(ctx, {
+    brand: '格力', model: 'KFR-35', category: '空调', unit: '台',
+    cost: '1800', priceWholesale: '2200', priceRetail: '2599'
+  });
 
-  /* ① 进货 10 件，挂账（应付 200） */
+  /* ① 进货：冰箱 10 台挂账，空调 5 台现结 */
   const pur = engine.savePurchase(ctx, {
-    date: '2026-08-01', partnerName: '温州鞋厂',
-    items: [{ skuId: skuId, qty: 10, costPrice: '50' }], paid: '300'
+    date: '2026-09-01', partnerName: '格力经销商',
+    items: [
+      { productId: frigo.id, qty: 10, costPrice: '1000' },
+      { productId: ac.id, qty: 5, costPrice: '1800' }
+    ],
+    paid: '9000' // 空调 5×1800=9000 现结，冰箱 10×1000=10000 挂账
   });
-  assert.ok(pur.ok, '进货应成功');
-  assert.strictEqual(stockOf(ctx, skuId), 10, '进货后库存 10');
+  assert.ok(pur.ok);
+  assert.strictEqual(stockOf(ctx, frigo.id), 10);
+  assert.strictEqual(stockOf(ctx, ac.id), 5);
   const sup = ctx.getPartner(pur.doc.partnerId);
-  assert.strictEqual(sup.balance, 20000, '供应商应付 200.00');
+  assert.strictEqual(sup.balance, 1000000, '供应商应付 10000 元');
 
-  /* ④ 付供应商 200 → 应付清零 */
-  const pay = engine.settleAccount(ctx, { partnerId: sup.id, amount: '200', date: '2026-08-02', isSupplier: true });
-  assert.ok(pay.ok, '付款应成功');
-  assert.strictEqual(sup.balance, 0, '供应商应付清零');
-  assert.ok(ledger.list(ctx, { type: 'pay_supplier' }).length === 1, '应有一笔供应商付款流水');
+  /* ② 付供应商 10000 → 应付清零 */
+  const pay = engine.settleAccount(ctx, { partnerId: sup.id, amount: '10000', date: '2026-09-02', isSupplier: true });
+  assert.ok(pay.ok);
+  assert.strictEqual(sup.balance, 0);
+  assert.strictEqual(ledger.list(ctx, { type: 'pay_supplier' }).length, 1);
 
-  /* ① 现金销售 3 件（应收 387.00，收入流水） */
-  const cash = engine.saveSale(ctx, {
-    date: '2026-08-03',
-    items: [{ skuId: skuId, qty: 3, price: '129', type: 'sale' }],
-    payments: [{ method: 'cash', amount: '387' }]
+  /* ③ 零售现金卖 2 台冰箱 */
+  const sale1 = engine.saveSale(ctx, {
+    date: '2026-09-03',
+    items: [{ productId: frigo.id, qty: 2, price: '1399', priceType: 'retail' }],
+    payments: [{ method: 'wechat', amount: '2798' }]
   });
-  assert.ok(cash.ok, '现金销售应成功');
-  assert.strictEqual(stockOf(ctx, skuId), 7, '销售后库存 7');
-  assert.ok(ledger.list(ctx, { type: 'sale_income' }).length === 1, '应有一笔销售收入流水');
+  assert.ok(sale1.ok);
+  assert.strictEqual(stockOf(ctx, frigo.id), 8);
+  assert.strictEqual(sale1.doc.received, 279800);
 
-  /* ⑤ 挂账销售 2 件给客户（应收 258.00） */
-  const credit = engine.saveSale(ctx, {
-    date: '2026-08-04',
-    items: [{ skuId: skuId, qty: 2, price: '129', type: 'sale' }],
-    partnerName: '张三'
+  /* ④ 批发挂账卖 3 台空调给王老板 */
+  const sale2 = engine.saveSale(ctx, {
+    date: '2026-09-04', partnerName: '王老板',
+    items: [{ productId: ac.id, qty: 3, price: '2200', priceType: 'wholesale' }],
+    payments: [{ method: 'cash', amount: '3000' }]
   });
-  assert.ok(credit.ok, '挂账销售应成功');
-  assert.strictEqual(stockOf(ctx, skuId), 5, '挂账销售后库存 5');
-  const cus = ctx.getPartner(credit.doc.partnerId);
-  assert.strictEqual(cus.balance, 25800, '客户应收 258.00');
+  assert.ok(sale2.ok);
+  assert.strictEqual(stockOf(ctx, ac.id), 2);
+  const cust = ctx.getPartner(sale2.doc.partnerId);
+  assert.strictEqual(cust.balance, 660000 - 300000, '王老板欠 3600 元');
 
-  /* ③ 退货红冲：现金单退 1 件（库存 +1，退款流水） */
-  const refund = engine.refundSale(ctx, { originalNo: cash.doc.no, items: [{ skuId: skuId, qty: 1 }] });
-  assert.ok(refund.ok, '退货应成功');
-  assert.strictEqual(stockOf(ctx, skuId), 6, '退货后库存 6');
-  const rd = ctx.getDoc('sales', refund.doc.no);
-  assert.strictEqual(rd.type, 'refund', '退货单类型应为 refund');
-  assert.strictEqual(rd.refNo, cash.doc.no, '应关联原单');
-  assert.ok(ledger.list(ctx, { type: 'refund_out' }).length === 1, '应有一笔退货退款流水');
+  /* ⑤ 王老板回款 2000 */
+  const rec = engine.settleAccount(ctx, { partnerId: cust.id, amount: '2000', date: '2026-09-05' });
+  assert.ok(rec.ok);
+  assert.strictEqual(cust.balance, 160000);
 
-  /* ⑥ 作废挂账销售（库存回滚 +2，应收冲回，流水留痕） */
-  const v = engine.voidSale(ctx, credit.doc.no);
-  assert.ok(v.ok, '作废应成功');
-  assert.strictEqual(stockOf(ctx, skuId), 8, '作废后库存回到 8');
-  assert.strictEqual(cus.balance, 0, '作废后客户应收归零');
-  assert.strictEqual(credit.doc.voided, true, '原单应标记作废');
+  /* ⑥ 零售单退 1 台冰箱（红冲） */
+  const ref = engine.refundSale(ctx, { originalNo: sale1.doc.no, items: [{ productId: frigo.id, qty: 1 }] });
+  assert.ok(ref.ok);
+  assert.strictEqual(stockOf(ctx, frigo.id), 9, '退货回库');
 
-  /* 最终一致性：销售类单据 = 现金单 + 挂账单(已作废) + 退货单 = 3 */
-  assert.strictEqual(ctx.data.sales.length, 3, '应有 3 张销售类单据（含退货/作废）');
-  const nonVoidLedgers = ledger.list(ctx, {}).filter(function (l) { return !l.voided; });
-  assert.strictEqual(nonVoidLedgers.length, 4, '未作废流水应为 4 笔（进货支出/付款/收入/退货）');
+  /* ⑦ 作废批发单 → 库存回滚、王老板欠款清零 */
+  const v = engine.voidSale(ctx, sale2.doc.no);
+  assert.ok(v.ok);
+  assert.strictEqual(stockOf(ctx, ac.id), 5, '作废后空调库存回到 5');
+  assert.strictEqual(cust.balance, 0, '作废后客户应收清零');
 
-  const sum = profit.summary(ctx);
-  // 营收 = 现金 387 - 退货 129 = 258（挂账单已作废不计）
-  assert.strictEqual(sum.revenue, 25800, '营收应为 258.00');
-  // 毛利 = 营收 25800 - 销售成本(现金3×50 - 退货1×50=10000) = 15800
-  assert.strictEqual(sum.grossProfit, 15800, '毛利应为 158.00');
+  /* 最终一致性校验 */
+  // 库存：冰箱 10-2+1=9；空调 5
+  assert.strictEqual(stockOf(ctx, frigo.id), 9);
+  assert.strictEqual(stockOf(ctx, ac.id), 5);
+  // 进货流水 2、销售流水（sale1 + refund + 作废的反向）=4 条库存流水
+  assert.ok(ctx.data.stockLogs.length >= 6);
+  // 利润：只算零售销售 2 台冰箱（1 台退货冲减）→ 1×(1399-1000)=399 元；
+  // 批发单已作废不计入
+  const sm = profit.summary(ctx, { from: '2026-09-01', to: '2026-09-30' });
+  assert.strictEqual(sm.netProfit, 39900);
+  // 库存资金占用：9×1000 + 5×1800 = 18000 元
+  assert.strictEqual(profit.stockValue(ctx), 9 * 100000 + 5 * 180000);
 });

@@ -70,20 +70,23 @@
       },
 
       /* ---- 查询助手 ---- */
-      getProduct: function (styleCode) {
+      /** 按商品 id 取商品（电器版单层模型，无 SKU） */
+      getProduct: function (id) {
         return (data.products || []).find(function (p) {
-          return p.styleCode === styleCode;
+          return String(p.id) === String(id);
         }) || null;
       },
-      getSku: function (skuId) {
-        return (data.skus || []).find(function (s) {
-          return s.id === skuId;
+      /** 按原厂条码 / 二维码内容取商品（归一化：去空白、转大写） */
+      getProductByCode: function (code) {
+        var c = String(code == null ? '' : code).trim().toUpperCase();
+        if (!c) return null;
+        return (data.products || []).find(function (p) {
+          var arr = p.barcodes;
+          if (!Array.isArray(arr)) return false;
+          return arr.some(function (b) {
+            return String(b == null ? '' : b).trim().toUpperCase() === c;
+          });
         }) || null;
-      },
-      skusOf: function (styleCode) {
-        return (data.skus || []).filter(function (s) {
-          return s.styleCode === styleCode;
-        });
       },
       getPartner: function (partnerId) {
         return (data.partners || []).find(function (p) {

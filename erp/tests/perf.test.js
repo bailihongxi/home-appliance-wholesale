@@ -1,5 +1,5 @@
 /**
- * tests/perf.test.js —— 性能压测（开发计划 Sprint 9）
+ * tests/perf.test.js —— 性能压测（电器版）
  * 造 5000 条单据，验证列表分页 / 利润汇总 / 超期扫描均在合理时间内完成。
  */
 const test = require('node:test');
@@ -7,33 +7,34 @@ const assert = require('node:assert');
 
 const { newCtx } = require('./helpers/ctx.js');
 const util = require('../js/core/util.js');
-const coding = require('../js/core/coding.js');
+const product = require('../js/core/product.js');
 const profit = require('../js/core/profit.js');
 const debt = require('../js/core/debt.js');
 
 function buildBigCtx() {
   const ctx = newCtx();
+  const ids = [];
   for (let i = 0; i < 50; i++) {
-    coding.create(
-      { name: '商品' + i, category: '鞋', colors: ['红', '黑'], sizes: ['38', '39'], costPrice: '50', salePrice: '129' },
-      ctx
-    );
+    const r = product.save(ctx, {
+      brand: '品牌' + i, model: '型号' + i, category: '生活小家电', unit: '台',
+      cost: '500', priceWholesale: '800', priceRetail: '1290'
+    });
+    ids.push(r.product.id);
   }
-  const skus = ctx.data.skus; // 200 个
-  assert.ok(skus.length === 200, '应生成 200 个 SKU');
+  assert.ok(ids.length === 50, '应生成 50 个商品');
 
   const today = util.today();
   for (let i = 0; i < 5000; i++) {
-    const sku = skus[i % skus.length];
+    const pid = ids[i % ids.length];
     const qty = (i % 3) + 1;
-    const price = 12900;
+    const price = 129000;
     const payable = price * qty;
     ctx.data.sales.push({
       no: 'S' + String(i).padStart(5, '0'),
       date: today,
       type: 'sale',
       partnerId: null,
-      items: [{ skuId: sku.id, styleCode: sku.styleCode, color: sku.color, size: sku.size, qty: qty, price: price, costSnapshot: 5000, type: 'sale' }],
+      items: [{ productId: pid, qty: qty, price: price, priceType: 'retail', costSnapshot: 50000, type: 'sale' }],
       discount: 0,
       payments: [{ method: 'cash', amount: payable }],
       received: payable,
@@ -67,9 +68,9 @@ test('压测：利润汇总 < 2s 且营收正确', () => {
   const t0 = Date.now();
   const s = profit.summary(ctx);
   const dt = Date.now() - t0;
-  // 营收 = Σ qty * 12900 ; qty 循环 1,2,3 → 每 3 单合计 6 * 12900 = 77400，共 5000 单
+  // 营收 = Σ qty * 129000 ; qty 循环 1,2,3 → 每 3 单合计 6 * 129000 = 774000，共 5000 单
   // Σqty = (1+2+3) * floor(5000/3) + 余数(1,2) = 6*1666 + 3 = 9999
-  const expectedRevenue = 9999 * 12900;
+  const expectedRevenue = 9999 * 129000;
   assert.strictEqual(s.revenue, expectedRevenue, '营收应等于 Σ(qty×单价)');
   assert.ok(dt < 2000, '利润汇总耗时 ' + dt + 'ms 应 < 2000ms');
 });

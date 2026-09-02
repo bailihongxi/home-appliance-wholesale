@@ -42,7 +42,7 @@
   backup.build = function build(ctx) {
     var data = ctx.data || {};
     var out = {
-      app: 'shoe-erp',
+      app: 'appliance-erp',
       schemaVersion: schema.VERSION,
       exportedAt: util.nowISO(),
       summary: countSummary(data),

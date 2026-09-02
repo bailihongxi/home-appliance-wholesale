@@ -1,5 +1,6 @@
 /**
- * core/schema.js —— 数据结构定义、默认设置、schemaVersion 迁移
+ * core/schema.js —— 数据结构定义、默认设置、schemaVersion 迁移（电器版）
+ * 电器版：商品单层模型（无编码、无 SKU、无属性），字段 = 品牌/型号/类型/单位/成本/批发价/零售价/库存/备注/原厂条码
  */
 (function (root, factory) {
   var mod = factory();
@@ -11,41 +12,37 @@
 
   var S = {
     /** 当前数据结构版本 */
-    VERSION: 1,
-    DB_NAME: 'shoeErp',
+    VERSION: 2,
+    DB_NAME: 'erp',
     DB_VERSION: 1,
     META_SETTINGS_KEY: 'settings',
     META_LAST_BACKUP_KEY: 'lastBackupAt',
 
-    /** V3 多账号：每账号独立数据库名 shoeErp_<acctId>；无账号（兼容旧库）用 shoeErp */
+    /** V3 多账号：每账号独立数据库名 erp_<acctId> */
     dbNameFor: function dbNameFor(acctId) {
-      return acctId ? 'shoeErp_' + acctId : 'shoeErp';
+      return acctId ? 'erp_' + acctId : 'erp';
     },
 
     STORES: {
       products: 'products',
-      skus: 'skus',
       purchases: 'purchases',
       sales: 'sales',
       stocktakes: 'stocktakes',
       stockLogs: 'stockLogs',
       ledgers: 'ledgers',
       partners: 'partners',
-      printJobs: 'printJobs',
       logs: 'logs',
       meta: 'meta'
     },
 
     KEY_PATH: {
-      products: 'styleCode',
-      skus: 'id',
+      products: 'id',
       purchases: 'no',
       sales: 'no',
       stocktakes: 'no',
       stockLogs: 'id',
       ledgers: 'id',
       partners: 'id',
-      printJobs: 'id',
       logs: 'id',
       meta: 'key'
     },
@@ -53,20 +50,19 @@
     /** 备份/导出时会整体写入的表（顺序固定） */
     DATA_STORES: [
       'products',
-      'skus',
       'purchases',
       'sales',
       'stocktakes',
       'stockLogs',
       'ledgers',
       'partners',
-      'printJobs',
       'logs'
     ],
 
-    CATEGORIES: ['鞋', '服装', '裤', '配饰', '包袋', '其他'],
+    /** 商品类型字典（可在设置里自定义；账号经营范围按此过滤） */
+    CATEGORIES: ['冰箱', '洗衣机', '空调', '电视', '厨房电器', '生活小家电', '数码影音', '配件耗材', '其他'],
 
-    /** 本账号可见分类列表（经营范围过滤）：scopeCategories 为空=不限制，返回全部分类 */
+    /** 本账号可见类型列表（经营范围过滤）：scopeCategories 为空=不限制 */
     categoriesFor: function categoriesFor(settings) {
       var all = S.CATEGORIES.slice();
       if (!settings) return all;
@@ -75,21 +71,12 @@
       return all.filter(function (c) { return sc.indexOf(c) >= 0; });
     },
 
-    /** 判断某分类是否在本账号经营范围内（空 scope=不限制） */
+    /** 判断某类型是否在本账号经营范围内（空 scope=不限制） */
     inScope: function inScope(settings, category) {
       if (!settings) return true;
       var sc = settings.scopeCategories;
       if (!sc || !sc.length) return true;
       return sc.indexOf(category) >= 0;
-    },
-
-    DEFAULT_CATEGORY_PREFIX: {
-      鞋: 'X',
-      服装: 'F',
-      裤: 'K',
-      配饰: 'P',
-      包袋: 'B',
-      其他: 'O'
     },
 
     STATUS: { ON: 'on', OFF: 'off' },
@@ -135,38 +122,21 @@
 
     PARTNER_TYPES: ['supplier', 'customer'],
 
-    /** 条码来源 */
-    BARCODE_SOURCE: { SYSTEM: 'system', SUPPLIER: 'supplier' }
+    /** 销售价格类型：批发 / 零售 */
+    PRICE_TYPE: { WHOLESALE: 'wholesale', RETAIL: 'retail' },
+    PRICE_TYPE_LABEL: { wholesale: '批发', retail: '零售' }
   };
 
   /* ---------------- 默认设置 ---------------- */
 
   S.defaultSettings = function defaultSettings() {
     return {
-      shopName: '我的鞋服店',
-      /** V3：本账号经营范围（分类白名单）；空数组=未限制（全部分类） */
+      shopName: '我的电器店',
+      /** V3：本账号经营范围（类型白名单）；空数组=未限制（全部分类） */
       scopeCategories: [],
       /** V3：本账号头像（dataURL） */
       avatar: '',
-      categoryPrefix: Object.assign({}, S.DEFAULT_CATEGORY_PREFIX),
       defaultThreshold: 3,
-      /** 一码一色码开关：true 时条码内容 = SKU id（默认关闭 = 款号） */
-      oneCodePerSku: false,
-      label: {
-        widthMm: 40,
-        heightMm: 30,
-        dpi: 203,
-        barcodeHeightMm: 10,
-        quietMm: 2.5,
-        showShopName: true,
-        copiesFromStock: true
-      },
-      print: {
-        /** tspl | escpos */
-        protocol: 'tspl',
-        density: 8,
-        gapMm: 2
-      },
       lock: { enabled: false, hash: null },
       debtOverdueDays: 15
     };
@@ -176,9 +146,6 @@
     var base = S.defaultSettings();
     if (!raw || typeof raw !== 'object') return base;
     var out = Object.assign({}, base, raw);
-    out.categoryPrefix = Object.assign({}, base.categoryPrefix, raw.categoryPrefix || {});
-    out.label = Object.assign({}, base.label, raw.label || {});
-    out.print = Object.assign({}, base.print, raw.print || {});
     out.lock = Object.assign({}, base.lock, raw.lock || {});
     return out;
   };
@@ -221,7 +188,7 @@
 
   /**
    * 迁移：低版本备份 → 当前版本（逐版本升级，钩子在此扩展）
-   * 返回 {ok, data, from, to, notes}
+   * v1（鞋服版）结构含 skus/printJobs，与电器版 v2 不兼容：给出明确提示，不自动迁移。
    */
   S.migrate = function migrate(raw) {
     var check = S.validateBackup(raw);
@@ -232,9 +199,14 @@
     });
     var notes = [];
     var from = raw.schemaVersion;
+    if (from < 2) {
+      return {
+        ok: false,
+        error: '检测到旧版（鞋服版 v1）备份。电器版数据结构不兼容，无法自动迁移，请勿导入旧备份；如需使用请重新建档。'
+      };
+    }
     var v = from;
     while (v < S.VERSION) {
-      // v1 为首个版本，暂无历史迁移步骤；后续新增版本在此按序追加
       v += 1;
       notes.push('已从 v' + (v - 1) + ' 升级到 v' + v);
     }

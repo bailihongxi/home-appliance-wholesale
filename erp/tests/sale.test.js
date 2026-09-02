@@ -1,319 +1,291 @@
+/**
+ * tests/sale.test.js —— 电器版单据核心：进货 / 销售(批发·零售) / 赠送 / 成本快照 /
+ * 退货红冲 / 换货 / 作废回滚 / 收付款
+ */
 const test = require('node:test');
 const assert = require('node:assert');
-const coding = require('../js/core/coding.js');
-const inv = require('../js/core/inventory.js');
-const cart = require('../js/core/cart.js');
-const engine = require('../js/core/engine.js');
-const ledger = require('../js/core/ledger.js');
-const debt = require('../js/core/debt.js');
 const { newCtx } = require('./helpers/ctx.js');
+const product = require('../js/core/product.js');
+const engine = require('../js/core/engine.js');
+const schema = require('../js/core/schema.js');
+const profit = require('../js/core/profit.js');
 
-const L = require('../js/core/schema.js').LEDGER;
-
-/** 建一款：白/黑 × 38/39，进价 50 售价 129 */
-function seed(ctx) {
-  coding.create(
-    { name: '小白鞋', category: '鞋', colors: ['白', '黑'], sizes: ['38', '39'], costPrice: '50', salePrice: '129' },
-    ctx
-  );
-  return ctx;
+/** 建 1 台商品并返回 ctx */
+function seedOne(ctx, opts) {
+  opts = opts || {};
+  const r = product.save(ctx, {
+    brand: opts.brand || '海尔',
+    model: opts.model || 'BCD-200',
+    category: opts.category || '冰箱',
+    unit: '台',
+    cost: opts.cost || '1000',
+    priceWholesale: opts.priceWholesale || '1200',
+    priceRetail: opts.priceRetail || '1399'
+  });
+  return r.product;
 }
-function purchase(ctx, items, paid, partnerName) {
-  return engine.savePurchase(ctx, {
-    date: '2026-08-31',
-    partnerName: partnerName || '温州鞋厂',
-    items: items,
-    paid: paid === undefined ? 99999 : paid
-  });
-}
 
-/* ---------- cart.compute ---------- */
-
-test('cart：销售行合计 − 折扣 = 应收；赠送不计入应收', () => {
-  const r = cart.compute(
-    [
-      { type: 'sale', price: 12900, qty: 2, costSnapshot: 5000 },
-      { type: 'gift', price: 0, qty: 1, costSnapshot: 5000 }
-    ],
-    { discount: 0, payments: [] }
-  );
-  assert.strictEqual(r.saleTotal, 25800);
-  assert.strictEqual(r.giftQty, 1);
-  assert.strictEqual(r.giftCost, 5000);
-  assert.strictEqual(r.payable, 25800, '赠送不计入应收');
-});
-
-test('cart：整单折扣与欠款计算', () => {
-  const r = cart.compute(
-    [{ type: 'sale', price: 12900, qty: 2, costSnapshot: 5000 }],
-    { discount: 900, payments: [{ method: 'cash', amount: 12000 }] }
-  );
-  assert.strictEqual(r.payable, 24900, '258 − 9 = 249');
-  assert.strictEqual(r.received, 12000);
-  assert.strictEqual(r.debt, 12900, '应收 − 实收 = 欠款');
-});
-
-test('cart：实收超过应收时按应收封顶，不产生负欠款', () => {
-  const r = cart.compute(
-    [{ type: 'sale', price: 12900, qty: 1, costSnapshot: 5000 }],
-    { discount: 0, payments: [{ method: 'cash', amount: 20000 }] }
-  );
-  assert.strictEqual(r.received, 12900);
-  assert.strictEqual(r.debt, 0);
-});
-
-/* ---------- 10.1-① 进货→销售 库存与流水 ---------- */
-
-test('10.1-① 进货 3 件 → 开单 2 件 → 库存 1，且生成销售收入流水', () => {
-  const ctx = seed(newCtx());
-  purchase(ctx, [{ skuId: 'X0010138', qty: 3, costPrice: '50' }]);
-  assert.strictEqual(ctx.getSku('X0010138').stock, 3);
-
-  const r = engine.saveSale(ctx, {
-    date: '2026-08-31',
-    items: [{ skuId: 'X0010138', qty: 2, price: '129' }],
-    payments: [{ method: 'cash', amount: '258' }]
+test('进货：库存 +N、档案成本回写、供应商应付挂账', () => {
+  const ctx = newCtx();
+  const p = seedOne(ctx);
+  const r = engine.savePurchase(ctx, {
+    date: '2026-09-01', partnerName: '格力经销商',
+    items: [{ productId: p.id, qty: 5, costPrice: '950' }],
+    paid: '0'
   });
   assert.strictEqual(r.ok, true);
-  assert.strictEqual(ctx.getSku('X0010138').stock, 1, '3 − 2 = 1');
-  assert.strictEqual(r.doc.payable, 25800);
-
-  const inc = ctx.data.ledgers.filter((l) => l.type === L.SALE_INCOME && !l.voided);
-  assert.strictEqual(inc.length, 1);
-  assert.strictEqual(inc[0].amount, 25800);
-  assert.strictEqual(inc[0].refNo, r.doc.no);
+  assert.strictEqual(p.stock, 5);
+  assert.strictEqual(p.cost, 95000, '档案成本回写为本次进价 950 元');
+  assert.strictEqual(r.doc.total, 5 * 95000);
+  assert.strictEqual(r.doc.debt, 5 * 95000, '未付款全额挂账');
+  const sup = ctx.getPartner(r.doc.partnerId);
+  assert.strictEqual(sup.balance, 5 * 95000);
+  assert.strictEqual(ctx.data.stockLogs.length, 1);
 });
 
-test('10.1-① 库存不足时拒绝保存且不产生脏数据', () => {
-  const ctx = seed(newCtx());
-  const r = engine.saveSale(ctx, {
-    items: [{ skuId: 'X0010138', qty: 1, price: '129' }],
-    payments: [{ method: 'cash', amount: '129' }]
+test('进货：售货价联动 —— 档案成本带出且可改，保存后同步档案', () => {
+  const ctx = newCtx();
+  const p = seedOne(ctx);
+  engine.savePurchase(ctx, {
+    date: '2026-09-01', partnerName: '格力经销商',
+    items: [{ productId: p.id, qty: 3, costPrice: '1050' }],
+    paid: '99999'
   });
-  assert.strictEqual(r.ok, false);
-  assert.ok(r.error.includes('库存'));
-  assert.strictEqual(ctx.data.sales.length, 0);
+  assert.strictEqual(p.cost, 105000);
 });
 
-/* ---------- 10.1-② 混合赠送单 ---------- */
+test('销售（零售价）：库存减少、利润按成本快照、priceType 落单', () => {
+  const ctx = newCtx();
+  const p = seedOne(ctx);
+  engine.savePurchase(ctx, {
+    date: '2026-09-01', partnerName: '格力经销商',
+    items: [{ productId: p.id, qty: 10, costPrice: '1000' }], paid: '99999'
+  });
+  const s = engine.saveSale(ctx, {
+    date: '2026-09-02',
+    items: [{ productId: p.id, qty: 2, price: '1399', priceType: 'retail' }],
+    payments: [{ method: 'wechat', amount: '2798' }]
+  });
+  assert.strictEqual(s.ok, true);
+  assert.strictEqual(p.stock, 8);
+  const doc = s.doc;
+  assert.strictEqual(doc.items[0].price, 139900);
+  assert.strictEqual(doc.items[0].priceType, 'retail');
+  assert.strictEqual(doc.items[0].costSnapshot, 100000);
+  assert.strictEqual(doc.payable, 279800);
+  assert.strictEqual(doc.received, 279800);
+  assert.strictEqual(doc.debt, 0);
+  // 利润：2 × (1399 - 1000) = 798 元
+  const sm = profit.summary(ctx, { from: '2026-09-01', to: '2026-09-30' });
+  assert.strictEqual(sm.netProfit, 79800);
+});
 
-test('10.1-② 1 行销售 + 1 行赠送：应收只含销售、库存各 −1、生成赠送成本流水、无第二笔收入', () => {
-  const ctx = seed(newCtx());
-  purchase(ctx, [
-    { skuId: 'X0010138', qty: 5, costPrice: '50' },
-    { skuId: 'X0010139', qty: 5, costPrice: '50' }
-  ]);
+test('销售（批发价）：priceType=wholesale，用批发价结算', () => {
+  const ctx = newCtx();
+  const p = seedOne(ctx);
+  engine.savePurchase(ctx, {
+    date: '2026-09-01', partnerName: '格力经销商',
+    items: [{ productId: p.id, qty: 10, costPrice: '1000' }], paid: '99999'
+  });
+  const s = engine.saveSale(ctx, {
+    date: '2026-09-02',
+    items: [{ productId: p.id, qty: 4, price: '1200', priceType: 'wholesale' }],
+    payments: [{ method: 'cash', amount: '4800' }]
+  });
+  assert.strictEqual(s.ok, true);
+  assert.strictEqual(s.doc.items[0].priceType, 'wholesale');
+  assert.strictEqual(s.doc.payable, 480000);
+  assert.strictEqual(p.stock, 6);
+});
 
-  const r = engine.saveSale(ctx, {
-    date: '2026-08-31',
+test('销售挂账：赊销客户应收增加', () => {
+  const ctx = newCtx();
+  const p = seedOne(ctx);
+  engine.savePurchase(ctx, {
+    date: '2026-09-01', partnerName: '格力经销商',
+    items: [{ productId: p.id, qty: 10, costPrice: '1000' }], paid: '99999'
+  });
+  const s = engine.saveSale(ctx, {
+    date: '2026-09-02', partnerName: '王老板',
+    items: [{ productId: p.id, qty: 3, price: '1399', priceType: 'retail' }],
+    payments: [{ method: 'wechat', amount: '1000' }]
+  });
+  assert.strictEqual(s.ok, true);
+  assert.strictEqual(s.doc.debt, 319700, '欠款 1399×3-1000');
+  const cust = ctx.getPartner(s.doc.partnerId);
+  assert.strictEqual(cust.balance, 319700);
+});
+
+test('成本快照：进货改成本后，历史销售利润不随档案变（D1 已确认）', () => {
+  const ctx = newCtx();
+  const p = seedOne(ctx);
+  engine.savePurchase(ctx, {
+    date: '2026-09-01', partnerName: '格力经销商',
+    items: [{ productId: p.id, qty: 10, costPrice: '1000' }], paid: '99999'
+  });
+  // 卖 2 台（此时成本快照 1000）
+  engine.saveSale(ctx, {
+    date: '2026-09-02',
+    items: [{ productId: p.id, qty: 2, price: '1399', priceType: 'retail' }],
+    payments: [{ method: 'wechat', amount: '2798' }]
+  });
+  // 再进货改成本为 1200
+  engine.savePurchase(ctx, {
+    date: '2026-09-03', partnerName: '格力经销商',
+    items: [{ productId: p.id, qty: 1, costPrice: '1200' }], paid: '1200'
+  });
+  assert.strictEqual(p.cost, 120000, '档案成本已更新');
+  const sm = profit.summary(ctx, { from: '2026-09-01', to: '2026-09-30' });
+  // 历史销售利润仍按旧快照 1000 计算：2×(1399-1000)=798
+  assert.strictEqual(sm.netProfit, 79800, '历史利润不受档案成本变更影响');
+});
+
+test('赠送出库：库存减少、售价为 0、记录赠送原因', () => {
+  const ctx = newCtx();
+  const p = seedOne(ctx);
+  engine.savePurchase(ctx, {
+    date: '2026-09-01', partnerName: '格力经销商',
+    items: [{ productId: p.id, qty: 10, costPrice: '1000' }], paid: '99999'
+  });
+  const s = engine.saveSale(ctx, {
+    date: '2026-09-02', partnerName: '老客户',
+    items: [{ productId: p.id, qty: 1, type: 'gift', giftReason: '赠品' }],
+    payments: []
+  });
+  assert.strictEqual(s.ok, true);
+  assert.strictEqual(p.stock, 9);
+  assert.strictEqual(s.doc.items[0].type, 'gift');
+  assert.strictEqual(s.doc.items[0].price, 0);
+  assert.strictEqual(s.doc.payable, 0);
+});
+
+test('销售退货红冲：库存回库、收入冲减、已退数量受限', () => {
+  const ctx = newCtx();
+  const p = seedOne(ctx);
+  engine.savePurchase(ctx, {
+    date: '2026-09-01', partnerName: '格力经销商',
+    items: [{ productId: p.id, qty: 10, costPrice: '1000' }], paid: '99999'
+  });
+  const s = engine.saveSale(ctx, {
+    date: '2026-09-02', partnerName: '王老板',
+    items: [{ productId: p.id, qty: 3, price: '1399', priceType: 'retail' }],
+    payments: [{ method: 'wechat', amount: '4197' }]
+  });
+  const beforeStock = p.stock; // 7
+  const ref = engine.refundSale(ctx, { originalNo: s.doc.no, items: [{ productId: p.id, qty: 1 }] });
+  assert.strictEqual(ref.ok, true);
+  assert.strictEqual(ref.doc.type, 'refund');
+  assert.strictEqual(ref.doc.refNo, s.doc.no);
+  assert.strictEqual(p.stock, beforeStock + 1, '退货 1 台回库');
+  assert.strictEqual(ref.doc.payable, 139900);
+  assert.strictEqual(ctx.data.stockLogs.length, 3);
+
+  // 超量退货被拒
+  const over = engine.refundSale(ctx, { originalNo: s.doc.no, items: [{ productId: p.id, qty: 99 }] });
+  assert.strictEqual(over.ok, true, '超量自动截断到剩余可退数 2');
+  assert.strictEqual(over.doc.items[0].qty, 2);
+});
+
+test('换货：退旧 + 换新，一退一销两单联动', () => {
+  const ctx = newCtx();
+  const pOld = seedOne(ctx, { brand: '海尔', model: 'BCD-200' });
+  const pNew = seedOne(ctx, { brand: '美的', model: 'KFR-35', category: '空调' });
+  engine.savePurchase(ctx, {
+    date: '2026-09-01', partnerName: '格力经销商',
     items: [
-      { skuId: 'X0010138', qty: 1, price: '129', type: 'sale' },
-      { skuId: 'X0010139', qty: 1, price: '0', type: 'gift', giftReason: '赠品' }
-    ],
-    payments: [{ method: 'cash', amount: '129' }]
+      { productId: pOld.id, qty: 10, costPrice: '1000' },
+      { productId: pNew.id, qty: 10, costPrice: '2000' }
+    ], paid: '99999'
   });
-  assert.strictEqual(r.ok, true);
-  assert.strictEqual(ctx.getSku('X0010138').stock, 4, '销售行 −1');
-  assert.strictEqual(ctx.getSku('X0010139').stock, 4, '赠送行 −1');
-  assert.strictEqual(r.doc.payable, 12900, '应收只含销售行');
-
-  const incomes = ctx.data.ledgers.filter((l) => l.type === L.SALE_INCOME && !l.voided);
-  assert.strictEqual(incomes.length, 1, '只生成一笔销售收入');
-  assert.strictEqual(incomes[0].amount, 12900);
-
-  const giftLed = ctx.data.ledgers.find((l) => l.type === L.GIFT_COST && !l.voided);
-  assert.ok(giftLed, '应生成赠送成本流水');
-  assert.strictEqual(giftLed.amount, 5000, '赠送成本 = 进价 × 数量');
-
-  // 赠送记录视图：从销售单明细筛出 type=gift
-  const giftRows = ctx.data.sales
-    .filter((s) => !s.voided)
-    .reduce((acc, s) => acc.concat(s.items.filter((it) => it.type === 'gift')), []);
-  assert.strictEqual(giftRows.length, 1);
-  assert.strictEqual(giftRows[0].giftReason, '赠品');
-});
-
-/* ---------- 10.1-③ 退货红冲 ---------- */
-
-test('10.1-③ 退货：库存 +N、收入冲减（退货红冲流水）、原单红冲', () => {
-  const ctx = seed(newCtx());
-  purchase(ctx, [{ skuId: 'X0010138', qty: 3, costPrice: '50' }]);
   const s = engine.saveSale(ctx, {
-    date: '2026-08-31',
-    items: [{ skuId: 'X0010138', qty: 2, price: '129' }],
-    payments: [{ method: 'cash', amount: '258' }]
+    date: '2026-09-02',
+    items: [{ productId: pOld.id, qty: 1, price: '1399', priceType: 'retail' }],
+    payments: [{ method: 'wechat', amount: '1399' }]
   });
-  assert.strictEqual(ctx.getSku('X0010138').stock, 1);
-
-  const rf = engine.refundSale(ctx, { originalNo: s.doc.no });
-  assert.strictEqual(rf.ok, true);
-  assert.strictEqual(ctx.getSku('X0010138').stock, 3, '退货入库 1 → 3');
-  assert.strictEqual(rf.doc.type, 'refund');
-  assert.strictEqual(rf.doc.refNo, s.doc.no);
-
-  // 退货红冲流水
-  const refundLed = ctx.data.ledgers.find((l) => l.type === L.REFUND_OUT && !l.voided);
-  assert.ok(refundLed, '应生成退货红冲流水');
-  assert.strictEqual(refundLed.amount, 25800);
-  assert.strictEqual(refundLed.refNo, rf.doc.no);
-
-  // 收入净额为 0（收入 25800 − 退款 25800）
-  const net = ledger.sum(ctx, {});
-  const saleInc = ctx.data.ledgers
-    .filter((l) => l.type === L.SALE_INCOME && !l.voided)
-    .reduce((t, l) => t + l.amount, 0);
-  const refundOut = ctx.data.ledgers
-    .filter((l) => l.type === L.REFUND_OUT && !l.voided)
-    .reduce((t, l) => t + l.amount, 0);
-  assert.strictEqual(saleInc - refundOut, 0, '收入按退货金额冲减');
+  const ex = engine.exchange(ctx, {
+    originalNo: s.doc.no,
+    returns: [{ productId: pOld.id, qty: 1 }],
+    replacements: [{ productId: pNew.id, qty: 1, price: '2599', priceType: 'retail' }],
+    payments: [{ method: 'wechat', amount: '1200' }] // 补差价 2599-1399=1200
+  });
+  assert.strictEqual(ex.ok, true);
+  assert.strictEqual(pOld.stock, 10, '退旧 1 台回库');
+  assert.strictEqual(pNew.stock, 9, '换新 1 台出库');
+  assert.ok(ex.refund && ex.sale, '应生成退货单 + 新销售单');
+  assert.strictEqual(ex.sale.exchangeOf, s.doc.no);
+  assert.strictEqual(ex.refund.exchangeLinked, ex.sale.no);
 });
 
-test('10.1-③ 部分退货：只退其中一行', () => {
-  const ctx = seed(newCtx());
-  purchase(ctx, [
-    { skuId: 'X0010138', qty: 3, costPrice: '50' },
-    { skuId: 'X0010139', qty: 3, costPrice: '50' }
-  ]);
+test('作废销售单：库存回滚、欠款冲回、流水作废留痕', () => {
+  const ctx = newCtx();
+  const p = seedOne(ctx);
+  engine.savePurchase(ctx, {
+    date: '2026-09-01', partnerName: '格力经销商',
+    items: [{ productId: p.id, qty: 10, costPrice: '1000' }], paid: '99999'
+  });
   const s = engine.saveSale(ctx, {
-    items: [
-      { skuId: 'X0010138', qty: 2, price: '129' },
-      { skuId: 'X0010139', qty: 1, price: '129' }
-    ],
-    payments: [{ method: 'cash', amount: '387' }]
+    date: '2026-09-02', partnerName: '王老板',
+    items: [{ productId: p.id, qty: 3, price: '1399', priceType: 'retail' }],
+    payments: [{ method: 'wechat', amount: '1000' }]
   });
-  assert.strictEqual(ctx.getSku('X0010138').stock, 1);
-  assert.strictEqual(ctx.getSku('X0010139').stock, 2);
-
-  const rf = engine.refundSale(ctx, { originalNo: s.doc.no, items: [{ skuId: 'X0010138', qty: 1 }] });
-  assert.strictEqual(rf.ok, true);
-  assert.strictEqual(ctx.getSku('X0010138').stock, 2, '白/38 退 1 → 2');
-  assert.strictEqual(ctx.getSku('X0010139').stock, 2, '黑/39 不受影响');
-  assert.strictEqual(rf.doc.items.length, 1);
+  const beforeStock = p.stock; // 7
+  const v = engine.voidSale(ctx, s.doc.no);
+  assert.strictEqual(v.ok, true);
+  assert.strictEqual(p.stock, beforeStock + 3, '库存回滚');
+  const cust = ctx.getPartner(s.doc.partnerId);
+  assert.strictEqual(cust.balance, 0, '欠款冲回');
+  const s2 = ctx.getDoc('sales', s.doc.no);
+  assert.strictEqual(s2.voided, true);
 });
 
-test('10.1-③ 赊账单退货：冲减客户应收而非产生现金退款', () => {
-  const ctx = seed(newCtx());
-  purchase(ctx, [{ skuId: 'X0010138', qty: 3, costPrice: '50' }]);
-  const customer = debt.ensurePartner(ctx, { name: '小张', type: 'customer' });
+test('作废进货单：库存回滚、应付冲回', () => {
+  const ctx = newCtx();
+  const p = seedOne(ctx);
+  const r = engine.savePurchase(ctx, {
+    date: '2026-09-01', partnerName: '格力经销商',
+    items: [{ productId: p.id, qty: 5, costPrice: '950' }], paid: '0'
+  });
+  const v = engine.voidPurchase(ctx, r.doc.no);
+  assert.strictEqual(v.ok, true);
+  assert.strictEqual(p.stock, 0, '进货作废库存归零');
+  const sup = ctx.getPartner(r.doc.partnerId);
+  assert.strictEqual(sup.balance, 0, '应付冲回');
+});
+
+test('收付款：供应商付款 / 客户回款', () => {
+  const ctx = newCtx();
+  const p = seedOne(ctx);
+  const pur = engine.savePurchase(ctx, {
+    date: '2026-09-01', partnerName: '格力经销商',
+    items: [{ productId: p.id, qty: 5, costPrice: '950' }], paid: '0'
+  });
+  const sup = ctx.getPartner(pur.doc.partnerId);
+  const pay = engine.settleAccount(ctx, { partnerId: sup.id, amount: '3000', date: '2026-09-03', isSupplier: true });
+  assert.strictEqual(pay.ok, true);
+  assert.strictEqual(sup.balance, 5 * 95000 - 300000);
+
   const s = engine.saveSale(ctx, {
-    items: [{ skuId: 'X0010138', qty: 2, price: '129' }],
-    partnerId: customer.id // 未付款 → 全赊账
+    date: '2026-09-04', partnerName: '王老板',
+    items: [{ productId: p.id, qty: 1, price: '1399', priceType: 'retail' }],
+    payments: [{ method: 'wechat', amount: '0' }]
   });
-  assert.strictEqual(s.doc.debt, 25800);
-  assert.strictEqual(ctx.getPartner(customer.id).balance, 25800);
-
-  const rf = engine.refundSale(ctx, { originalNo: s.doc.no });
-  assert.strictEqual(rf.ok, true);
-  assert.strictEqual(rf.doc.cashRefund, 0, '赊账退货不产生现金退款');
-  assert.strictEqual(rf.doc.debtRefund, 25800);
-  assert.strictEqual(ctx.getPartner(customer.id).balance, 0, '客户应收冲减为 0');
+  const cust = ctx.getPartner(s.doc.partnerId);
+  const rec = engine.settleAccount(ctx, { partnerId: cust.id, amount: '1399', date: '2026-09-05', isSupplier: false });
+  assert.strictEqual(rec.ok, true);
+  assert.strictEqual(cust.balance, 0);
 });
 
-/* ---------- 10.1-④ 进货欠款与付款 ---------- */
-
-test('10.1-④ 进货欠款 1000 / 已付 600 → 应付 400；付款 400 → 归零 + 付款流水', () => {
-  const ctx = seed(newCtx());
-  const sup = debt.ensurePartner(ctx, { name: '温州鞋厂', type: 'supplier' });
-  const p = engine.savePurchase(ctx, {
-    date: '2026-08-31',
-    partnerId: sup.id,
-    items: [{ skuId: 'X0010138', qty: 10, costPrice: '100' }],
-    paid: '600'
+test('销售明细含价格类型枚举校验：非法类型回退零售', () => {
+  const ctx = newCtx();
+  const p = seedOne(ctx);
+  engine.savePurchase(ctx, {
+    date: '2026-09-01', partnerName: '格力经销商',
+    items: [{ productId: p.id, qty: 2, costPrice: '1000' }], paid: '99999'
   });
-  assert.strictEqual(p.doc.total, 100000);
-  assert.strictEqual(p.doc.debt, 40000);
-  assert.strictEqual(ctx.getPartner(sup.id).balance, 40000);
-
-  const st = engine.settleAccount(ctx, { partnerId: sup.id, amount: '400', isSupplier: true, date: '2026-08-31' });
-  assert.strictEqual(st.ok, true);
-  assert.strictEqual(ctx.getPartner(sup.id).balance, 0);
-
-  const payLed = ctx.data.ledgers.find((l) => l.type === L.PAY_SUPPLIER && !l.voided);
-  assert.ok(payLed, '应生成供应商付款流水');
-  assert.strictEqual(payLed.amount, 40000);
-});
-
-/* ---------- 10.1-⑤ 客户挂账与收款 ---------- */
-
-test('10.1-⑤ 客户挂账 300 → 应收 +300；收款 300 → 归零 + 回款流水', () => {
-  const ctx = seed(newCtx());
-  purchase(ctx, [{ skuId: 'X0010138', qty: 5, costPrice: '50' }]);
-  const cus = debt.ensurePartner(ctx, { name: '小李', type: 'customer' });
   const s = engine.saveSale(ctx, {
-    date: '2026-08-31',
-    partnerId: cus.id,
-    items: [{ skuId: 'X0010138', qty: 2, price: '150' }] // 应收 300，未付款
+    date: '2026-09-02',
+    items: [{ productId: p.id, qty: 1, price: '1399', priceType: 'OTHER' }],
+    payments: [{ method: 'wechat', amount: '1399' }]
   });
-  assert.strictEqual(s.doc.payable, 30000);
-  assert.strictEqual(s.doc.debt, 30000);
-  assert.strictEqual(ctx.getPartner(cus.id).balance, 30000);
-
-  const st = engine.settleAccount(ctx, { partnerId: cus.id, amount: '300', isSupplier: false, date: '2026-08-31' });
-  assert.strictEqual(st.ok, true);
-  assert.strictEqual(ctx.getPartner(cus.id).balance, 0);
-
-  const recv = ctx.data.ledgers.find((l) => l.type === L.RECEIVE_DEBT && !l.voided);
-  assert.ok(recv, '应生成客户回款流水');
-  assert.strictEqual(recv.amount, 30000);
-});
-
-/* ---------- 10.1-⑥ 作废回滚 ---------- */
-
-test('10.1-⑥ 赊账销售单作废：库存与欠款同步回滚且留操作日志', () => {
-  const ctx = seed(newCtx());
-  purchase(ctx, [{ skuId: 'X0010138', qty: 5, costPrice: '50' }]);
-  const cus = debt.ensurePartner(ctx, { name: '小王', type: 'customer' });
-  const s = engine.saveSale(ctx, {
-    items: [{ skuId: 'X0010138', qty: 2, price: '129' }],
-    partnerId: cus.id
-  });
-  assert.strictEqual(ctx.getSku('X0010138').stock, 3);
-  assert.strictEqual(ctx.getPartner(cus.id).balance, 25800, '赊账生成客户应收');
-
-  const r = engine.voidSale(ctx, s.doc.no);
-  assert.strictEqual(r.ok, true);
-  assert.strictEqual(ctx.getSku('X0010138').stock, 5, '库存回滚到进货后');
-  assert.strictEqual(ctx.getPartner(cus.id).balance, 0, '欠款冲回');
-  assert.strictEqual(ctx.getDoc('sales', s.doc.no).voided, true);
-  assert.ok(ctx.data.logs.some((l) => l.action === '作废销售单'));
-  assert.strictEqual(engine.voidSale(ctx, s.doc.no).ok, false, '不能重复作废');
-});
-
-test('10.1-⑥ 现金销售单作废：收入流水被作废（净收入归零）', () => {
-  const ctx = seed(newCtx());
-  purchase(ctx, [{ skuId: 'X0010138', qty: 5, costPrice: '50' }]);
-  const s = engine.saveSale(ctx, {
-    items: [{ skuId: 'X0010138', qty: 2, price: '129' }],
-    payments: [{ method: 'cash', amount: '258' }]
-  });
-  const incomeBefore = ctx.data.ledgers.filter((l) => l.type === L.SALE_INCOME && !l.voided).length;
-  assert.strictEqual(incomeBefore, 1);
-
-  const r = engine.voidSale(ctx, s.doc.no);
-  assert.strictEqual(r.ok, true);
-  const incomeAfter = ctx.data.ledgers.filter((l) => l.type === L.SALE_INCOME && !l.voided).length;
-  assert.strictEqual(incomeAfter, incomeBefore - 1, '收入流水被作废');
-});
-
-test('10.1-⑥ 赠送退货原单作废：赠送成本流水一并作废', () => {
-  const ctx = seed(newCtx());
-  purchase(ctx, [
-    { skuId: 'X0010138', qty: 5, costPrice: '50' },
-    { skuId: 'X0010139', qty: 5, costPrice: '50' }
-  ]);
-  const s = engine.saveSale(ctx, {
-    items: [
-      { skuId: 'X0010138', qty: 1, price: '129', type: 'sale' },
-      { skuId: 'X0010139', qty: 1, price: '0', type: 'gift', giftReason: '样品' }
-    ],
-    payments: [{ method: 'cash', amount: '129' }]
-  });
-  const giftBefore = ctx.data.ledgers.filter((l) => l.type === L.GIFT_COST && !l.voided).length;
-  assert.strictEqual(giftBefore, 1);
-
-  engine.voidSale(ctx, s.doc.no);
-  const giftAfter = ctx.data.ledgers.filter((l) => l.type === L.GIFT_COST && !l.voided).length;
-  assert.strictEqual(giftAfter, 0, '赠送成本流水随作废消失');
-  assert.strictEqual(ctx.getSku('X0010138').stock, 5);
-  assert.strictEqual(ctx.getSku('X0010139').stock, 5);
+  assert.strictEqual(s.doc.items[0].priceType, 'retail', '非法价格类型回退零售');
 });

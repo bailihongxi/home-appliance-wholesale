@@ -1,7 +1,7 @@
 /**
- * V3-阶段3：经营范围过滤（schema.inScope / categoriesFor）
+ * V3-阶段3：经营范围过滤（schema.inScope / categoriesFor，电器版）
  * - 空 scopeCategories=未限制（全部分类可见）
- * - 账号 scope=['鞋'] → 只可见鞋；['服装'] → 只服装；['配饰'] → 只配饰
+ * - 账号 scope=['冰箱'] → 只可见冰箱；['厨房电器'] → 只厨房电器；['空调'] → 只空调
  */
 const test = require('node:test');
 const assert = require('node:assert');
@@ -13,34 +13,26 @@ test('categoriesFor：未限制时返回全部分类', () => {
   assert.deepStrictEqual(schema.categoriesFor({}), schema.CATEGORIES);
 });
 
-test('categoriesFor：账号1 只鞋、账号2 只服装、账号3 只配饰', () => {
-  assert.deepStrictEqual(schema.categoriesFor({ scopeCategories: ['鞋'] }), ['鞋']);
-  assert.deepStrictEqual(schema.categoriesFor({ scopeCategories: ['服装'] }), ['服装']);
-  assert.deepStrictEqual(schema.categoriesFor({ scopeCategories: ['配饰'] }), ['配饰']);
-  assert.deepStrictEqual(schema.categoriesFor({ scopeCategories: ['鞋', '服装'] }), ['鞋', '服装']);
+test('categoriesFor：按经营范围过滤', () => {
+  assert.deepStrictEqual(schema.categoriesFor({ scopeCategories: ['冰箱'] }), ['冰箱']);
+  assert.deepStrictEqual(schema.categoriesFor({ scopeCategories: ['洗衣机'] }), ['洗衣机']);
+  assert.deepStrictEqual(schema.categoriesFor({ scopeCategories: ['空调', '电视'] }), ['空调', '电视']);
 });
 
 test('inScope：分类是否在本账号经营范围内', () => {
-  // 未限制 → 全部通过
-  assert.strictEqual(schema.inScope(null, '鞋'), true);
-  assert.strictEqual(schema.inScope({ scopeCategories: [] }, '包袋'), true);
-  // 鞋店：鞋 true，服装 false
-  const shoe = { scopeCategories: ['鞋'] };
-  assert.strictEqual(schema.inScope(shoe, '鞋'), true);
-  assert.strictEqual(schema.inScope(shoe, '服装'), false);
-  assert.strictEqual(schema.inScope(shoe, '配饰'), false);
-  // 服装店
-  const clothes = { scopeCategories: ['服装'] };
-  assert.strictEqual(schema.inScope(clothes, '服装'), true);
-  assert.strictEqual(schema.inScope(clothes, '鞋'), false);
-  // 饰品店=配饰
-  const acc = { scopeCategories: ['配饰'] };
-  assert.strictEqual(schema.inScope(acc, '配饰'), true);
-  assert.strictEqual(schema.inScope(acc, '鞋'), false);
+  assert.strictEqual(schema.inScope(null, '冰箱'), true);
+  assert.strictEqual(schema.inScope({ scopeCategories: [] }, '电视'), true);
+  const big = { scopeCategories: ['冰箱', '洗衣机', '空调'] };
+  assert.strictEqual(schema.inScope(big, '冰箱'), true);
+  assert.strictEqual(schema.inScope(big, '电视'), false);
+  assert.strictEqual(schema.inScope(big, '厨房电器'), false);
+  const kitchen = { scopeCategories: ['厨房电器'] };
+  assert.strictEqual(schema.inScope(kitchen, '厨房电器'), true);
+  assert.strictEqual(schema.inScope(kitchen, '冰箱'), false);
 });
 
-test('inScope 边界：分类不在 CATEGORIES 时按未限制处理不崩溃', () => {
-  assert.strictEqual(schema.inScope({ scopeCategories: ['鞋'] }, ''), false);
-  assert.strictEqual(schema.inScope({ scopeCategories: ['鞋'] }, '其他'), false);
-  assert.strictEqual(schema.inScope({ scopeCategories: ['鞋', '服装'] }, '裤'), false);
+test('inScope 边界：分类不在经营范围时按未限制处理不崩溃', () => {
+  assert.strictEqual(schema.inScope({ scopeCategories: ['冰箱'] }, ''), false);
+  assert.strictEqual(schema.inScope({ scopeCategories: ['冰箱'] }, '其他'), false);
+  assert.strictEqual(schema.inScope({ scopeCategories: ['冰箱', '洗衣机'] }, '空调'), false);
 });

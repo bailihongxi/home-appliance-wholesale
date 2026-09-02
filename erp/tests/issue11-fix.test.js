@@ -149,12 +149,12 @@ test('问题11-⑤ schema 较晚就位时，ctx.touch 能正常打 dirty，不�
   const data = schema.emptyData();
   const ctx = repo.createContext(data);
   assert.doesNotThrow(() => {
-    ctx.touch('products', { styleCode: 'X001', name: '小白鞋' });
-    ctx.touch('skus', { id: 'X0010138', styleCode: 'X001', stock: 1 });
+    ctx.touch('products', { id: 'p1', brand: '海尔', model: 'BCD-200' });
+    ctx.touch('purchases', { no: 'P1', date: '2026-09-01' });
   }, 'touch 不应抛错');
   const dirty = ctx.takeDirty();
   assert.strictEqual((dirty.products || []).length, 1, 'products dirty 应有 1 条');
-  assert.strictEqual((dirty.skus || []).length, 1, 'skus dirty 应有 1 条');
+  assert.strictEqual((dirty.purchases || []).length, 1, 'purchases dirty 应有 1 条');
 });
 
 /* ---------------- ⑥ 端到端：保存出单不再 "null is not an object (evaluating 'repo.log')" ---------------- */
@@ -172,14 +172,13 @@ test('问题11-⑥ 端到端：保存销售单 + 同步日志依然正常（问�
 
   // 准备数据
   const data = schema.emptyData();
-  data.products.push({ styleCode: 'X001', name: '小白鞋', category: '鞋', barcode: 'X001', costPrice: 50, salePrice: 100, status: 'on' });
-  data.skus.push({ id: 'X0010138', styleCode: 'X001', color: '白', size: '38', stock: 5, threshold: 1, costPrice: 50 });
+  data.products.push({ id: 'p1', brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台', cost: 100000, priceWholesale: 120000, priceRetail: 139900, stock: 5, status: 'on', barcodes: [] });
   const ctx = repo.createContext(data);
 
   // 关键断言：调用不会抛 "undefined is not an object (evaluating 'schema.KEY_PATH')"
   const r = engine.saveSale(ctx, {
-    items: [{ skuId: 'X0010138', qty: 1, price: 100, costSnapshot: 50 }],
-    payments: [{ method: 'cash', amount: 100 }],
+    items: [{ productId: 'p1', qty: 1, price: 139900, priceType: 'retail', costSnapshot: 100000 }],
+    payments: [{ method: 'cash', amount: 139900 }],
     date: util.today()
   });
   assert.strictEqual(r.ok, true, 'saveSale 应成功：' + (r.error || ''));

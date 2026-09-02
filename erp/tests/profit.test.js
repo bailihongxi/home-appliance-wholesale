@@ -3,52 +3,49 @@ const assert = require('node:assert');
 const profit = require('../js/core/profit.js');
 const ledger = require('../js/core/ledger.js');
 const { newCtx } = require('./helpers/ctx.js');
+const product = require('../js/core/product.js');
 
 /**
- * 构造 PRD 10.2 固定数据：
- *   进价 50、售价 129、卖 10 件、赠 1 件、费用 500
- * 期望：销售收入 1290、销售成本 500、毛利 790、赠送成本 50、净利参考 240
+ * 构造 PRD 10.2 固定数据（电器版）：
+ *   成本 1000、售价 1399、卖 10 台、赠 1 台、费用 5000 元
+ * 期望：销售收入 13990、销售成本 10000、毛利 3990、赠送成本 1000、净利参考 -2010
  */
 function buildFixed(ctx) {
-  const coding = require('../js/core/coding.js');
-  coding.create(
-    { name: '小白鞋', category: '鞋', colors: ['白'], sizes: ['38'], costPrice: '50', salePrice: '129' },
-    ctx
-  );
-  // 销售单：10 件销售 + 1 件赠送
-  ctx.data.sales.push({
-    no: 'S1', date: '2026-08-31', type: 'sale', partnerId: null, partnerName: '',
-    items: [
-      { skuId: 'X0010138', styleCode: 'X001', color: '白', size: '38', qty: 10, price: 12900, costSnapshot: 5000, type: 'sale', giftReason: null },
-      { skuId: 'X0010138', styleCode: 'X001', color: '白', size: '38', qty: 1, price: 0, costSnapshot: 5000, type: 'gift', giftReason: '赠品' }
-    ],
-    discount: 0, payable: 129000, received: 129000, debt: 0, payments: [{ method: 'cash', amount: 129000 }],
-    note: '', voided: false, createdAt: '2026-08-31T10:00:00'
+  const { product: p } = product.save(ctx, {
+    brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
+    cost: '1000', priceWholesale: '1200', priceRetail: '1399'
   });
-  // 费用 500（手工记一笔：支出）
-  ledger.manual(ctx, { date: '2026-08-31', category: '其他', direction: 'out', amount: '500' });
+  ctx.data.sales.push({
+    no: 'S1', date: '2026-09-01', type: 'sale', partnerId: null, partnerName: '',
+    items: [
+      { productId: p.id, brand: '海尔', model: 'BCD-200', qty: 10, price: 139900, costSnapshot: 100000, type: 'sale', giftReason: null },
+      { productId: p.id, brand: '海尔', model: 'BCD-200', qty: 1, price: 0, costSnapshot: 100000, type: 'gift', giftReason: '赠品' }
+    ],
+    discount: 0, payable: 1399000, received: 1399000, debt: 0, payments: [{ method: 'cash', amount: 1399000 }],
+    note: '', voided: false, createdAt: '2026-09-01T10:00:00'
+  });
+  ledger.manual(ctx, { date: '2026-09-01', category: '其他', direction: 'out', amount: '5000' });
 }
 
 test('PRD 10.2 固定数据：三层利润口径', () => {
   const ctx = newCtx();
   buildFixed(ctx);
   const s = profit.summary(ctx);
-  assert.strictEqual(s.revenue, 129000, '销售收入 1290 元');
-  assert.strictEqual(s.saleCost, 50000, '销售成本 500 元（仅销售行，不含赠送）');
-  assert.strictEqual(s.grossProfit, 79000, '毛利 790 元');
-  assert.ok(Math.abs(s.grossMargin - 790 / 1290) < 1e-9, '毛利率 = 毛利/收入');
-  assert.strictEqual(s.giftCost, 5000, '赠送成本 50 元');
-  assert.strictEqual(s.expense, 50000, '费用支出 500 元');
-  assert.strictEqual(s.netProfit, 24000, '净利参考 240 元');
+  assert.strictEqual(s.revenue, 1399000, '销售收入 13990 元');
+  assert.strictEqual(s.saleCost, 1000000, '销售成本 10000 元（仅销售行，不含赠送）');
+  assert.strictEqual(s.grossProfit, 399000, '毛利 3990 元');
+  assert.ok(Math.abs(s.grossMargin - 3990 / 13990) < 1e-9, '毛利率 = 毛利/收入');
+  assert.strictEqual(s.giftCost, 100000, '赠送成本 1000 元');
+  assert.strictEqual(s.expense, 500000, '费用支出 5000 元');
+  assert.strictEqual(s.netProfit, -201000, '净利参考 -2010 元');
 });
 
-test('PRD 10.2：改进价后历史报表数字不变（进价快照生效）', () => {
+test('PRD 10.2：改进价后历史报表数字不变（成本快照生效）', () => {
   const ctx = newCtx();
   buildFixed(ctx);
   const before = profit.summary(ctx);
-  // 改动商品档案当前进价（模拟调价），不影响已存销售单的 costSnapshot
-  ctx.getProduct('X001').costPrice = 99900;
-  ctx.getSku('X0010138').costPrice = 99900;
+  // 改商品档案成本，不影响已存销售单的 costSnapshot
+  ctx.data.products[0].cost = 200000;
   const after = profit.summary(ctx);
   assert.strictEqual(after.revenue, before.revenue, '收入不变');
   assert.strictEqual(after.saleCost, before.saleCost, '销售成本不变（用快照）');
@@ -58,66 +55,84 @@ test('PRD 10.2：改进价后历史报表数字不变（进价快照生效）', 
 
 test('退货冲减销售收入与成本', () => {
   const ctx = newCtx();
-  const coding = require('../js/core/coding.js');
-  coding.create({ name: '小白鞋', category: '鞋', colors: ['白'], sizes: ['38'], costPrice: '50', salePrice: '129' }, ctx);
+  const { product: p } = product.save(ctx, {
+    brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
+    cost: '1000', priceWholesale: '1200', priceRetail: '1399'
+  });
   ctx.data.sales.push({
-    no: 'S1', date: '2026-08-31', type: 'sale', items: [
-      { skuId: 'X0010138', styleCode: 'X001', qty: 2, price: 12900, costSnapshot: 5000, type: 'sale' }
+    no: 'S1', date: '2026-09-01', type: 'sale', items: [
+      { productId: p.id, qty: 2, price: 139900, costSnapshot: 100000, type: 'sale' }
     ],
-    discount: 0, payable: 25800, received: 25800, debt: 0, voided: false
+    discount: 0, payable: 279800, received: 279800, debt: 0, voided: false
   });
   let s = profit.summary(ctx);
-  assert.strictEqual(s.revenue, 25800);
-  assert.strictEqual(s.saleCost, 10000);
-  // 退 1 件
+  assert.strictEqual(s.revenue, 279800);
+  assert.strictEqual(s.saleCost, 200000);
+  // 退 1 台
   ctx.data.sales.push({
-    no: 'S2', date: '2026-08-31', type: 'refund', refNo: 'S1', items: [
-      { skuId: 'X0010138', styleCode: 'X001', qty: 1, price: 12900, costSnapshot: 5000, type: 'sale' }
+    no: 'S2', date: '2026-09-02', type: 'refund', refNo: 'S1', items: [
+      { productId: p.id, qty: 1, price: 139900, costSnapshot: 100000, type: 'sale' }
     ],
-    discount: 0, payable: 12900, received: 0, debt: 0, voided: false
+    discount: 0, payable: 139900, received: 0, debt: 0, voided: false
   });
   s = profit.summary(ctx);
-  assert.strictEqual(s.revenue, 12900, '退货后收入减半');
-  assert.strictEqual(s.saleCost, 5000, '退货后成本回冲');
+  assert.strictEqual(s.revenue, 139900, '退货后收入减半');
+  assert.strictEqual(s.saleCost, 100000, '退货后成本减半');
 });
 
-test('畅销 TOP5 按毛利排序', () => {
+test('作废销售单不计入利润', () => {
   const ctx = newCtx();
-  const coding = require('../js/core/coding.js');
-  coding.create({ name: '小白鞋', category: '鞋', colors: ['白'], sizes: ['38'], costPrice: '50', salePrice: '129' }, ctx);
-  coding.create({ name: '黑裤', category: '裤', colors: ['黑'], sizes: ['30'], costPrice: '40', salePrice: '99' }, ctx);
+  const { product: p } = product.save(ctx, {
+    brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
+    cost: '1000', priceWholesale: '1200', priceRetail: '1399'
+  });
   ctx.data.sales.push({
-    no: 'S1', date: '2026-08-31', type: 'sale', items: [
-      { skuId: 'X0010138', styleCode: 'X001', qty: 5, price: 12900, costSnapshot: 5000, type: 'sale' },
-      { skuId: 'K0020130', styleCode: 'K002', qty: 2, price: 9900, costSnapshot: 4000, type: 'sale' }
+    no: 'S1', date: '2026-09-01', type: 'sale', items: [
+      { productId: p.id, qty: 1, price: 139900, costSnapshot: 100000, type: 'sale' }
     ],
-    payable: 129000 * 0 + 5 * 12900 + 2 * 9900, received: 5 * 12900 + 2 * 9900, debt: 0, voided: false
+    discount: 0, payable: 139900, received: 139900, debt: 0, voided: true
   });
-  const top = profit.topProducts(ctx, { by: 'profit', n: 5 });
-  assert.strictEqual(top[0].styleCode, 'X001', '小白鞋毛利更高应排第一');
-  assert.strictEqual(top[0].grossProfit, 5 * (12900 - 5000));
+  const s = profit.summary(ctx);
+  assert.strictEqual(s.revenue, 0, '作废单不计收入');
+  assert.strictEqual(s.saleCost, 0);
 });
 
-test('库存资金占用 = 当前库存 × 最新进价', () => {
+test('topProducts：按商品聚合销量与毛利', () => {
   const ctx = newCtx();
-  const coding = require('../js/core/coding.js');
-  coding.create({ name: '小白鞋', category: '鞋', colors: ['白'], sizes: ['38'], costPrice: '50', salePrice: '129' }, ctx);
-  ctx.data.skus[0].stock = 10;
-  ctx.data.skus[0].costPrice = 5000;
-  assert.strictEqual(profit.stockValue(ctx), 50000, '10 × 50 = 500');
-});
-
-test('buildCSV：带表头与月度行', () => {
-  const ctx = newCtx();
-  const coding = require('../js/core/coding.js');
-  coding.create({ name: '小白鞋', category: '鞋', colors: ['白'], sizes: ['38'], costPrice: '50', salePrice: '129' }, ctx);
+  const { product: a } = product.save(ctx, { brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台', cost: '1000', priceWholesale: '1200', priceRetail: '1399' });
+  const { product: b } = product.save(ctx, { brand: '格力', model: 'KFR-35', category: '空调', unit: '台', cost: '1800', priceWholesale: '2200', priceRetail: '2599' });
   ctx.data.sales.push({
-    no: 'S1', date: '2026-08-31', type: 'sale', items: [
-      { skuId: 'X0010138', styleCode: 'X001', qty: 1, price: 12900, costSnapshot: 5000, type: 'sale' }
-    ], payable: 12900, received: 12900, debt: 0, voided: false
+    no: 'S1', date: '2026-09-01', type: 'sale',
+    items: [
+      { productId: a.id, qty: 3, price: 139900, costSnapshot: 100000, type: 'sale' },
+      { productId: b.id, qty: 2, price: 259900, costSnapshot: 180000, type: 'sale' }
+    ],
+    discount: 0, payable: 0, received: 0, debt: 0, voided: false
   });
-  const csv = profit.buildCSV(ctx);
-  assert.ok(csv.startsWith('﻿'), '带 BOM');
-  assert.ok(csv.includes('月份'));
-  assert.ok(csv.includes('2026-08'), '含月份行');
+  const top = profit.topProducts(ctx, { by: 'profit', n: 2 });
+  assert.strictEqual(top.length, 2);
+  // 冰箱毛利 3×(1399-1000)=1197；空调 2×(2599-1800)=1598 → 空调第一
+  assert.strictEqual(top[0].productId, b.id);
+  assert.strictEqual(top[0].grossProfit, 159800);
+  assert.strictEqual(top[0].brand, '格力');
+  assert.strictEqual(top[1].grossProfit, 119700);
+});
+
+test('stockValue：库存资金占用', () => {
+  const ctx = newCtx();
+  const { product: a } = product.save(ctx, { brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台', cost: '1000', priceWholesale: '1200', priceRetail: '1399' });
+  a.stock = 5;
+  const { product: b } = product.save(ctx, { brand: '格力', model: 'KFR-35', category: '空调', unit: '台', cost: '1800', priceWholesale: '2200', priceRetail: '2599' });
+  b.stock = 2;
+  assert.strictEqual(profit.stockValue(ctx), 5 * 100000 + 2 * 180000);
+});
+
+test('monthly：按月汇总利润', () => {
+  const ctx = newCtx();
+  buildFixed(ctx);
+  const m = profit.monthly(ctx);
+  assert.ok(Array.isArray(m));
+  const row = m.find((r) => r.month === '2026-09');
+  assert.ok(row, '应有 2026-09 汇总');
+  assert.strictEqual(row.revenue, 1399000);
 });

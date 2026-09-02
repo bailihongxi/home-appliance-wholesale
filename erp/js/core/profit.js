@@ -130,7 +130,7 @@
   /**
    * 畅销 / 滞销 TOP N（按毛利或销量）
    * @param opts {by:'profit'|'qty', n:5, order:'desc'|'asc'}
-   * 返回 [{styleCode, name, qty, revenue, cost, grossProfit}]
+   * 返回 [{productId, brand, model, name, qty, revenue, cost, grossProfit}]
    */
   profit.topProducts = function topProducts(ctx, opts) {
     opts = opts || {};
@@ -143,9 +143,9 @@
       var isRefund = d.type === D.REFUND;
       (d.items || []).forEach(function (it) {
         if (it.type === D.GIFT) return; // 赠送不计入排行
-        var sc = it.styleCode;
-        if (!map[sc]) map[sc] = { styleCode: sc, name: '', qty: 0, revenue: 0, cost: 0 };
-        var m = map[sc];
+        var pid = it.productId;
+        if (!map[pid]) map[pid] = { productId: pid, brand: '', model: '', name: '', qty: 0, revenue: 0, cost: 0 };
+        var m = map[pid];
         var amt = (it.costSnapshot || 0) * (it.qty || 0);
         if (isRefund) {
           m.qty -= (it.qty || 0);
@@ -158,10 +158,14 @@
         }
       });
     });
-    var list = Object.keys(map).map(function (sc) {
-      var m = map[sc];
-      var p = ctx.getProduct(sc);
-      if (p) m.name = p.name;
+    var list = Object.keys(map).map(function (pid) {
+      var m = map[pid];
+      var p = ctx.getProduct(pid);
+      if (p) {
+        m.brand = p.brand;
+        m.model = p.model;
+        m.name = [p.brand, p.model].filter(function (s) { return String(s || '').trim(); }).join(' ');
+      }
       m.grossProfit = m.revenue - m.cost;
       return m;
     });
@@ -173,18 +177,13 @@
     return list.slice(0, n);
   };
 
-  /** 库存资金占用 = Σ(当前库存 × 最新进价) */
+  /** 库存资金占用 = Σ(当前库存 × 最新成本) */
   profit.stockValue = function stockValue(ctx) {
     var total = 0;
-    (ctx.data.skus || []).forEach(function (sku) {
-      var stock = sku.stock || 0;
+    (ctx.data.products || []).forEach(function (p) {
+      var stock = p.stock || 0;
       if (stock <= 0) return;
-      var cost = sku.costPrice;
-      if (cost === undefined || cost === null) {
-        var p = ctx.getProduct(sku.styleCode);
-        cost = p ? p.costPrice || 0 : 0;
-      }
-      total += stock * (cost || 0);
+      total += stock * (p.cost || 0);
     });
     return total;
   };

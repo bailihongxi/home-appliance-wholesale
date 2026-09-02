@@ -235,7 +235,7 @@
       })
       .then(function (ct) {
         return {
-          app: 'shoe-erp',
+          app: 'appliance-erp',
           kind: 'sync-snapshot',
           v: sync.ENVELOPE_VERSION,
           alg: 'AES-GCM-256',
@@ -297,15 +297,14 @@
     return { text: text, summary: obj.summary || {}, bytes: strToBytes(text).length };
   };
 
-  /** 摘要文字：3 款 / 12 色码 / 5 进货单 / 8 销售单 */
+  /** 摘要文字：3 款商品 / 5 进货单 / 8 销售单 */
   sync.summaryText = function summaryText(summary) {
     var s = summary || {};
     var parts = [];
     function add(key, label) {
       if (s[key]) parts.push(s[key] + ' ' + label);
     }
-    add('products', '款');
-    add('skus', '色码');
+    add('products', '商品');
     add('purchases', '进货单');
     add('sales', '销售单');
     add('ledgers', '账目');

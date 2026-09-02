@@ -20,7 +20,7 @@
   var ACCOUNTS_KEY = 'erp.accounts';
   var MAX_ACCOUNTS = 10;
   var DEFAULT_PASSWORD = '000000';
-  var ALL_CATEGORIES = ['鞋', '服装', '裤', '配饰', '包袋', '其他'];
+  var ALL_CATEGORIES = ['冰箱', '洗衣机', '空调', '电视', '厨房电器', '生活小家电', '数码影音', '配件耗材', '其他'];
 
   var api = {};
 
@@ -29,11 +29,11 @@
   api.DEFAULT_PASSWORD = DEFAULT_PASSWORD;
   api.ALL_CATEGORIES = ALL_CATEGORIES;
 
-  /** 预置账号（V3 需求1：账号1 鞋、账号2 服装、账号3 饰品=配饰） */
+  /** 预置账号（电器版）：大家电店 / 小家电店 / 厨电店 */
   api.PRESET = [
-    { id: 'acct1', username: 'shoe',     shopName: '鞋店',   scopeCategories: ['鞋'],   password: DEFAULT_PASSWORD },
-    { id: 'acct2', username: 'clothes',  shopName: '服装店', scopeCategories: ['服装'], password: DEFAULT_PASSWORD },
-    { id: 'acct3', username: 'accessory', shopName: '饰品店', scopeCategories: ['配饰'], password: DEFAULT_PASSWORD }
+    { id: 'acct1', username: 'appliance',    shopName: '大家电店', scopeCategories: ['冰箱', '洗衣机', '空调', '电视'], password: DEFAULT_PASSWORD },
+    { id: 'acct2', username: 'smallapp',     shopName: '小家电店', scopeCategories: ['厨房电器', '生活小家电', '数码影音'], password: DEFAULT_PASSWORD },
+    { id: 'acct3', username: 'kitchen',      shopName: '厨电店',   scopeCategories: ['厨房电器', '生活小家电'], password: DEFAULT_PASSWORD }
   ];
 
   /** 生成新账号 id（自建账号：acct4 起递增，避开已存在 id） */

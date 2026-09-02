@@ -85,18 +85,16 @@
   };
 
   /**
-   * 由表单明细生成结算所需的 items（补全 type / costSnapshot / price）
-   * formItems: [{ skuId, qty, price(分), type, giftReason, costSnapshot(分) }]
+   * 由表单明细生成结算所需的 items（补全 type / costSnapshot / price / priceType）
+   * formItems: [{ productId, qty, price(分), priceType, type, giftReason, costSnapshot(分) }]
    */
   cart.toItems = function toItems(formItems) {
     return (formItems || []).map(function (it) {
       return {
-        skuId: it.skuId,
-        styleCode: it.styleCode,
-        color: it.color,
-        size: it.size,
+        productId: it.productId,
         qty: Math.max(1, parseInt(it.qty, 10) || 1),
         price: Math.max(0, Math.round(it.price || 0)),
+        priceType: it.priceType === schema.PRICE_TYPE.WHOLESALE ? schema.PRICE_TYPE.WHOLESALE : schema.PRICE_TYPE.RETAIL,
         costSnapshot: Math.max(0, Math.round(it.costSnapshot || 0)),
         type: it.type === schema.DOC.GIFT ? schema.DOC.GIFT : schema.DOC.SALE,
         giftReason: it.type === schema.DOC.GIFT ? (it.giftReason || schema.GIFT_REASONS[0]) : null
