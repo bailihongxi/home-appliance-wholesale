@@ -37,6 +37,28 @@ test('页面元数据与云同步卡片渲染', () => {
   assert.ok(html.includes('同步设置'));
 });
 
+test('常用入口图标与首页快捷入口统一，开单为手推车样式', () => {
+  const { ctx, state } = fresh();
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('常用入口'), '含常用入口卡片');
+  // 图标与首页快捷入口一致：进货🚚 商品📦 库存🗄️ 记账📒 报表📈 退换货🔁
+  assert.ok(html.includes('🚚'), '进货图标与首页一致(🚚)');
+  assert.ok(html.includes('📦'), '商品图标与首页一致(📦)');
+  assert.ok(html.includes('🗄️'), '库存图标与首页一致(🗄️)');
+  assert.ok(html.includes('📒'), '记账图标与首页一致(📒)');
+  assert.ok(html.includes('📈'), '报表图标与首页一致(📈)');
+  assert.ok(html.includes('🔁'), '退换货图标与首页一致(🔁)');
+  // 开单统一使用手推车 🛒
+  assert.ok(html.includes('🛒'), '开单为手推车样式(🛒)');
+  // 不再使用旧图标
+  assert.ok(!html.includes('🛍'), '不再用旧进货图标');
+  assert.ok(!html.includes('▦'), '不再用旧库存图标');
+  assert.ok(!html.includes('➕'), '开单不再用加号');
+  // 供应商/设置为我的页独有，保留原图标
+  assert.ok(html.includes('👤'), '供应商保留');
+  assert.ok(html.includes('⚙'), '设置保留');
+});
+
 test('同步设置展开：含「测试连接」与「保存同步设置」按钮', () => {
   const { ctx, state } = fresh();
   state.syncOpen = true;

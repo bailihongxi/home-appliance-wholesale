@@ -455,16 +455,16 @@
     return h;
   }
 
-  /** 8 格圆形快捷入口（2 行 4 列），颜色匹配设计图 */
+  /** 8 格圆形快捷入口（2 行 4 列），图标与首页「快捷入口」统一；开单统一为手推车样式 */
   function renderQuickGrid() {
     var items = [
-      { page: 'sale',      icon: '➕', text: '开单',     color: 'c-green' },
-      { page: 'purchase',  icon: '🛍', text: '进货',     color: 'c-teal' },
-      { page: 'product',   icon: '🛒', text: '商品',     color: 'c-blue' },
+      { page: 'sale',      icon: '🛒', text: '开单',     color: 'c-green' },
+      { page: 'purchase',  icon: '🚚', text: '进货',     color: 'c-teal' },
+      { page: 'product',   icon: '📦', text: '商品',     color: 'c-blue' },
       { page: 'supplier',  icon: '👤', text: '供应商',   color: 'c-yellow' },
-      { page: 'inventory', icon: '▦',  text: '库存',     color: 'c-teal' },
-      { page: 'account',   icon: '📋', text: '记账中心', color: 'c-purple' },
-      { page: 'report',    icon: '📊', text: '报表',     color: 'c-pink' },
+      { page: 'inventory', icon: '🗄️', text: '库存',     color: 'c-teal' },
+      { page: 'account',   icon: '📒', text: '记账中心', color: 'c-purple' },
+      { page: 'report',    icon: '📈', text: '报表',     color: 'c-pink' },
       { page: 'exchange',  icon: '🔁', text: '退换货',   color: 'c-peach' },
       { page: 'setting',   icon: '⚙', text: '设置',     color: 'c-gray' }
     ];
