@@ -128,3 +128,11 @@ test('测试连接-失败(401 Token 无效)：显示细分原因', async () => {
     sync.checkAuth = orig;
   }
 });
+
+test('关于：版本号统一为 V3.1（与 PRD / 开发计划一致）', () => {
+  const { ctx, state } = fresh();
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('版本：V3.1'), '关于页显示 V3.1');
+  assert.ok(html.includes('关于'), '含关于卡片');
+  assert.ok(!html.includes('版本：V3.0'), '不再显示旧版本号');
+});
