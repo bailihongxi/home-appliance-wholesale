@@ -400,6 +400,9 @@
     if (!page) return;
     var state = stateOf(page);
 
+    // 供页面读取当前登录账号（role 判断：如权限管理页仅管理员可见）
+    if (app.ctx) app.ctx.currentAccount = ERP.currentAccount;
+
     renderNav(page);
 
     var html = '';

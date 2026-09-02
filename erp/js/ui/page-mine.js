@@ -341,6 +341,21 @@
     // 3. 云同步卡片
     h += renderSyncCard(state, cfg);
 
+    // V2.3：管理员专属「权限管理」入口（普通账号不显示）
+    var curAcct = ctx && ctx.currentAccount;
+    if (curAcct && (curAcct.role === 'admin' || curAcct.id === 'admin')) {
+      h += '<div class="card mt8 admin-entry" data-act="go" data-page="admin">' +
+        '<div class="row" style="align-items:center;gap:10px">' +
+          '<span style="font-size:20px">🔐</span>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div class="name" style="font-weight:700">权限管理</div>' +
+            '<div class="small muted">管理全部账号的经营范围</div>' +
+          '</div>' +
+          '<span class="arrow">›</span>' +
+        '</div>' +
+      '</div>';
+    }
+
     // 4. 常用入口（9 格圆形 3×3 九宫格）—— 关键字串「常用入口」保留
     h += renderQuickGrid();
 

@@ -82,11 +82,11 @@ test('登录账户管理-渲染：每个账号卡片含编辑/删除按钮', () 
   const html = page.render(null, state);
   assert.ok(html.includes('data-act="edit-account"'), '含编辑按钮');
   assert.ok(html.includes('data-act="del-account"'), '含删除按钮');
-  // 3 个预置账号 × 各 2 个管理按钮
+  // 4 个预置账号（admin + 3 店）× 各 2 个管理按钮
   const editCount = (html.match(/data-act="edit-account"/g) || []).length;
   const delCount = (html.match(/data-act="del-account"/g) || []).length;
-  assert.strictEqual(editCount, 3);
-  assert.strictEqual(delCount, 3);
+  assert.strictEqual(editCount, 4);
+  assert.strictEqual(delCount, 4);
 });
 
 test('登录账户管理-edit-account：点击编辑预填店名/登录名，打开编辑表单', () => {
@@ -169,4 +169,26 @@ test('登录账户管理-cancel-del-account：取消不删除', () => {
   page.actions['cancel-del-account'](state, state);
   assert.strictEqual(state.pendingDeleteId, null);
   assert.strictEqual(accounts.getById(accounts.load(store), 'acct1') !== null, true, '账号仍在');
+});
+
+/* ===== V2.3 管理员账号 ===== */
+test('V2.3-登录列表：含管理员账号 admin（管理总控）', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const state = page.init(null, store);
+  const html = page.render(null, state);
+  assert.ok(html.includes('管理总控'), '登录列表显示管理员店名');
+  assert.ok(html.includes('@admin'), '显示 @admin 登录名');
+  const admin = accounts.getById(accounts.load(store), 'admin');
+  assert.strictEqual(admin.role, 'admin');
+});
+
+test('V2.3-管理员登录：初始密码 admina1b22c333 校验通过', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const ok = page.loginWith(store, 'admin', 'admina1b22c333');
+  assert.strictEqual(ok.ok, true, '管理员初始密码可登录');
+  assert.strictEqual(ok.account.role, 'admin', '登录结果含 role=admin');
+  const bad = page.loginWith(store, 'admin', 'wrong');
+  assert.strictEqual(bad.ok, false, '错误密码拒绝');
 });

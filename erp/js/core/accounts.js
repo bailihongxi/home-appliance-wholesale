@@ -29,8 +29,9 @@
   api.DEFAULT_PASSWORD = DEFAULT_PASSWORD;
   api.ALL_CATEGORIES = ALL_CATEGORIES;
 
-  /** 预置账号（电器版）：大家电店 / 小家电店 / 厨电店 */
+  /** 预置账号（电器版）：管理员 admin + 大家电店 / 小家电店 / 厨电店 */
   api.PRESET = [
+    { id: 'admin', username: 'admin',  shopName: '管理总控', role: 'admin', scopeCategories: null, password: 'admina1b22c333' },
     { id: 'acct1', username: 'appliance',    shopName: '大家电店', scopeCategories: ['冰箱', '洗衣机', '空调', '电视'], password: DEFAULT_PASSWORD },
     { id: 'acct2', username: 'smallapp',     shopName: '小家电店', scopeCategories: ['厨房电器', '生活小家电', '数码影音'], password: DEFAULT_PASSWORD },
     { id: 'acct3', username: 'kitchen',      shopName: '厨电店',   scopeCategories: ['厨房电器', '生活小家电'], password: DEFAULT_PASSWORD }
@@ -90,9 +91,10 @@
   };
 
   /**
-   * 确保预置账号存在（仅首次初始化时写入；已存在则不重复创建）。
-   * 注：只在「从未初始化」时写入全部预置账号；用户删除任意账号（含预置）后
-   * 不会再被自动补回，保证登录页的删除操作真实生效。
+   * 确保预置账号存在。
+   * - 首次初始化：写入全部预置账号（admin + 3 店）；
+   * - 后续调用：仅确保「管理员 admin」存在（系统级账号，删除后自动补回）；
+   *   用户删除的店铺账号不会被自动补回（尊重登录页删除操作）。
    */
   api.ensurePreset = function ensurePreset(store) {
     if (!store || !store.getItem) return [];
@@ -104,20 +106,29 @@
     }
     var list = api.load(store);
     var firstInit = (raw === null || raw === undefined || raw === '');
-    if (firstInit) {
-      api.PRESET.forEach(function (p) {
-        list.push({
-          id: p.id,
-          username: p.username,
-          shopName: p.shopName,
-          avatar: '',
-          scopeCategories: p.scopeCategories.slice(),
-          hash: util.hashPassword(p.password),
-          createdAt: new Date().toISOString().slice(0, 10)
-        });
+    var changed = false;
+    var pushOne = function (p) {
+      list.push({
+        id: p.id,
+        username: p.username,
+        shopName: p.shopName,
+        role: p.role || 'user',
+        avatar: '',
+        scopeCategories: p.scopeCategories ? p.scopeCategories.slice() : ALL_CATEGORIES.slice(),
+        hash: util.hashPassword(p.password),
+        createdAt: new Date().toISOString().slice(0, 10)
       });
-      api.save(store, list);
+      changed = true;
+    };
+    if (firstInit) {
+      api.PRESET.forEach(pushOne);
     }
+    // 系统级管理员账号必须存在：缺失即补回
+    if (!api.getById(list, 'admin')) {
+      var pAdmin = api.PRESET[0];
+      pushOne(pAdmin);
+    }
+    if (changed) api.save(store, list);
     return list;
   };
 
@@ -143,11 +154,12 @@
     if (api.findByUsername(list, username)) {
       return { ok: false, error: '该登录账号已存在' };
     }
-    // 自建账号默认全部分类开放（未分配经营范围，后续可收紧）
+    // 自建账号默认全部分类开放（未分配经营范围，后续可由管理员收紧）
     var account = {
       id: api.nextId(list),
       username: username,
       shopName: shopName,
+      role: 'user', // 自建账号均为普通用户；管理员仅预置 admin
       avatar: typeof input.avatar === 'string' ? input.avatar : '',
       scopeCategories: input.scopeCategories && input.scopeCategories.length ? input.scopeCategories.slice() : ALL_CATEGORIES.slice(),
       hash: util.hashPassword(pwd),
@@ -238,6 +250,7 @@
       id: a.id,
       username: a.username,
       shopName: a.shopName,
+      role: a.role || 'user',
       avatar: a.avatar || '',
       scopeCategories: (a.scopeCategories || []).slice(),
       createdAt: a.createdAt || ''

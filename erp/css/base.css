@@ -334,6 +334,16 @@ textarea.input { min-height: 72px; resize: vertical; }
   color: var(--c-mint-700);
 }
 
+/* ---------- 权限管理（V2.3） ---------- */
+.admin-cats { display: flex; flex-wrap: wrap; gap: 6px; }
+.admin-cats .chip.admin-all { border-style: dashed; }
+.admin-cats .chip.admin-clear { color: var(--c-text-weak); }
+.admin-acct .name { display: inline-flex; align-items: center; gap: 6px; }
+.admin-acct .login-avatar { width: 40px; height: 40px; font-size: 16px; }
+.admin-entry { cursor: pointer; }
+.admin-entry:hover { background: var(--c-mint-50); }
+.admin-entry .arrow { color: var(--c-text-weak); font-size: 18px; }
+
 .checkline { display: flex; align-items: center; gap: 6px; font-size: 14px; }
 
 /* ---------- 表格 ---------- */

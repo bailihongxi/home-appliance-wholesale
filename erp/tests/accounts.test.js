@@ -17,16 +17,70 @@ function memStore(init) {
   };
 }
 
-test('预置账号：首次 ensurePreset 创建 3 个账号（大家电/小家电/厨电）', () => {
+test('预置账号：首次 ensurePreset 创建 4 个账号（admin + 大家电/小家电/厨电）', () => {
   const store = memStore();
   const list = accounts.ensurePreset(store);
-  assert.strictEqual(list.length, 3);
+  assert.strictEqual(list.length, 4);
   assert.deepStrictEqual(accounts.getById(list, 'acct1').scopeCategories, ['冰箱', '洗衣机', '空调', '电视']);
   assert.deepStrictEqual(accounts.getById(list, 'acct2').scopeCategories, ['厨房电器', '生活小家电', '数码影音']);
   assert.deepStrictEqual(accounts.getById(list, 'acct3').scopeCategories, ['厨房电器', '生活小家电']);
   assert.strictEqual(accounts.getById(list, 'acct1').shopName, '大家电店');
   assert.strictEqual(accounts.getById(list, 'acct2').shopName, '小家电店');
   assert.strictEqual(accounts.getById(list, 'acct3').shopName, '厨电店');
+});
+
+test('管理员账号：预置 admin（管理总控），初始密码 admina1b22c333 可登录，role=admin，经营范围全部分类', () => {
+  const store = memStore();
+  const list = accounts.ensurePreset(store);
+  const admin = accounts.getById(list, 'admin');
+  assert.ok(admin, 'admin 账号存在');
+  assert.strictEqual(admin.username, 'admin');
+  assert.strictEqual(admin.shopName, '管理总控');
+  assert.strictEqual(admin.role, 'admin', '角色为管理员');
+  assert.strictEqual(accounts.verify(admin, 'admina1b22c333'), true, '初始密码可登录');
+  assert.strictEqual(accounts.verify(admin, '000000'), false, '非初始密码拒绝');
+  assert.deepStrictEqual(admin.scopeCategories, accounts.ALL_CATEGORIES, '经营范围=全部分类');
+});
+
+test('管理员账号：ensurePreset 幂等（admin 不重复创建）', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const again = accounts.ensurePreset(store);
+  assert.strictEqual(again.length, 4);
+  assert.strictEqual(again.filter(a => a.id === 'admin').length, 1, 'admin 唯一');
+});
+
+test('管理员账号：删除 admin 后 ensurePreset 自动补回（系统级账号）', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const r = accounts.remove(store, 'admin');
+  assert.strictEqual(r.ok, true);
+  const list = accounts.ensurePreset(store);
+  assert.ok(accounts.getById(list, 'admin'), 'admin 被补回');
+  assert.strictEqual(accounts.getById(list, 'admin').role, 'admin');
+});
+
+test('管理员账号：publicList/strip 透出 role，自建账号默认 user', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  accounts.create(store, { username: 'normal', password: '123456', shopName: '普通店' });
+  const pub = accounts.publicList(accounts.load(store));
+  const adminPub = pub.find(a => a.id === 'admin');
+  const userPub = pub.find(a => a.username === 'normal');
+  assert.strictEqual(adminPub.role, 'admin');
+  assert.strictEqual(userPub.role, 'user', '自建账号 role=user');
+  assert.ok(pub.every(a => a.hash === undefined), '公开列表不含 hash');
+});
+
+test('管理员账号：update 修改店名/密码不改变 role', () => {
+  const store = memStore();
+  accounts.ensurePreset(store);
+  const r = accounts.update(store, 'admin', { shopName: '管理总控中心', password: 'newpass999' });
+  assert.strictEqual(r.ok, true);
+  const admin = accounts.getById(accounts.load(store), 'admin');
+  assert.strictEqual(admin.role, 'admin', 'role 不变');
+  assert.strictEqual(admin.shopName, '管理总控中心');
+  assert.strictEqual(accounts.verify(admin, 'newpass999'), true, '新密码生效');
 });
 
 test('预置账号：初始密码 000000 可校验，错误密码不可', () => {
@@ -42,7 +96,7 @@ test('ensurePreset 幂等：重复调用不重复创建', () => {
   const store = memStore();
   accounts.ensurePreset(store);
   const again = accounts.ensurePreset(store);
-  assert.strictEqual(again.length, 3);
+  assert.strictEqual(again.length, 4);
 });
 
 test('自行创建账号：成功创建并可用初始密码登录；默认全部分类开放', () => {
@@ -198,8 +252,9 @@ test('登录账户管理-remove：删除预置账号后 ensurePreset 不再自�
   assert.strictEqual(accounts.getById(accounts.load(store), 'acct3') !== null, true);
   const r = accounts.remove(store, 'acct3');
   assert.strictEqual(r.ok, true);
-  // 再次 ensurePreset（模拟刷新/重渲染）不应把被删的预置账号补回
+  // 再次 ensurePreset（模拟刷新/重渲染）不应把被删的店铺账号补回（admin 属系统账号仍保留）
   const list = accounts.ensurePreset(store);
-  assert.strictEqual(accounts.getById(list, 'acct3'), null, '删除后不被自动恢复');
-  assert.strictEqual(list.length, 2, '剩余 2 个账号');
+  assert.strictEqual(accounts.getById(list, 'acct3'), null, '店铺账号删除后不被自动恢复');
+  assert.strictEqual(accounts.getById(list, 'admin') !== null, true, 'admin 系统账号仍在');
+  assert.strictEqual(list.length, 3, '剩余 3 个账号（admin+acct1+acct2）');
 });
