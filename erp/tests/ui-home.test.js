@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 const page = require('../js/ui/page-home.js');
 const { newCtx } = require('./helpers/ctx.js');
 const product = require('../js/core/product.js');
@@ -39,4 +41,18 @@ test('备份提醒：从未备份时出现提示', () => {
   const ctx = newCtx();
   const html = page.render(ctx, page.init());
   assert.ok(html.includes('未备份'), '有备份提醒');
+});
+
+test('右上角图标已取消：手机版与桌面版首页均无铃铛/头像按钮', () => {
+  const ctx = newCtx();
+  const html = page.render(ctx, page.init());
+  assert.ok(html.includes('page-banner'), 'banner 保留');
+  assert.ok(!html.includes('banner-action'), '无 banner 铃铛按钮(手机版+桌面版)');
+  assert.ok(!html.includes('🔔'), '无铃铛图标');
+  // index.html 顶栏：铃铛 + 头像按钮已移除
+  const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.ok(!indexHtml.includes('class="bell"'), '顶栏无铃铛按钮');
+  assert.ok(!indexHtml.includes('top-avatar'), '顶栏无头像按钮');
+  assert.ok(!indexHtml.includes('top-bell-dot'), '无铃铛红点元素');
+  assert.ok(indexHtml.includes('top-shop-name'), '顶栏店名保留');
 });

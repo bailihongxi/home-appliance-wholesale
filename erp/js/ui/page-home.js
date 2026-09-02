@@ -185,9 +185,6 @@
       '<div class="page-banner">' +
         '<div class="banner-title"><img class="banner-logo" src="' + esc(brandLogo) + '" alt="logo">' + esc(shopName) + '</div>' +
         '<div class="banner-sub">已备份 · 今天 09:12</div>' +
-        '<button class="banner-action" data-act="go" data-page="setting" aria-label="通知">' +
-          '🔔<span class="dot"></span>' +
-        '</button>' +
       '</div>' +
       '<div class="home-top">' +
         '<div class="overview-head">' +
@@ -211,9 +208,6 @@
       '<div class="page-banner">' +
         '<div class="banner-title"><img class="banner-logo" src="' + esc(brandLogo) + '" alt="logo">' + esc(shopName) + '</div>' +
         '<div class="banner-sub">已备份 · 今天 09:12</div>' +
-        '<button class="banner-action" data-act="go" data-page="setting" aria-label="通知">' +
-          '🔔<span class="dot"></span>' +
-        '</button>' +
       '</div>' +
       '<div class="home-top">' +
         '<div class="overview-head">' +

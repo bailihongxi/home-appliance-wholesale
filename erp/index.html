@@ -26,7 +26,7 @@
       <span class="brand">我的电器店</span>
       <span class="sub">进销存记账</span>
     </header>
-    <!-- 电脑端顶栏（v2）：店名 + 全局搜索 + 铃铛 + 头像，由 app.renderNav 填充 -->
+    <!-- 电脑端顶栏（v2）：店名 + 全局搜索，右上角图标已取消（铃铛/头像） -->
     <div class="top-bar">
       <span class="shop-name" id="top-shop-name">我的电器店</span>
       <div class="global-search">
@@ -34,10 +34,6 @@
         <input id="global-search-input" type="search" placeholder="全局搜索商品 / 订单 / 客户" autocomplete="off">
       </div>
       <div class="spacer"></div>
-      <button class="bell" data-act="go" data-page="report" aria-label="通知" title="经营概览">
-        🔔<span class="dot hidden" id="top-bell-dot"></span>
-      </button>
-      <div class="avatar" id="top-avatar" data-act="go" data-page="mine" title="我的"><img src="assets/icon-192.png" alt="我的"></div>
     </div>
     <main class="app-main">
       <div id="view"></div>
