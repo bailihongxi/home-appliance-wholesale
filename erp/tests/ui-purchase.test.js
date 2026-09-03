@@ -119,3 +119,30 @@ test('列表渲染：含供应商与金额', () => {
   assert.ok(detail.includes('data-act="print-doc"'), '单据弹层有打印按钮');
   assert.ok(detail.includes('>打印<'), '打印按钮文案');
 });
+
+test('进货选货区：默认每页 15 条 + 斑马纹 + 分页导航（pick-page）', () => {
+  const ctx = newCtx();
+  for (let i = 0; i < 18; i++) {
+    product.save(ctx, {
+      brand: '品牌' + i, model: 'M' + String(i).padStart(3, '0'), category: '生活小家电',
+      unit: '台', cost: '500', priceWholesale: '800', priceRetail: '1290'
+    });
+  }
+  const state = fresh(ctx);
+  state.tab = 'form';
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('tbl tbl-striped'), '进货选货表格应带斑马纹样式');
+  assert.strictEqual((html.match(/data-act="add-item"/g) || []).length, 15, '默认只显示前 15 条商品');
+  assert.ok(html.includes('data-act="pick-page"'), '进货选货分页应使用 pick-page 动作');
+  assert.ok(html.includes('共 18 条'), '分页显示总条数');
+
+  // 翻到第 2 页
+  page.actions['pick-page'](ctx, state, { getAttribute: (k) => (k === 'data-page' ? '2' : null) });
+  const html2 = page.render(ctx, state);
+  assert.strictEqual((html2.match(/data-act="add-item"/g) || []).length, 3, '第 2 页显示剩余 3 条');
+  assert.ok(html2.includes('2 / 2'), '第 2 页页码');
+
+  // 搜索词变化重置回第 1 页
+  page.actions['form-keyword'](ctx, state, { value: '品牌1' });
+  assert.strictEqual(state.form.pickPage, 1, '搜索词变化回到选货第 1 页');
+});

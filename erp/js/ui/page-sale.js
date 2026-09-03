@@ -34,6 +34,7 @@
   function emptyForm() {
     return {
       keyword: '',
+      pickPage: 1,
       productId: '',
       items: [],
       discount: '',
@@ -116,6 +117,10 @@
       },
       keyword: function (ctx, state, el) {
         state.form.keyword = el.value;
+        state.form.pickPage = 1; // 搜索词变化回到选货第 1 页
+      },
+      'pick-page': function (ctx, state, el) {
+        state.form.pickPage = parseInt(el.getAttribute('data-page'), 10) || 1;
       },
       'pick-product': function (ctx, state, el) {
         var id = el.getAttribute('data-id');
@@ -361,19 +366,20 @@
     h += '<div class="card"><div class="card-title">选货区</div>' +
       ui.searchBar({ value: form.keyword, placeholder: '搜索 品牌 / 型号 / 类型 / 条码', scan: true });
     var kw = String(form.keyword || '').trim().toUpperCase();
-    // 大数据量优化：提前终止取前 30 个（无关键词不全量遍历；有关键词命中即停）
-    var list = util.pickProducts(ctx.data.products, kw, {
-      limit: 30,
+    // 大数据量优化：默认每页 15 条 + 斑马纹 + 分页（避免一次性加载过多商品拉慢速度）
+    var pick = util.pickProductsPaged(ctx.data.products, kw, {
+      limit: 15,
+      page: form.pickPage || 1,
       scope: function (cat) { return schema.inScope(ctx.settings, cat); },
       offStatus: schema.STATUS.OFF
     });
-    if (!list.length) {
+    if (!pick.list.length) {
       h += ui.empty('没有匹配的商品，请先到「商品档案」建档');
     } else {
-      h += '<div class="table-wrap"><table class="tbl"><thead><tr>' +
+      h += '<div class="table-wrap"><table class="tbl tbl-striped"><thead><tr>' +
         '<th>商品</th><th class="num">批发</th><th class="num">零售</th><th class="num">库存</th><th></th>' +
         '</tr></thead><tbody>';
-      list.forEach(function (p) {
+      pick.list.forEach(function (p) {
         var low = (p.stock || 0) < (ctx.settings.defaultThreshold == null ? 3 : ctx.settings.defaultThreshold);
         h += '<tr>' +
           '<td>' + esc(p.brand) + ' <b>' + esc(p.model) + '</b><br><span class="weak small">' + esc(p.category) + ' / ' + esc(p.unit) + '</span></td>' +
@@ -383,7 +389,7 @@
           '<td class="act"><button class="btn btn-sm btn-primary" data-act="pick-product" data-id="' + esc(p.id) + '">加入</button></td>' +
           '</tr>';
       });
-      h += '</tbody></table></div>';
+      h += '</tbody></table></div>' + ui.pager(pick.page, pick.pages, pick.total, 'pick-page');
     }
     h += '</div>';
     h += '</div>';

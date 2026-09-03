@@ -103,15 +103,16 @@
     return h;
   };
 
-  C.pager = function pager(page, pages, total) {
+  C.pager = function pager(page, pages, total, act) {
+    var a = act || 'page';
     if (!pages || pages <= 1) {
       return total ? '<div class="pager weak small">共 ' + total + ' 条</div>' : '';
     }
     return (
       '<div class="pager">' +
-      '<button class="btn btn-sm" data-act="page" data-page="' + (page - 1) + '"' + (page <= 1 ? ' disabled' : '') + '>上一页</button>' +
+      '<button class="btn btn-sm" data-act="' + a + '" data-page="' + (page - 1) + '"' + (page <= 1 ? ' disabled' : '') + '>上一页</button>' +
       '<span class="muted small">' + page + ' / ' + pages + '　共 ' + total + ' 条</span>' +
-      '<button class="btn btn-sm" data-act="page" data-page="' + (page + 1) + '"' + (page >= pages ? ' disabled' : '') + '>下一页</button>' +
+      '<button class="btn btn-sm" data-act="' + a + '" data-page="' + (page + 1) + '"' + (page >= pages ? ' disabled' : '') + '>下一页</button>' +
       '</div>'
     );
   };
