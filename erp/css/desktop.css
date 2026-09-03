@@ -35,25 +35,26 @@
     white-space: nowrap;
     overflow: hidden;
   }
-  /* 折叠/展开按钮：吸顶右侧 */
+  /* 折叠/展开按钮：吸顶右侧——红色醒目，便于点击 */
   .app-sidebar .side-toggle {
     position: sticky;
     top: 8px;
     display: block;
     margin: 0 8px 4px auto;
-    width: 26px;
-    height: 26px;
+    width: 30px;
+    height: 30px;
     line-height: 1;
-    border: 1px solid var(--c-border);
-    border-radius: 7px;
-    background: #fff;
-    color: var(--c-text-sub);
-    font-size: 11px;
+    border: 2px solid #dc2626;
+    border-radius: 8px;
+    background: #dc2626;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
     cursor: pointer;
     transition: background .12s ease, color .12s ease;
     z-index: 1;
   }
-  .app-sidebar .side-toggle:hover { background: var(--c-mint-50); color: var(--c-mint-700); }
+  .app-sidebar .side-toggle:hover { background: #b91c1c; border-color: #b91c1c; color: #fff; }
   /* 折叠态：收窄为图标栏，隐藏文字 */
   .app-sidebar.collapsed { width: 60px; flex-basis: 60px; }
   .app-sidebar.collapsed .brand { justify-content: center; padding: 14px 0; }

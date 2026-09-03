@@ -57,3 +57,17 @@ test('问题1-手机端「我的」头部经营信息缩略显示（单行省略
   const ruleIdx = mobile.indexOf('.shop-info-card .sub');
   assert.ok(ruleIdx > mediaStart, '缩略规则位于手机端媒体查询内');
 });
+
+test('问题2-电脑版左侧导航折叠按钮红色醒目', () => {
+  const desktop = read('css/desktop.css');
+  // 限定电脑端作用域（min-width: 768px）
+  assert.ok(desktop.includes('@media (min-width: 768px)'), 'desktop.css 整体在电脑端媒体查询内');
+  const ruleIdx = desktop.indexOf('.app-sidebar .side-toggle {');
+  assert.ok(ruleIdx > desktop.indexOf('@media (min-width: 768px)'), '折叠按钮规则位于电脑端媒体查询内');
+  assert.ok(desktop.includes('background: #dc2626'), '折叠按钮红色背景醒目');
+  assert.ok(desktop.includes('color: #fff'), '折叠按钮白色文字');
+  assert.ok(desktop.includes('border: 2px solid #dc2626'), '折叠按钮红色加粗边框');
+  assert.ok(desktop.includes('font-weight: 700'), '折叠按钮加粗');
+  assert.ok(desktop.includes('width: 30px') && desktop.includes('height: 30px'), '折叠按钮适当放大（30px）');
+  assert.ok(desktop.includes('.app-sidebar .side-toggle:hover { background: #b91c1c'), 'hover 红色加深');
+});
