@@ -33,10 +33,12 @@ test('收款模块在底部横排（.sale-bottom-pay）', () => {
     '收款方式（微信/现金/支付宝）横向排布');
   assert.ok(desktop.includes('.sale-bottom-pay .pay-stats { display: flex;'),
     '实收/余款处理/欠款一行排布（非三行堆叠，降低高度）');
-  assert.ok(desktop.includes('.sale-bottom-pay .pay-note { display: flex; align-items: flex-end; gap: 12px; margin-left: auto;'),
-    '备注与按钮靠右、与左侧各项同一行');
-  assert.ok(desktop.includes('.sale-bottom-pay .pm-input { width: 88px; }'),
-    '每个收款方式输入框定宽 88px 紧凑排列');
+  assert.ok(desktop.includes('.sale-bottom-pay .pay-note { display: flex; align-items: flex-end; gap: 14px; flex: 1 1 340px; margin-left: auto;'),
+    '备注与按钮靠右、随页面宽度自适应拉伸');
+  assert.ok(desktop.includes('.sale-bottom-pay .pm-input { flex: 1 1 96px; min-width: 84px; }'),
+    '收款方式输入框 flex 比例拉伸（随页面宽度加宽/收缩）');
+  assert.ok(desktop.includes('.sale-bottom-pay .pm-note { flex: 1 1 220px; min-width: 170px; }'),
+    '备注框加长并撑满剩余空间');
 });
 
 test('列内卡片 flex:1 填满，应收合计卡保持自然高度', () => {
