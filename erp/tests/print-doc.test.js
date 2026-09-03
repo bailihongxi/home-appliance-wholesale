@@ -120,3 +120,18 @@ test('问题3-打印页操作栏：含「打印」与「关闭（返回）」按
     '打印时操作栏自动隐藏，不打印在单据上');
   assert.ok(printDoc.PRINT_CSS.includes('position: sticky'), '操作栏吸顶显示');
 });
+
+test('问题3-手机端打印按钮放大醒目：加大按钮/字号/触控高度，关闭按钮红色区分', () => {
+  const html = printDoc.buildDocHtml(newCtx({ shopName: '幸福家电批发' }), saleDoc(), 'sale');
+  // 关闭按钮有独立醒目 class
+  assert.ok(html.includes('class="pb-close"'), '关闭按钮带 pb-close 醒目类');
+  assert.ok(html.includes('class="pb-print"'), '打印按钮带 pb-print 类');
+  // 按钮放大：字号 17px、加粗、min-height 48px 触控高度、加大内边距
+  assert.ok(printDoc.PRINT_CSS.includes('font-size: 17px'), '按钮字号放大至 17px');
+  assert.ok(printDoc.PRINT_CSS.includes('font-weight: 700'), '按钮加粗');
+  assert.ok(printDoc.PRINT_CSS.includes('min-height: 48px'), '按钮最小高度 48px（移动端触控友好）');
+  assert.ok(printDoc.PRINT_CSS.includes('padding: 13px 32px'), '按钮内边距加大');
+  // 关闭按钮红色醒目区分
+  assert.ok(printDoc.PRINT_CSS.includes('.print-toolbar .pb-close { background: #fff; color: #dc2626; border-color: #dc2626; }'),
+    '关闭按钮红色边框/文字醒目');
+});

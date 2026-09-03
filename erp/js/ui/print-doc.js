@@ -43,10 +43,11 @@
     '.doc-sign { margin-top: 18px; display: flex; justify-content: space-between; font-size: 11px; }',
     '.doc-sign .sg { width: 90px; }',
     '.doc-foot { margin-top: 4px; text-align: right; font-size: 10px; color: #555; }',
-    '/* 屏幕预览操作栏：提供打印与关闭（关闭可返回上一页），打印时自动隐藏 */',
-    '.print-toolbar { position: sticky; top: 0; background: #eef2f7; padding: 8px; text-align: center; z-index: 9; border-bottom: 1px solid #d0d7de; }',
-    '.print-toolbar button { margin: 0 6px; padding: 9px 20px; font-size: 14px; border: 1px solid #888; border-radius: 6px; background: #fff; cursor: pointer; }',
+    '/* 屏幕预览操作栏：提供打印与关闭（关闭可返回上一页），打印时自动隐藏；手机端按钮加大醒目便于触控 */',
+    '.print-toolbar { position: sticky; top: 0; background: #eef2f7; padding: 10px 8px; text-align: center; z-index: 9; border-bottom: 1px solid #d0d7de; }',
+    '.print-toolbar button { margin: 0 8px; padding: 13px 32px; font-size: 17px; font-weight: 700; min-height: 48px; border: 2px solid #888; border-radius: 8px; background: #fff; cursor: pointer; }',
     '.print-toolbar .pb-print { background: #1f6feb; color: #fff; border-color: #1f6feb; }',
+    '.print-toolbar .pb-close { background: #fff; color: #dc2626; border-color: #dc2626; }',
     '@media print { .print-toolbar { display: none !important; } }'
   ].join('\n');
 
@@ -67,7 +68,7 @@
     // 屏幕操作栏：打印 + 关闭（返回），手机端避免打印页占满屏幕无法退出
     h += '<div class="print-toolbar">' +
       '<button class="pb-print" onclick="window.print()">打印</button>' +
-      '<button onclick="window.close()">关闭</button>' +
+      '<button class="pb-close" onclick="window.close()">关闭</button>' +
       '</div>';
     h += '<div class="doc">';
     h += '<div class="doc-head"><span class="doc-shop">' + esc(shop) + '</span>' +
