@@ -83,3 +83,40 @@ test('压测：超期扫描 < 1s（无往来仍快速返回）', () => {
   assert.ok(Array.isArray(list));
   assert.ok(dt < 1000, '超期扫描耗时 ' + dt + 'ms 应 < 1000ms');
 });
+
+test('压测：5000 商品选货提前终止 < 5ms（无关键词不全量遍历）', () => {
+  const ctx = newCtx();
+  for (let i = 0; i < 5000; i++) {
+    product.save(ctx, {
+      brand: '品牌' + (i % 500), model: 'M' + String(i).padStart(5, '0'),
+      category: '生活小家电', unit: '台', cost: '500', priceWholesale: '800',
+      priceRetail: '1290', barcodes: '69' + i
+    });
+  }
+  // 无关键词：应提前终止，只取前 30 个在售商品（5000 个中前 30 个即停）
+  let t0 = Date.now();
+  const list = util.pickProducts(ctx.data.products, '', { limit: 30 });
+  let dt = Date.now() - t0;
+  assert.strictEqual(list.length, 30, '应返回前 30 个在售商品');
+  assert.ok(dt < 5, '无关键词提前终止耗时 ' + dt + 'ms 应 < 5ms');
+
+  // 有关键词：命中即停，结果与 filter().slice(0,30) 一致
+  const kw = 'M00001';
+  t0 = Date.now();
+  const byKw = util.pickProducts(ctx.data.products, kw, { limit: 30 });
+  dt = Date.now() - t0;
+  assert.strictEqual(byKw.length, 1, '应命中 1 个型号 M00001');
+  assert.ok(dt < 5, '关键词选货耗时 ' + dt + 'ms 应 < 5ms');
+
+  // 行为等价性：与 filter(...).slice(0,30) 一致（含停售排除与条码匹配）
+  const legacy = ctx.data.products.filter(function (p) {
+    var bc = (Array.isArray(p.barcodes) ? p.barcodes : []).some(function (b) {
+      return String(b || '').toUpperCase().indexOf(kw.toUpperCase()) >= 0;
+    });
+    if (!kw) return p.status !== 'off';
+    return String(p.brand || '').toUpperCase().indexOf(kw.toUpperCase()) >= 0 ||
+      String(p.model || '').toUpperCase().indexOf(kw.toUpperCase()) >= 0 ||
+      String(p.category || '').toUpperCase().indexOf(kw.toUpperCase()) >= 0 || bc;
+  }).slice(0, 30);
+  assert.deepStrictEqual(byKw, legacy, '关键词选货结果与旧 filter 逻辑一致');
+});

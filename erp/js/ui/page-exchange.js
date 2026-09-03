@@ -408,15 +408,11 @@
     h += '<div class="card"><div class="card-title">② 选换新商品</div>';
     h += '<div class="row mb8"><input class="input" data-input="field" data-name="replKeyword" data-live="1" data-debounce="1" placeholder="搜索 品牌 / 型号 / 类型 / 条码" value="' + esc(state.replKeyword) + '"></div>';
     var kw = String(state.replKeyword || '').trim().toUpperCase();
-    var styles = ctx.data.products.filter(function (p) {
-      var bc = (Array.isArray(p.barcodes) ? p.barcodes : []).some(function (b) {
-        return String(b || '').toUpperCase().indexOf(kw) >= 0;
-      });
-      if (!kw) return p.status !== schema.STATUS.OFF;
-      return String(p.brand || '').toUpperCase().indexOf(kw) >= 0 ||
-        String(p.model || '').toUpperCase().indexOf(kw) >= 0 ||
-        String(p.category || '').toUpperCase().indexOf(kw) >= 0 || bc;
-    }).slice(0, 30);
+    // 大数据量优化：提前终止取前 30 个（无关键词不全量遍历；有关键词命中即停）
+    var styles = util.pickProducts(ctx.data.products, kw, {
+      limit: 30,
+      offStatus: schema.STATUS.OFF
+    });
     if (styles.length) {
       h += '<div class="table-wrap"><table class="tbl"><thead><tr><th>商品</th>' +
         '<th class="num">批发</th><th class="num">零售</th><th class="num">库存</th><th></th></tr></thead><tbody>';

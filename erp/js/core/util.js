@@ -251,6 +251,44 @@
     return arr;
   };
 
+  /**
+   * 选货商品快速过滤（大数据量优化，行为与 filter(...).slice(0, limit) 等价）：
+   * - 无关键词：直接收集前 limit 个在售商品（满足 scope 时），提前终止，不全量遍历商品数组；
+   * - 有关键词：逐个匹配 品牌/型号/类型/条码，取前 limit 个命中即停。
+   * opts.limit 默认 30；opts.scope 为 category 过滤函数（可选）；opts.offStatus 停售状态值（默认 'off'）。
+   */
+  util.pickProducts = function pickProducts(products, kw, opts) {
+    opts = opts || {};
+    var limit = opts.limit > 0 ? opts.limit : 30;
+    var scope = opts.scope || null;
+    var offStatus = opts.offStatus || 'off';
+    var q = String(kw == null ? '' : kw).trim().toUpperCase();
+    var arr = products || [];
+    var out = [];
+    for (var i = 0; i < arr.length && out.length < limit; i++) {
+      var p = arr[i];
+      if (scope && !scope(p.category)) continue;
+      if (!q) {
+        if (p.status === offStatus) continue;
+        out.push(p);
+        continue;
+      }
+      var hit = String(p.brand || '').toUpperCase().indexOf(q) >= 0 ||
+        String(p.model || '').toUpperCase().indexOf(q) >= 0 ||
+        String(p.category || '').toUpperCase().indexOf(q) >= 0;
+      if (!hit && Array.isArray(p.barcodes)) {
+        for (var j = 0; j < p.barcodes.length; j++) {
+          if (String(p.barcodes[j] == null ? '' : p.barcodes[j]).toUpperCase().indexOf(q) >= 0) {
+            hit = true;
+            break;
+          }
+        }
+      }
+      if (hit) out.push(p);
+    }
+    return out;
+  };
+
   util.deepClone = function deepClone(o) {
     return o === undefined ? o : JSON.parse(JSON.stringify(o));
   };

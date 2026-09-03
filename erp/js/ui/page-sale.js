@@ -361,16 +361,12 @@
     h += '<div class="card"><div class="card-title">选货区</div>' +
       ui.searchBar({ value: form.keyword, placeholder: '搜索 品牌 / 型号 / 类型 / 条码', scan: true });
     var kw = String(form.keyword || '').trim().toUpperCase();
-    var list = ctx.data.products.filter(function (p) {
-      if (!schema.inScope(ctx.settings, p.category)) return false;
-      var bc = (Array.isArray(p.barcodes) ? p.barcodes : []).some(function (b) {
-        return String(b || '').toUpperCase().indexOf(kw) >= 0;
-      });
-      if (!kw) return p.status !== schema.STATUS.OFF;
-      return String(p.brand || '').toUpperCase().indexOf(kw) >= 0 ||
-        String(p.model || '').toUpperCase().indexOf(kw) >= 0 ||
-        String(p.category || '').toUpperCase().indexOf(kw) >= 0 || bc;
-    }).slice(0, 30);
+    // 大数据量优化：提前终止取前 30 个（无关键词不全量遍历；有关键词命中即停）
+    var list = util.pickProducts(ctx.data.products, kw, {
+      limit: 30,
+      scope: function (cat) { return schema.inScope(ctx.settings, cat); },
+      offStatus: schema.STATUS.OFF
+    });
     if (!list.length) {
       h += ui.empty('没有匹配的商品，请先到「商品档案」建档');
     } else {
