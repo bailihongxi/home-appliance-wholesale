@@ -82,6 +82,24 @@
    * }
    * 期初库存：走盘点调整（stocktake）写入库存流水，库存由单据派生（D2 已确认）。
    */
+  /**
+   * 价格体系：按系统整体利润率（settings.wholesaleMargin / retailMargin，%）生成批发价/零售价。
+   * costFen 为成本（分）。结果取整到元（无小数），返回 { priceWholesale, priceRetail }（分）。
+   * 成本为空/为 0 时返回 0。
+   */
+  api.autoPrices = function autoPrices(ctx, costFen) {
+    var st = (ctx && ctx.settings) || {};
+    var w = st.wholesaleMargin == null ? 20 : Number(st.wholesaleMargin);
+    var r = st.retailMargin == null ? 35 : Number(st.retailMargin);
+    function calc(margin) {
+      var c = Number(costFen) || 0;
+      if (!(c > 0)) return 0;
+      var yuan = Math.round(c * (1 + margin / 100) / 100); // 元取整（不含小数点）
+      return Math.max(0, yuan) * 100; // 转分
+    }
+    return { priceWholesale: calc(w), priceRetail: calc(r) };
+  };
+
   api.save = function save(ctx, input) {
     input = input || {};
     var brand = util.cleanText(input.brand);
@@ -93,8 +111,17 @@
     if (!category) return err('请选择类型');
 
     var cost = util.parseMoney(input.cost);
-    var priceWholesale = util.parseMoney(input.priceWholesale);
-    var priceRetail = util.parseMoney(input.priceRetail);
+    // 未自定义价格（留空/未填）→ 按系统利润率自动生成（取整到元）；已填则保留用户自定义
+    var hasCustomW = !(input.priceWholesale === undefined || input.priceWholesale === null || String(input.priceWholesale).trim() === '');
+    var hasCustomR = !(input.priceRetail === undefined || input.priceRetail === null || String(input.priceRetail).trim() === '');
+    var priceWholesale = hasCustomW ? util.parseMoney(input.priceWholesale) : 0;
+    var priceRetail = hasCustomR ? util.parseMoney(input.priceRetail) : 0;
+    if (!hasCustomW || !hasCustomR) {
+      var auto = api.autoPrices(ctx, cost);
+      if (!hasCustomW) priceWholesale = auto.priceWholesale;
+      if (!hasCustomR) priceRetail = auto.priceRetail;
+    }
+    var autoPriced = !hasCustomW || !hasCustomR;
     if (cost < 0) return err('成本不能为负');
     if (priceWholesale < 0) return err('批发价不能为负');
     if (priceRetail < 0) return err('零售价不能为负');
@@ -169,7 +196,7 @@
     // 问题2：新类型自动并入账号经营范围，保证列表可见且下拉建议持续包含该类型
     ensureScopeCategory(ctx, category);
 
-    return { ok: true, product: rec, isNew: isNew };
+    return { ok: true, product: rec, isNew: isNew, autoPriced: autoPriced };
   };
 
   /** 若类型不在账号经营范围（scope 非空时），自动并入 scopeCategories */

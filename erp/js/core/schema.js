@@ -138,7 +138,11 @@
       avatar: '',
       defaultThreshold: 3,
       lock: { enabled: false, hash: null },
-      debtOverdueDays: 15
+      debtOverdueDays: 15,
+      /** V3.5 价格体系：系统整体利润率（%）。商品未自定义批发/零售价时，
+          按 成本×(1+利润率) 自动生成并取整到元（不含小数） */
+      wholesaleMargin: 20,
+      retailMargin: 35
     };
   };
 
