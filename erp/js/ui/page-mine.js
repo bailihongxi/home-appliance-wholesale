@@ -468,7 +468,7 @@
   /** 8 格圆形快捷入口（2 行 4 列），图标与首页「快捷入口」统一；开单统一为手推车样式 */
   function renderQuickGrid() {
     var items = [
-      { page: 'sale',      icon: '🛒', text: '开单',     color: 'c-green' },
+      { page: 'sale',      query: 'tab=new', icon: '🛒', text: '开单',     color: 'c-green' },
       { page: 'purchase',  icon: '🚚', text: '进货',     color: 'c-teal' },
       { page: 'product',   icon: '📦', text: '商品',     color: 'c-blue' },
       { page: 'supplier',  icon: '👤', text: '供应商',   color: 'c-yellow' },
@@ -481,7 +481,8 @@
     ];
     var h = '<div class="card quick-grid-card"><h3 class="card-title">常用入口</h3><div class="quick-grid mine-quick">';
     items.forEach(function (it) {
-      h += '<button class="quick-circle ' + it.color + '" data-act="go" data-page="' + esc(it.page) + '">' +
+      h += '<button class="quick-circle ' + it.color + '" data-act="go" data-page="' + esc(it.page) + '"' +
+        (it.query ? ' data-query="' + esc(it.query) + '"' : '') + '>' +
         '<span class="disc">' + it.icon + '</span>' +
         '<span class="text">' + esc(it.text) + '</span>' +
       '</button>';

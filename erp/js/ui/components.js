@@ -253,7 +253,9 @@
       return false;
     },
     go: function (ctx, state, el) {
-      if (typeof location !== 'undefined') location.hash = '#/' + el.getAttribute('data-page');
+      var page = el.getAttribute('data-page');
+      var q = el.getAttribute('data-query');
+      if (typeof location !== 'undefined') location.hash = '#/' + page + (q ? '?' + q : '');
       return false;
     }
   };

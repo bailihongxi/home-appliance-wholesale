@@ -272,7 +272,7 @@
         mask.querySelector('[data-act="scan-go-sale"]').addEventListener('click', function () {
           ui.closeModal();
           ERP.pendingSaleProduct = p.id;
-          if (app && app.go) app.go('sale');
+          if (app && app.go) app.go('sale', { tab: 'new' });
         });
       }
     });

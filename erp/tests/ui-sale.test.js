@@ -18,15 +18,17 @@ function seed(ctx) {
 }
 
 function fresh(ctx) {
-  return page.init();
+  const s = page.init();
+  s.tab = 'new'; // 测试聚焦开单表单视图
+  return s;
 }
 
 test('页面元数据与初始状态', () => {
   assert.strictEqual(page.name, 'sale');
-  assert.strictEqual(page.title, '销售开单');
+  assert.strictEqual(page.title, '销售管理');
   const ctx = newCtx();
-  const state = fresh(ctx);
-  assert.strictEqual(state.tab, 'new');
+  const state = page.init();
+  assert.strictEqual(state.tab, 'list', '默认进入销售管理（列表）视图，与进货管理同等级');
   assert.deepStrictEqual(state.form.items, []);
 });
 
@@ -142,7 +144,8 @@ test('列表渲染：销售记录含品牌型号', () => {
   page.actions['field'](ctx, state, { getAttribute: () => 'pay.cash', value: '1399' });
   page.actions['save-sale'](ctx, state);
   const html = page.render(ctx, state);
-  assert.ok(html.includes('销售记录'));
+  assert.ok(html.includes('销售管理'));
+  assert.ok(html.includes('销售开单'), '列表页右上角有「销售开单」按钮');
   assert.ok(html.includes('S2026'), '含销售单号');
   // 查看详情 → 弹层显示品牌型号
   const doc = ctx.data.sales[0];
@@ -175,4 +178,33 @@ test('收款模块在页面底部横排（sale-bottom-pay + pay-grid，非右列
   assert.ok(!html.includes('sale-col-pay'), '收款不再作为右侧独立列');
   // 上部两列容器存在
   assert.ok(html.includes('sale-top-col'), '上部两列容器（选货+订单）存在');
+});
+
+test('默认销售管理视图：tab=list 渲染列表页，右上角「销售开单」按钮', () => {
+  const ctx = newCtx();
+  const state = page.init(); // tab='list'
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('销售管理'), '页头标题为销售管理');
+  assert.ok(html.includes('data-act="open-new"'), '含开单动作按钮');
+  assert.ok(html.includes('销售开单'), '按钮文案为销售开单');
+});
+
+test('直达开单：hash #/sale?tab=new 应用后进入开单视图并清除 query', () => {
+  const origLoc = globalThis.location, origHist = globalThis.history;
+  const calls = [];
+  globalThis.location = { hash: '#/sale?tab=new' };
+  globalThis.history = { replaceState: function () { calls.push(Array.from(arguments)); } };
+  try {
+    const ctx = newCtx();
+    const state = page.init(); // 初始 tab='list'
+    const html = page.render(ctx, state);
+    assert.strictEqual(state.tab, 'new', 'query 直达开单视图');
+    assert.ok(html.includes('sale-top-col'), '渲染开单表单布局');
+    assert.ok(html.includes('sale-bottom-pay'), '渲染底部收款');
+    assert.strictEqual(calls.length, 1, '应用后清除 query 避免与页内操作冲突');
+    assert.strictEqual(calls[0][2], '#/sale');
+  } finally {
+    globalThis.location = origLoc;
+    globalThis.history = origHist;
+  }
 });

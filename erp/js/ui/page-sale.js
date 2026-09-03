@@ -46,7 +46,7 @@
 
   var page = {
     name: 'sale',
-    title: '销售开单',
+    title: '销售管理',
     icon: '🛒',
 
     init: function () {
@@ -57,7 +57,7 @@
         ERP.pendingSaleProduct = null;
       }
       return {
-        tab: 'new',
+        tab: 'list',
         form: form,
         from: '',
         to: '',
@@ -70,6 +70,14 @@
     },
 
     render: function (ctx, state) {
+      // 支持 #/sale?tab=new|list 直达视图（首页/常用入口/扫码「开单」跳转用），应用后清除 query 避免与页内操作冲突
+      var m = typeof location !== 'undefined' ? /^#\/sale\?tab=(new|list)/.exec(location.hash) : null;
+      if (m) {
+        state.tab = m[1];
+        try {
+          if (typeof history !== 'undefined' && history.replaceState) history.replaceState(null, '', '#/sale');
+        } catch (e) { /* 忽略：无法改写历史记录时仅本次生效 */ }
+      }
       if (state.tab === 'list') return renderList(ctx, state);
       return renderNew(ctx, state);
     },
@@ -543,9 +551,9 @@
     var pg = util.paginate(list, state.page, 300);
     state.page = pg.page;
 
-    var h = '<div class="page-head"><h2>销售记录</h2>' +
+    var h = '<div class="page-head"><h2>销售管理</h2>' +
       '<span class="desc">' + list.length + ' 张单</span>' +
-      '<div class="actions"><button class="btn btn-primary" data-act="open-new">＋ 开单</button></div></div>';
+      '<div class="actions"><button class="btn btn-primary" data-act="open-new">＋ 销售开单</button></div></div>';
 
     h += '<div class="card">' + ui.searchBar({ value: state.keyword, placeholder: '搜索单号 / 客户 / 品牌 / 型号', scan: false });
     h += '<div class="row wrap">' +

@@ -127,7 +127,7 @@
         statCardHtml('今日单数', fmtNumber(s.count), 'gray', '📃', '') +
         statCardHtml('今日毛利', '¥' + fmtNumber(s.grossProfit / 100), 'mint', '📈', 'profit') +
         statCardHtml('预警款数', fmtNumber(s.alertCount), 'pink', '⚠️', 'danger') +
-        '<button class="home-sale-btn home-sale-row" data-act="go" data-page="sale" aria-label="开单">' +
+        '<button class="home-sale-btn home-sale-row" data-act="go" data-page="sale" data-query="tab=new" aria-label="开单">' +
           '<span class="ico">🛒</span>' +
           '<span class="t">开单</span>' +
           '<span class="s">扫码 / 选货</span>' +
