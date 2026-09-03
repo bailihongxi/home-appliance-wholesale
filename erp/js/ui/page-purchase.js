@@ -455,7 +455,7 @@
     /* 选品加行 */
     h += '<div class="card"><div class="card-title">按商品加行' +
       '<span class="more">点「加入」数量 +1</span></div>' +
-      '<div class="row mb8"><input class="input" data-input="form-keyword" data-name="keyword" data-live="1" placeholder="搜索 品牌 / 型号 / 类型 / 条码" value="' + esc(form.keyword) + '"></div>';
+      '<div class="row mb8"><input class="input" data-input="form-keyword" data-name="keyword" data-live="1" data-debounce="1" placeholder="搜索 品牌 / 型号 / 类型 / 条码" value="' + esc(form.keyword) + '"></div>';
 
     var kw = String(form.keyword || '').trim().toUpperCase();
     var list = ctx.data.products.filter(function (p) {

@@ -60,3 +60,12 @@ test('sw.js activate 事件清除旧版本缓存', () => {
     'activate 应删除非当前版本的旧缓存');
   assert.ok(sw.includes('self.skipWaiting()'), 'install 应 skipWaiting 立即生效');
 });
+
+test('index.html：本地开发（localhost）注销 SW 避免缓存干扰，线上才注册 SW', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.ok(html.includes("host === 'localhost' || host === '127.0.0.1'"),
+    '应识别本地开发主机');
+  assert.ok(html.includes("r.unregister()"), '本地应注销历史 SW 注册');
+  assert.ok(html.includes("navigator.serviceWorker.register('sw.js')"),
+    '线上（https）仍应注册 SW');
+});

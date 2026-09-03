@@ -100,11 +100,19 @@
 <!-- ============ 启动 ============ -->
 <script src="js/app.js"></script>
 <script>
-  // 注册 Service Worker（仅 https 托管生效；file:// 双击静默跳过）
-  if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
-    window.addEventListener('load', function () {
-      navigator.serviceWorker.register('sw.js').catch(function () {});
-    });
+  // Service Worker 策略：本地开发（localhost/127.0.0.1）不启用 SW，并注销历史注册，
+  // 避免旧 SW 缓存导致本地看不到最新代码；线上（https 托管）正常注册 SW 支持离线与缓存更新。
+  if ('serviceWorker' in navigator) {
+    var host = location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      navigator.serviceWorker.getRegistrations().then(function (rs) {
+        rs.forEach(function (r) { r.unregister(); });
+      });
+    } else if (location.protocol.indexOf('http') === 0) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function () {});
+      });
+    }
   }
 </script>
 </body>

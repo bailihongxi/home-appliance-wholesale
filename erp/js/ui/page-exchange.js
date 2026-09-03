@@ -406,7 +406,7 @@
 
     /* 换新商品选择 */
     h += '<div class="card"><div class="card-title">② 选换新商品</div>';
-    h += '<div class="row mb8"><input class="input" data-input="field" data-name="replKeyword" data-live="1" placeholder="搜索 品牌 / 型号 / 类型 / 条码" value="' + esc(state.replKeyword) + '"></div>';
+    h += '<div class="row mb8"><input class="input" data-input="field" data-name="replKeyword" data-live="1" data-debounce="1" placeholder="搜索 品牌 / 型号 / 类型 / 条码" value="' + esc(state.replKeyword) + '"></div>';
     var kw = String(state.replKeyword || '').trim().toUpperCase();
     var styles = ctx.data.products.filter(function (p) {
       var bc = (Array.isArray(p.barcodes) ? p.barcodes : []).some(function (b) {

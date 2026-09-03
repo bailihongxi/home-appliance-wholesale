@@ -14,7 +14,19 @@
     ctx: null,
     ready: false,
     pageStates: Object.create(null),
-    main: null
+    main: null,
+    // 搜索防抖：250ms 内多次输入只渲染一次（大数据量下实时搜索不卡顿；纯函数可测）
+    _debounceMs: 250
+  };
+
+  // 通用防抖调度（可测）：多次调用只执行最后一次
+  var searchTimer = null;
+  app._scheduleSearch = function (fn, ms) {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(function () {
+      searchTimer = null;
+      fn();
+    }, ms);
   };
 
   function router() {
@@ -217,6 +229,12 @@
         pos = null;
       }
       var key = el.getAttribute('data-name') || '';
+      // 搜索类输入（data-debounce="1"）：防抖 250ms 后渲染一次，
+      // 避免数据量大时逐键触发全量过滤/排序/重建 DOM 导致卡顿（实时搜索但不逐键重渲染）
+      if (el.getAttribute('data-debounce') === '1') {
+        scheduleSearchRender(el, key);
+        return;
+      }
       render();
       scheduleCommit();
       var selector = '[data-input="' + el.getAttribute('data-input') + '"]' + (key ? '[data-name="' + key + '"]' : '');
@@ -229,6 +247,29 @@
           } catch (e2) { /* 部分输入类型不支持 */ }
         }
       }
+    }
+
+    // 搜索防抖：250ms 内多次输入只渲染一次；渲染后恢复搜索框焦点与光标
+    var searchState = null;
+    function scheduleSearchRender(el, key) {
+      searchState = { el: el, key: key || '' };
+      app._scheduleSearch(function () {
+        render();
+        var s = searchState;
+        searchState = null;
+        if (!s || !s.el) return;
+        var selector = '[data-input="' + (s.el.getAttribute('data-input') || '') + '"]' +
+          (s.key ? '[data-name="' + s.key + '"]' : '');
+        var next = document.querySelector(selector);
+        if (next) {
+          next.focus();
+          if (s.el.selectionStart !== null && s.el.selectionStart !== undefined) {
+            try {
+              next.setSelectionRange(s.el.selectionStart, s.el.selectionEnd);
+            } catch (e2) { /* 忽略 */ }
+          }
+        }
+      }, app._debounceMs);
     }
 
     // 扫码枪：光标在搜索框内，回车即视为扫码输入
