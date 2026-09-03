@@ -13,14 +13,14 @@
   var S = {
     /** 当前数据结构版本 */
     VERSION: 2,
-    DB_NAME: 'erp',
+    DB_NAME: 'applianceErp',
     DB_VERSION: 1,
     META_SETTINGS_KEY: 'settings',
     META_LAST_BACKUP_KEY: 'lastBackupAt',
 
-    /** V3 多账号：每账号独立数据库名 erp_<acctId> */
+    /** V3 多账号：每账号独立数据库名 applianceErp_<acctId>（与鞋服母版 shoeErp/erp 隔离） */
     dbNameFor: function dbNameFor(acctId) {
-      return acctId ? 'erp_' + acctId : 'erp';
+      return acctId ? 'applianceErp_' + acctId : 'applianceErp';
     },
 
     STORES: {

@@ -13,14 +13,16 @@ async function newDb(name) {
   return db.create({ backend: db.memoryBackend(), name: name });
 }
 
-test('schema.dbNameFor：每账号独立库名，无账号用基础库名', () => {
-  assert.strictEqual(schema.dbNameFor('acct1'), 'erp_acct1');
-  assert.strictEqual(schema.dbNameFor('acct2'), 'erp_acct2');
-  assert.strictEqual(schema.dbNameFor('acct3'), 'erp_acct3');
-  assert.strictEqual(schema.dbNameFor(''), 'erp');
-  assert.strictEqual(schema.dbNameFor(null), 'erp');
-  assert.strictEqual(schema.dbNameFor(undefined), 'erp');
-  assert.strictEqual(schema.dbNameFor('shop'), 'erp_shop');
+test('schema.dbNameFor：每账号独立库名，使用 applianceErp_ 前缀与鞋服母版（erp_/shoeErp_）隔离', () => {
+  assert.strictEqual(schema.dbNameFor('acct1'), 'applianceErp_acct1');
+  assert.strictEqual(schema.dbNameFor('acct2'), 'applianceErp_acct2');
+  assert.strictEqual(schema.dbNameFor('acct3'), 'applianceErp_acct3');
+  assert.strictEqual(schema.dbNameFor(''), 'applianceErp');
+  assert.strictEqual(schema.dbNameFor(null), 'applianceErp');
+  assert.strictEqual(schema.dbNameFor(undefined), 'applianceErp');
+  assert.strictEqual(schema.dbNameFor('shop'), 'applianceErp_shop');
+  assert.ok(!schema.dbNameFor('acct1').startsWith('erp_'), '不与鞋服版 erp_ 前缀共用');
+  assert.ok(schema.dbNameFor('acct1').startsWith('applianceErp_'), '使用本系统独立前缀');
   assert.ok(schema.dbNameFor('acct1') !== schema.dbNameFor('acct2'), '不同账号库名不同');
 });
 

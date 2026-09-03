@@ -27,7 +27,7 @@
 
   sync.ENVELOPE_VERSION = 2; // v2：快照压缩(gzip)后加密，上传体积显著减小
   sync.KDF_ITERATIONS = 150000;
-  sync.CONFIG_KEY = 'erp.sync.config';
+  sync.CONFIG_KEY = 'applianceErp.sync.config';
   /** GitHub Contents API 单文件硬上限（100MB）；上传前拦截，超限不发起请求 */
   sync.MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 

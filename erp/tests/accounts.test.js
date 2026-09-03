@@ -159,11 +159,11 @@ test('问题4-创建账号：支持自定义头像 dataURL', () => {
 
 test('问题4-多店铺数据隔离：不同账号库名独立，数据不共有', () => {
   const schema = require('../js/core/schema.js');
-  assert.strictEqual(schema.dbNameFor('acct1'), 'erp_acct1');
-  assert.strictEqual(schema.dbNameFor('acct2'), 'erp_acct2');
+  assert.strictEqual(schema.dbNameFor('acct1'), 'applianceErp_acct1');
+  assert.strictEqual(schema.dbNameFor('acct2'), 'applianceErp_acct2');
   assert.notStrictEqual(schema.dbNameFor('acct1'), schema.dbNameFor('acct2'), '两账号库名不同');
   // 自建账号也有独立库名
-  assert.strictEqual(schema.dbNameFor('acct_myShop'), 'erp_acct_myShop');
+  assert.strictEqual(schema.dbNameFor('acct_myShop'), 'applianceErp_acct_myShop');
 });
 
 /* ===== 登录账户管理：编辑（update） ===== */

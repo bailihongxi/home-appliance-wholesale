@@ -44,7 +44,7 @@
       setItem: function () {}
     };
   }
-  var CURRENT_KEY = 'erp.currentAccount';
+  var CURRENT_KEY = 'applianceErp.currentAccount';
   function loadCurrent() {
     try {
       var raw = store().getItem(CURRENT_KEY);
@@ -93,6 +93,11 @@
     app.ready = true;
     bindGlobalEvents();
 
+    // 命名空间隔离：一次性迁移旧版（与鞋服母版共用）的账号/登录态/数据库到本系统独立命名空间
+    try {
+      await app.migrateNamespace();
+    } catch (e) { /* 迁移失败不阻断启动 */ }
+
     // V3：多账号登录——已有登录态直接进入，否则展示登录页
     var saved = loadCurrent();
     if (saved && saved.id) {
@@ -112,7 +117,7 @@
     await app.enterAccount(account);
   };
 
-  /** 切换/进入某账号的数据空间（独立 IndexedDB 库 shoeErp_<acctId>） */
+  /** 切换/进入某账号的数据空间（独立 IndexedDB 库 applianceErp_<acctId>，与鞋服母版隔离） */
   app.enterAccount = async function enterAccount(account) {
     if (!account || !account.id) return app.ctx;
     app.db = await ERP.db.create({ name: ERP.schema.dbNameFor(account.id) });
@@ -133,7 +138,11 @@
 
   /** V2 存量数据迁移：旧库 shoeErp → 账号1 库（只迁移一次） */
   app.migrateLegacyData = async function migrateLegacyData() {
-    if (store().getItem('erp.migratedV3')) return { migrated: false, reason: 'already' };
+    if (store().getItem('applianceErp.migratedV3') === '1' || store().getItem('erp.migratedV3') === '1') {
+      // 兼容旧标记：若旧标记已置位，补设新标记后视为已迁移
+      store().setItem('applianceErp.migratedV3', '1');
+      return { migrated: false, reason: 'already' };
+    }
     var r = { migrated: false, reason: 'no-migrate-module' };
     try {
       if (ERP.migrate) {
@@ -147,8 +156,49 @@
       r = { migrated: false, reason: 'error' };
     }
     // 无论结果如何都标记，避免每次进入账号1 都检查旧库
-    store().setItem('erp.migratedV3', '1');
+    store().setItem('applianceErp.migratedV3', '1');
     return r;
+  };
+
+  /**
+   * 命名空间隔离迁移（一次性）：早期版本与鞋服母版共用存储——
+   *   localStorage：erp.accounts / erp.currentAccount → applianceErp.accounts / applianceErp.currentAccount
+   *   IndexedDB：每账号 erp_<id> → applianceErp_<id>
+   * 规则：新 key 已非空则跳过（不覆盖）；数据库 target 非空自动跳过（migrate 保护）；迁移失败不阻断登录。
+   */
+  app.migrateNamespace = async function migrateNamespace() {
+    var st = store();
+    var MARK = 'applianceErp.migrated';
+    try {
+      if (st.getItem(MARK) === '1') return { migrated: false, reason: 'already' };
+      // 1) localStorage：账号列表 + 当前登录态
+      ['accounts', 'currentAccount'].forEach(function (k) {
+        var oldK = 'erp.' + k, newK = 'applianceErp.' + k;
+        if (!st.getItem(newK)) {
+          var v = st.getItem(oldK);
+          if (v) {
+            try { st.setItem(newK, v); } catch (e) { /* ignore */ }
+          }
+        }
+      });
+      // 2) IndexedDB：每个账号 erp_<id> → applianceErp_<id>
+      if (ERP.migrate && ERP.db && ERP.accounts) {
+        var list = ERP.accounts.load(st);
+        for (var i = 0; i < list.length; i++) {
+          var id = list[i] && list[i].id;
+          if (!id) continue;
+          var oldName = 'erp_' + id, newName = 'applianceErp_' + id;
+          if (oldName === newName) continue;
+          try {
+            await ERP.migrate.migrate(function (n) { return ERP.db.create({ name: n }); }, oldName, newName);
+          } catch (e) { /* 单账号迁移失败不阻断整体 */ }
+        }
+      }
+      try { st.setItem(MARK, '1'); } catch (e) { /* ignore */ }
+      return { migrated: true };
+    } catch (e) {
+      return { migrated: false, reason: 'error' };
+    }
   };
 
   /** 退出登录：清会话回登录页 */
@@ -529,7 +579,7 @@
     if (!side) return;
     var collapsed = side.classList.toggle('collapsed');
     try {
-      localStorage.setItem('erp_sidebar_collapsed', collapsed ? '1' : '0');
+      localStorage.setItem('applianceErp.sidebarCollapsed', collapsed ? '1' : '0');
     } catch (e) { /* ignore */ }
     var btn = document.querySelector('.side-toggle');
     if (btn) btn.innerHTML = collapsed ? '▶' : '◀';
@@ -541,7 +591,7 @@
     if (!side) return;
     var collapsed = false;
     try {
-      collapsed = localStorage.getItem('erp_sidebar_collapsed') === '1';
+      collapsed = localStorage.getItem('applianceErp.sidebarCollapsed') === '1';
     } catch (e) { /* ignore */ }
     if (collapsed) side.classList.add('collapsed');
     var btn = document.querySelector('.side-toggle');

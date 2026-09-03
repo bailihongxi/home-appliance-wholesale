@@ -75,11 +75,12 @@ test('批发/零售双价格类型定义', () => {
   assert.strictEqual(schema.PRICE_TYPE_LABEL.retail, '零售');
 });
 
-test('多账号独立库名：erp_<acctId>', () => {
-  assert.strictEqual(schema.dbNameFor('acct1'), 'erp_acct1');
-  assert.strictEqual(schema.dbNameFor('acct2'), 'erp_acct2');
-  assert.strictEqual(schema.dbNameFor(), 'erp');
-  assert.strictEqual(schema.DB_NAME, 'erp');
+test('多账号独立库名：applianceErp_<acctId>（与鞋服母版 erp_ 隔离）', () => {
+  assert.strictEqual(schema.dbNameFor('acct1'), 'applianceErp_acct1');
+  assert.strictEqual(schema.dbNameFor('acct2'), 'applianceErp_acct2');
+  assert.strictEqual(schema.dbNameFor(), 'applianceErp');
+  assert.strictEqual(schema.DB_NAME, 'applianceErp');
+  assert.ok(!schema.dbNameFor('acct1').startsWith('erp_'), '不使用母版 erp_ 前缀');
 });
 
 test('经营范围过滤 categoriesFor / inScope（电器分类）', () => {

@@ -3,7 +3,7 @@
  *
  * 设计：
  *  - 本地账号 + 密码（无服务器、离线可用）；密码只存哈希（util.hashPassword，不存明文）
- *  - 账号列表存 localStorage['erp.accounts']；数据按账号独立（IndexedDB dbName = shoeErp_<acctId>）
+ *  - 账号列表存 localStorage['applianceErp.accounts']（与鞋服母版隔离）；数据按账号独立（IndexedDB dbName = applianceErp_<acctId>）
  *  - 预置 3 个账号（经营范围：鞋 / 服装 / 配饰，初始密码 000000），允许自行创建账号，最多 10 个
  *  - store 抽象：浏览器传 localStorage 之类 {getItem,setItem}，Node 单测传内存 mock
  */
@@ -17,7 +17,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (util) {
   'use strict';
 
-  var ACCOUNTS_KEY = 'erp.accounts';
+  var ACCOUNTS_KEY = 'applianceErp.accounts';
   var MAX_ACCOUNTS = 10;
   var DEFAULT_PASSWORD = '000000';
   var ALL_CATEGORIES = ['冰箱', '洗衣机', '空调', '电视', '厨房电器', '生活小家电', '数码影音', '配件耗材', '其他'];
