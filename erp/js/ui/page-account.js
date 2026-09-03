@@ -211,12 +211,16 @@
       ui.stat('本期净额', ui.money(sum.net), sum.net >= 0 ? 'ok' : 'danger') +
       '</div></div>';
 
-    h += '<div class="card">' + ui.searchBar({ value: state.keyword, placeholder: '搜索备注 / 往来 / 单号 / 类型' });
-    h += '<div class="row wrap">' +
+    // 筛选区共两行：第 1 行 = 搜索框 + 全部类型；第 2 行 = 日期选择 + 记一笔（强调色按钮）
+    h += '<div class="card">' + ui.searchBar({
+      value: state.keyword, placeholder: '搜索备注 / 往来 / 单号 / 类型',
+      filters: typeSelect(state.type)
+    });
+    h += '<div class="row">' +
       '<input class="input" type="date" data-change="filter" data-name="from" value="' + esc(state.from) + '">' +
       '<input class="input" type="date" data-change="filter" data-name="to" value="' + esc(state.to) + '">' +
-      typeSelect(state.type) +
-      '<button class="btn" data-act="open-manual">＋ 记一笔</button>' +
+      '<div class="spacer"></div>' +
+      '<button class="btn btn-primary" data-act="open-manual">＋ 记一笔</button>' +
       '</div></div>';
 
     if (!list.length) {
