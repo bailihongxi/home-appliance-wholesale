@@ -175,9 +175,13 @@ test('收款模块在页面底部横排（sale-bottom-pay + 一行紧凑排布�
   // 收款模块在底部容器中
   assert.ok(html.includes('sale-bottom-pay'), '收款模块位于底部容器');
   assert.ok(html.includes('pay-grid'), '收款内部为横向排布容器');
+  assert.ok(html.includes('pay-row1'), '第1行：收款方式/指标/按钮包裹在 pay-row1 中');
   assert.ok(html.includes('pm-input'), '收款方式（微信/现金/支付宝）为紧凑输入框');
   assert.ok(html.includes('pay-stats'), '实收/余款处理/欠款为一行指标区');
   assert.ok(html.includes('pay-actions'), '取消/保存按钮区');
+  assert.ok(html.includes('pay-note'), '第2行备注区独立存在（独占整行加长）');
+  assert.ok(html.indexOf('pay-note') > html.indexOf('data-act="save-sale"'),
+    '备注行位于按钮区之后（按钮在第1行，备注独占第2行）');
   // 不再出现旧右列结构
   assert.ok(!html.includes('sale-col-pay'), '收款不再作为右侧独立列');
   assert.ok(!html.includes('pay-methods-row'), '不再使用旧的横向包装类');

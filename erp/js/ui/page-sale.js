@@ -439,12 +439,17 @@
     h += '</div>';
     h += '</div>';
 
-    /* ---------- 底部：收款（横跨整行，宽度与选货+订单两列等宽，一行紧凑排布） ---------- */
+    /* ---------- 底部：收款（横跨整行，宽度与选货+订单两列等宽） ----------
+     * 两行紧凑排布：第1行 收款方式输入框 + 实收/余款/欠款 + 取消/保存并出单；
+     * 第2行 备注输入框独占整行（加长，随页面宽度拉伸）。
+     */
     h += '<div class="sale-bottom-pay">';
     h += '<div class="card"><div class="card-title">收款</div>';
     h += '<div class="pay-grid">';
 
-    // 左：收款方式（微信 / 现金 / 支付宝）—— 一行
+    // 第1行：收款方式（微信 / 现金 / 支付宝）+ 实收/余款处理/欠款 + 取消/保存并出单
+    h += '<div class="pay-row1">';
+
     h += '<div class="pay-methods">' +
       '<span class="pm-label">收款（元）</span>' +
       payInput('微信', 'pay.wechat', form.pay.wechat) +
@@ -452,7 +457,6 @@
       payInput('支付宝', 'pay.alipay', form.pay.alipay) +
       '</div>';
 
-    // 中：实收 / 余款处理 / 欠款 —— 一行三个指标
     h += '<div class="pay-stats">';
     h += '<span class="stat"><span class="muted">实收</span><b>' + ui.money(t.received) + '</b></span>';
     h += '<span class="stat"><span class="muted">余款处理</span>' +
@@ -462,14 +466,18 @@
       '<b style="color:' + (t.debt > 0 ? '#dc2626' : '#16a34a') + '">' + ui.money(t.debt) + '</b></span>';
     h += '</div>';
 
-    // 右：备注 + 取消 / 保存并出单
+    h += '<div class="pay-actions">' +
+      '<button class="btn" data-act="cancel-form">取消</button>' +
+      '<button class="btn btn-primary btn-lg" data-act="save-sale">保存并出单</button>' +
+      '</div>';
+
+    h += '</div>'; // pay-row1
+
+    // 第2行：备注（独占整行，加长）
     h += '<div class="pay-note">' +
       '<div class="pm-note"><div class="small muted mb2">备注</div>' +
       '<input class="input" data-input="field" data-name="note" placeholder="选填" value="' + esc(form.note) + '"></div>' +
-      '<div class="pay-actions">' +
-      '<button class="btn" data-act="cancel-form">取消</button>' +
-      '<button class="btn btn-primary btn-lg" data-act="save-sale">保存并出单</button>' +
-      '</div></div>';
+      '</div>';
 
     h += '</div>'; // pay-grid
 

@@ -27,18 +27,20 @@ test('开单页上部两列 min-height 撑满视口剩余高度', () => {
 test('收款模块在底部横排（.sale-bottom-pay）', () => {
   assert.ok(desktop.includes('.sale-bottom-pay { margin-top: 16px; }'),
     '底部收款容器 .sale-bottom-pay 与上部两列之间有间距');
-  assert.ok(desktop.includes('.sale-bottom-pay .pay-grid { display: flex; flex-wrap: wrap;'),
-    '收款模块内为可换行的横向布局');
+  assert.ok(desktop.includes('.sale-bottom-pay .pay-grid { display: flex; flex-direction: column; gap: 12px; }'),
+    '收款模块内为纵向两行布局（第1行输入框+指标+按钮，第2行备注）');
+  assert.ok(desktop.includes('.sale-bottom-pay .pay-row1 { display: flex;'),
+    '第1行 .pay-row1：收款方式/指标/按钮横向排布');
   assert.ok(desktop.includes('.sale-bottom-pay .pay-methods { display: flex;'),
     '收款方式（微信/现金/支付宝）横向排布');
   assert.ok(desktop.includes('.sale-bottom-pay .pay-stats { display: flex;'),
     '实收/余款处理/欠款一行排布（非三行堆叠，降低高度）');
-  assert.ok(desktop.includes('.sale-bottom-pay .pay-note { display: flex; align-items: flex-end; gap: 14px; flex: 1 1 340px; margin-left: auto;'),
-    '备注与按钮靠右、随页面宽度自适应拉伸');
-  assert.ok(desktop.includes('.sale-bottom-pay .pm-input { flex: 1 1 96px; min-width: 84px; }'),
-    '收款方式输入框 flex 比例拉伸（随页面宽度加宽/收缩）');
-  assert.ok(desktop.includes('.sale-bottom-pay .pm-note { flex: 1 1 220px; min-width: 170px; }'),
-    '备注框加长并撑满剩余空间');
+  assert.ok(desktop.includes('.sale-bottom-pay .pm-input { flex: 1 1 0; min-width: 110px; }'),
+    '收款方式输入框 flex 均分并加宽（随页面宽度拉长）');
+  assert.ok(desktop.includes('.sale-bottom-pay .pay-note { display: flex; align-items: flex-end; gap: 12px; width: 100%; min-width: 0; }'),
+    '第2行备注独占整行（width:100%），备注框随页面宽度加长');
+  assert.ok(desktop.includes('.sale-bottom-pay .pay-note .pm-note { flex: 1 1 0; min-width: 0; }'),
+    '备注输入框撑满备注行剩余空间');
 });
 
 test('列内卡片 flex:1 填满，应收合计卡保持自然高度', () => {
