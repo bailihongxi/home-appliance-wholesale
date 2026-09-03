@@ -15,13 +15,14 @@
     E.debt || (isNode ? require('../core/debt.js') : null),
     E.product || (isNode ? require('../core/product.js') : null),
     E.repo || (isNode ? require('../store/repo.js') : null),
+    E.printDoc || (isNode ? require('./print-doc.js') : null),
     E
   );
   if (isNode) module.exports = mod;
   root.ERP = root.ERP || {};
   root.ERP.pages = root.ERP.pages || {};
   root.ERP.pages.purchase = mod;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, engine, debt, product, repo, ERP) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, engine, debt, product, repo, printDoc, ERP) {
   'use strict';
 
   var esc = util.escapeHtml;
@@ -268,6 +269,14 @@
         state.viewNo = null;
       },
 
+      'print-doc': function (ctx, state, el) {
+        var no = el.getAttribute('data-no');
+        var doc = ctx.getDoc('purchases', no);
+        if (!doc) return;
+        var html = printDoc.buildDocHtml(ctx, doc, 'purchase');
+        printDoc.openPrint(html);
+      },
+
       filter: function (ctx, state, el) {
         state[el.getAttribute('data-name')] = el.value;
         state.page = 1;
@@ -411,6 +420,7 @@
     h += '</tbody></table></div>' +
       '<div class="row between mt8"><span class="muted">合计 ' + qty + ' 件 · ' + ui.money(doc.total) +
       '（已付 ' + ui.money(doc.paid) + '，欠款 ' + ui.money(doc.debt) + '）</span>' +
+      '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '">打印</button>' +
       '<button class="btn btn-sm" data-act="close-view">关闭</button></div></div>';
     return h;
   }

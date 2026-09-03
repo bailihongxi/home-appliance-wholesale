@@ -17,13 +17,14 @@
     E.debt || (isNode ? require('../core/debt.js') : null),
     E.product || (isNode ? require('../core/product.js') : null),
     E.repo || (isNode ? require('../store/repo.js') : null),
+    E.printDoc || (isNode ? require('./print-doc.js') : null),
     E
   );
   if (isNode) module.exports = mod;
   root.ERP = root.ERP || {};
   root.ERP.pages = root.ERP.pages || {};
   root.ERP.pages.sale = mod;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, inv, cart, engine, debt, product, repo, ERP) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, inv, cart, engine, debt, product, repo, printDoc, ERP) {
   'use strict';
 
   var esc = util.escapeHtml;
@@ -95,6 +96,13 @@
       'cancel-form': function (ctx, state) {
         state.tab = 'list';
         state.form = emptyForm();
+      },
+      'print-doc': function (ctx, state, el) {
+        var no = el.getAttribute('data-no');
+        var doc = ctx.getDoc('sales', no);
+        if (!doc) return;
+        var html = printDoc.buildDocHtml(ctx, doc, 'sale');
+        printDoc.openPrint(html);
       },
 
       /* 搜索选品 */
@@ -635,6 +643,7 @@
       (doc.discount ? '（折扣 ' + ui.money(doc.discount) + '）' : '') +
       '　实收 ' + ui.money(doc.received) + '　欠款 ' + ui.money(doc.debt) +
       (isRefund ? '　红冲 ' + esc(doc.refNo) : '') + '</span>' +
+      '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '">打印</button>' +
       '<button class="btn btn-sm" data-act="close-view">关闭</button></div></div>';
     return h;
   }

@@ -42,6 +42,10 @@ test('sw.js SHELL 包含所有已有页面和核心模块（无遗漏）', () =>
   });
 });
 
+test('sw.js SHELL 包含单据打印模块 print-doc.js', () => {
+  assert.ok(sw.includes("'./js/ui/print-doc.js'"), 'SHELL 应包含单据打印模块（销售单/进货单打印）');
+});
+
 test('sw.js 导航请求使用 stale-while-revalidate（后台更新缓存）', () => {
   // 导航请求块内应包含后台 fetch 更新缓存的逻辑，而非纯 cache-first
   const navBlock = sw.slice(sw.indexOf("req.mode === 'navigate'"));

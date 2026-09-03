@@ -116,4 +116,6 @@ test('列表渲染：含供应商与金额', () => {
   const detail = page.render(ctx, state);
   assert.ok(detail.includes('海尔'));
   assert.ok(detail.includes('BCD-200'));
+  assert.ok(detail.includes('data-act="print-doc"'), '单据弹层有打印按钮');
+  assert.ok(detail.includes('>打印<'), '打印按钮文案');
 });
