@@ -42,11 +42,16 @@
   .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
   .grid-4 { grid-template-columns: repeat(4, 1fr); }
   .grid-3 { grid-template-columns: repeat(3, 1fr); }
-  /* 库存紧凑统计卡：移动端 2 列（每列够宽容纳 label+数字，避免撑破/截断），数字保持醒目 */
-  .stat-grid-compact { grid-template-columns: repeat(2, 1fr); gap: 5px; }
-  .stat-grid-compact .stat-card { min-height: 26px; padding: 3px 7px; }
-  .stat-grid-compact .stat-card .label { font-size: 11px; }
-  .stat-grid-compact .stat-card .value { font-size: 20px; margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* 库存紧凑统计卡：移动端 2 列自适应屏幕宽度（minmax(0,1fr) 防止内容撑破溢出），
+     卡片改竖排（标签上、数字下）保证长金额完整显示 */
+  .stat-grid-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+  .stat-grid-compact .stat-card { min-width: 0; min-height: 34px; padding: 4px 8px; flex-direction: column; align-items: flex-start; justify-content: center; }
+  .stat-grid-compact .stat-card .label { font-size: 11px; line-height: 1.2; }
+  .stat-grid-compact .stat-card .value { font-size: 18px; margin-left: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* 搜索模块：手机端改回多行（搜索框+扫码一行；筛选下拉换行到第二行），便于手机操作 */
+  .search-bar { flex-wrap: wrap; }
+  .search-bar .select { flex: 1 1 100%; margin-top: 4px; }
 
   /* 记账中心头部：窄屏允许换行，统计横排紧凑 */
   .account-head { flex-wrap: wrap; row-gap: 6px; }

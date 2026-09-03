@@ -42,3 +42,12 @@ test('侧栏 HTML：折叠按钮挂载于侧栏内（data-act="toggle-side"）',
   assert.ok(html.includes('class="side-toggle" data-act="toggle-side"'), '折叠按钮 data-act=toggle-side');
   assert.ok(html.includes('<nav class="nav-list"></nav>'), '导航列表容器存在');
 });
+
+test('手机端搜索模块：搜索框一行、筛选下拉换行第二行（改回多行样式）', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
+  assert.ok(css.includes('.search-bar { flex-wrap: wrap; }'), '搜索栏手机端允许换行');
+  assert.ok(css.includes('.search-bar .select { flex: 1 1 100%; margin-top: 4px; }'),
+    '筛选下拉在手机端换行到第二行（整行显示）');
+  const base = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
+  assert.ok(base.includes('.search-bar { display: flex;'), 'search-bar 基础样式存在');
+});

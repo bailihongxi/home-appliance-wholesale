@@ -123,9 +123,10 @@ test('统计卡片 CSS：内边距/高度/间距减半 + 数字图标放大两�
   const desktop = fs.readFileSync(path.join(__dirname, '..', 'css', 'desktop.css'), 'utf8');
   assert.ok(desktop.includes('.stat-grid-compact { grid-template-columns: repeat(4, 1fr); gap: 3px; }'),
     '桌面保持 4 列并收紧间距');
-  // 移动端 2 列适配屏幕宽度（避免 4 列过窄撑破/截断），数字防溢出
+  // 移动端 2 列自适应屏幕宽度（minmax(0,1fr) 防内容撑破溢出）+ 竖排卡片 + 数字防溢出
   const mobile = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
-  assert.ok(mobile.includes('.stat-grid-compact { grid-template-columns: repeat(2, 1fr); gap: 5px; }'),
-    '移动端改为 2 列适配屏幕宽度（修复撑破）');
+  assert.ok(mobile.includes('.stat-grid-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }'),
+    '移动端 2 列自适应屏幕宽度（minmax(0,1fr) 防溢出）');
+  assert.ok(mobile.includes('flex-direction: column'), '移动端卡片竖排（标签上数字下，长金额完整）');
   assert.ok(mobile.includes('text-overflow: ellipsis'), '移动端数值超长防溢出截断');
 });
