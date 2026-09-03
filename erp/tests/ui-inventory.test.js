@@ -125,8 +125,17 @@ test('统计卡片 CSS：内边距/高度/间距减半 + 数字图标放大两�
     '桌面保持 4 列并收紧间距');
   // 移动端 2 列自适应屏幕宽度（minmax(0,1fr) 防内容撑破溢出）+ 竖排卡片 + 数字防溢出
   const mobile = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
-  assert.ok(mobile.includes('.stat-grid-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }'),
+  assert.ok(mobile.includes('.stat-grid-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }'),
     '移动端 2 列自适应屏幕宽度（minmax(0,1fr) 防溢出）');
   assert.ok(mobile.includes('flex-direction: column'), '移动端卡片竖排（标签上数字下，长金额完整）');
   assert.ok(mobile.includes('text-overflow: ellipsis'), '移动端数值超长防溢出截断');
+});
+
+test('问题1-手机版库存统计卡：高度缩小一半（min-height 34px → 17px）', () => {
+  const mobile = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
+  const block = mobile.slice(mobile.indexOf('.stat-grid-compact'), mobile.indexOf('.search-bar'));
+  assert.ok(block.includes('min-height: 17px'), '手机统计卡最小高度减半（17px）');
+  assert.ok(block.includes('padding: 1px 6px'), '内边距进一步压缩（1px 6px）');
+  assert.ok(block.includes('.stat-card .label { font-size: 10px'), '标签字号压缩（10px）');
+  assert.ok(block.includes('.stat-card .value { font-size: 15px'), '数值字号压缩（15px）');
 });
