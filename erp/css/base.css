@@ -1,25 +1,25 @@
 /* base.css —— 变量、重置、通用组件
  * 设计语言 v2（薄荷绿主题 + 大圆角 + 软阴影）
- * 配色系统：薄荷绿主色 #6CC4B0 / 强调 #3FB89B / 深色 #2A9D87
+ * 配色系统：薄荷绿主色 #60a5fa / 强调 #2563eb / 深色 #1d4ed8
  */
 
 :root {
   /* —— 主色系：薄荷绿 ——
    * 主色用于顶部 banner、关键按钮、强调态；强调色用于 hover/active、统计正向；深色用于顶部文字、强烈按钮 */
-  --c-mint-50:  #F0FAF6;
-  --c-mint-100: #DAF2EA;
-  --c-mint-200: #B7E5D6;
-  --c-mint-300: #8DD5C0;
-  --c-mint-400: #6CC4B0;   /* 主色 banner */
-  --c-mint-500: #4FB29D;   /* 强调色 */
-  --c-mint-600: #3FB89B;   /* 强调色深一档 */
-  --c-mint-700: #2A9D87;
-  --c-mint-800: #1F7A68;
+  --c-mint-50:  #eff6ff;
+  --c-mint-100: #dbeafe;
+  --c-mint-200: #bfdbfe;
+  --c-mint-300: #93c5fd;
+  --c-mint-400: #60a5fa;   /* 主色 banner */
+  --c-mint-500: #3b82f6;   /* 强调色 */
+  --c-mint-600: #2563eb;   /* 强调色深一档 */
+  --c-mint-700: #1d4ed8;
+  --c-mint-800: #1e40af;
 
   /* —— 兼容旧 var 名（避免破坏现有组件代码）—— */
-  --c-primary: #3FB89B;       /* = --c-mint-600 */
-  --c-primary-dark: #2A9D87;  /* = --c-mint-700 */
-  --c-primary-soft: #F0FAF6;  /* = --c-mint-50 */
+  --c-primary: #2563eb;       /* = --c-mint-600 */
+  --c-primary-dark: #1d4ed8;  /* = --c-mint-700 */
+  --c-primary-soft: #eff6ff;  /* = --c-mint-50 */
 
   /* —— 状态色 —— */
   --c-success: #16a34a;
@@ -51,7 +51,7 @@
 
   /* —— 阴影 —— */
   --shadow:        0 1px 3px rgba(17, 24, 39, .05);
-  --shadow-soft:   0 4px 14px rgba(63, 184, 155, .08);
+  --shadow-soft:   0 4px 14px rgba(37, 99, 235, .08);
   --shadow-card:   0 4px 16px rgba(17, 24, 39, .06);
   --shadow-lg:     0 10px 30px rgba(17, 24, 39, .14);
 
@@ -274,7 +274,7 @@ button, input, select, textarea {
   background: var(--c-mint-500);
   border-color: var(--c-mint-500);
   color: #fff;
-  box-shadow: 0 4px 12px rgba(63, 184, 155, .25);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, .25);
 }
 .btn-primary:active { background: var(--c-mint-600); }
 .btn-success { background: var(--c-success); border-color: var(--c-success); color: #fff; }
@@ -314,7 +314,7 @@ button, input, select, textarea {
 }
 .input:focus, .select:focus {
   border-color: var(--c-mint-500);
-  box-shadow: 0 0 0 3px rgba(63, 184, 155, .15);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .15);
 }
 .input[type="number"] { -moz-appearance: textfield; }
 textarea.input { min-height: 72px; resize: vertical; }
@@ -614,7 +614,7 @@ table.matrix td.cell.hit { outline: 2px solid var(--c-primary); background: var(
   background: var(--c-mint-500);
   color: #fff;
   font-weight: 600;
-  box-shadow: 0 4px 12px rgba(63, 184, 155, .25);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, .25);
 }
 .segmented .seg-item .count {
   position: absolute;
@@ -843,12 +843,12 @@ table.matrix td.cell.hit { outline: 2px solid var(--c-primary); background: var(
   color: #fff;
   font: inherit;
   text-align: center;
-  box-shadow: 0 8px 22px rgba(63, 184, 155, .35);
+  box-shadow: 0 8px 22px rgba(37, 99, 235, .35);
   transition: transform .08s ease, box-shadow .15s ease;
 }
-.home-sale-btn:hover { box-shadow: 0 10px 26px rgba(63, 184, 155, .45); }
+.home-sale-btn:hover { box-shadow: 0 10px 26px rgba(37, 99, 235, .45); }
 .home-sale-btn:active { transform: scale(.97); }
-.home-sale-btn:focus-visible { outline: 3px solid rgba(63, 184, 155, .35); outline-offset: 2px; }
+.home-sale-btn:focus-visible { outline: 3px solid rgba(37, 99, 235, .35); outline-offset: 2px; }
 .home-sale-btn .ico { font-size: 30px; line-height: 1; }
 .home-sale-btn .t { font-size: 18px; font-weight: 700; margin-top: 4px; letter-spacing: 1px; }
 .home-sale-btn .s { font-size: 12px; opacity: .92; }

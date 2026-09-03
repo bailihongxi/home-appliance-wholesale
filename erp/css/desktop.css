@@ -144,7 +144,7 @@
   .top-bar .global-search input:focus {
     background: #fff;
     border-color: var(--c-mint-500);
-    box-shadow: 0 0 0 3px rgba(63, 184, 155, .15);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .15);
   }
   .top-bar .global-search .ico {
     position: absolute;

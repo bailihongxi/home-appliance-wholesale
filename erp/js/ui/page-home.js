@@ -282,16 +282,16 @@
     });
     areaD += 'L ' + (padL + innerW) + ' ' + (padT + innerH) + ' Z';
     s += '<defs><linearGradient id="trend-grad" x1="0" y1="0" x2="0" y2="1">' +
-      '<stop offset="0%" stop-color="#6CC4B0" stop-opacity="0.35"/>' +
-      '<stop offset="100%" stop-color="#6CC4B0" stop-opacity="0"/>' +
+      '<stop offset="0%" stop-color="#60A5FA" stop-opacity="0.35"/>' +
+      '<stop offset="100%" stop-color="#60A5FA" stop-opacity="0"/>' +
       '</linearGradient></defs>';
     s += '<path d="' + areaD + '" fill="url(#trend-grad)"/>';
-    s += '<path d="' + pathD + '" fill="none" stroke="#3FB89B" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+    s += '<path d="' + pathD + '" fill="none" stroke="#2563EB" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
     // 数据点
     pts.forEach(function (p, i) {
       var x = padL + step * i;
       var y = padT + innerH - (p.value / max) * innerH;
-      s += '<circle cx="' + x + '" cy="' + y + '" r="3.5" fill="#fff" stroke="#3FB89B" stroke-width="2"/>';
+      s += '<circle cx="' + x + '" cy="' + y + '" r="3.5" fill="#fff" stroke="#2563EB" stroke-width="2"/>';
       s += '<text x="' + x + '" y="' + (h - 8) + '" text-anchor="middle" font-size="11" fill="#6b7280">' + esc(p.label) + '</text>';
       if (p.value > 0) {
         s += '<text x="' + x + '" y="' + (y - 8) + '" text-anchor="middle" font-size="10" fill="#1f7a68" font-weight="600">' +
