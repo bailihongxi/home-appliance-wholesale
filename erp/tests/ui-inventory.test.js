@@ -139,3 +139,23 @@ test('问题1-手机版库存统计卡：高度缩小一半（min-height 34px �
   assert.ok(block.includes('.stat-card .label { font-size: 10px'), '标签字号压缩（10px）');
   assert.ok(block.includes('.stat-card .value { font-size: 15px'), '数值字号压缩（15px）');
 });
+
+test('V3.4-库存统计卡高度与内容匹配：label/value 不被拉伸、无多余内边距（字号不变）', () => {
+  // 手机端：卡片/标签/数值固定为内容尺寸（flex:0 0 auto / height:auto / min-height:0 / padding:0），
+  // 避免 flex 与 grid 把卡片拉伸到约 140px（应收缩到 ~38px 贴合数字）
+  const mobile = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
+  const mBlock = mobile.slice(mobile.indexOf('.stat-grid-compact'), mobile.indexOf('.search-bar'));
+  assert.ok(mBlock.includes('.stat-card { min-width: 0; min-height: 17px; padding: 1px 6px; flex-direction: column; align-items: flex-start; justify-content: center; }'),
+    '手机卡片保持紧凑基线（min-height 17px、padding 1px 6px、竖排）');
+  assert.ok(mBlock.includes('.stat-card .label { font-size: 10px; line-height: 1.1; flex: 0 0 auto; height: auto; min-height: 0; padding: 0; }'),
+    '手机标签固定内容高度：flex 0 0 auto + height auto + min-height 0 + padding 0（字号仍 10px 不变）');
+  assert.ok(mBlock.includes('.stat-card .value { font-size: 15px; margin-left: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 0 auto; height: auto; }'),
+    '手机数值固定内容高度：flex 0 0 auto + height auto（字号仍 15px 不变）');
+  // 桌面端 row 布局同样锁定 label/value 尺寸，避免被拉伸
+  const base = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
+  const bBlock = base.slice(base.indexOf('.stat-grid-compact'), base.indexOf('.stat {'));
+  assert.ok(bBlock.includes('.stat-card .label { font-size: 10px; white-space: nowrap; flex: 0 0 auto; height: auto; min-height: 0; padding: 0; }'),
+    '桌面标签固定内容高度（字号仍 10px 不变）');
+  assert.ok(bBlock.includes('.stat-card .value { font-size: 24px; margin-left: 6px; flex: 0 0 auto; height: auto; }'),
+    '桌面数值固定内容高度（字号仍 24px 不变）');
+});

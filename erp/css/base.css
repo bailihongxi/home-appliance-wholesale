@@ -422,8 +422,8 @@ table.matrix td.cell.hit { outline: 2px solid var(--c-primary); background: var(
   margin-bottom: 0;
   flex: 0 0 auto;
 }
-.stat-grid-compact .stat-card .label { font-size: 10px; white-space: nowrap; }
-.stat-grid-compact .stat-card .value { font-size: 24px; margin-left: 6px; }
+.stat-grid-compact .stat-card .label { font-size: 10px; white-space: nowrap; flex: 0 0 auto; height: auto; min-height: 0; padding: 0; }
+.stat-grid-compact .stat-card .value { font-size: 24px; margin-left: 6px; flex: 0 0 auto; height: auto; }
 .stat-grid-compact .stat-card .delta { font-size: 11px; margin-top: 0; }
 .stat {
   background: var(--c-card);

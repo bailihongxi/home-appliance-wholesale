@@ -46,8 +46,8 @@
      卡片改竖排（标签上、数字下）保证长金额完整显示 */
   .stat-grid-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
   .stat-grid-compact .stat-card { min-width: 0; min-height: 17px; padding: 1px 6px; flex-direction: column; align-items: flex-start; justify-content: center; }
-  .stat-grid-compact .stat-card .label { font-size: 10px; line-height: 1.1; }
-  .stat-grid-compact .stat-card .value { font-size: 15px; margin-left: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stat-grid-compact .stat-card .label { font-size: 10px; line-height: 1.1; flex: 0 0 auto; height: auto; min-height: 0; padding: 0; }
+  .stat-grid-compact .stat-card .value { font-size: 15px; margin-left: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 0 auto; height: auto; }
 
   /* 搜索模块：手机端改回多行（搜索框+扫码一行；筛选下拉换行到第二行），便于手机操作 */
   .search-bar { flex-wrap: wrap; }
