@@ -404,6 +404,27 @@ table.matrix td.cell.hit { outline: 2px solid var(--c-primary); background: var(
 /* ---------- 统计卡（老样式保留兼容）---------- */
 
 .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+
+/* 紧凑统计卡（库存管理页等）：缩小卡片、图标与数值，够用即可 */
+.stat-grid-compact { gap: 8px; }
+.stat-grid-compact .stat-card {
+  padding: 9px 11px;
+  min-height: 54px;
+  gap: 3px;
+  flex-direction: row;
+  align-items: center;
+}
+.stat-grid-compact .stat-card .icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  font-size: 14px;
+  margin-bottom: 0;
+  flex: 0 0 auto;
+}
+.stat-grid-compact .stat-card .label { font-size: 10px; }
+.stat-grid-compact .stat-card .value { font-size: 17px; margin-left: auto; }
+.stat-grid-compact .stat-card .delta { font-size: 11px; margin-top: 0; }
 .stat {
   background: var(--c-card);
   border-radius: var(--radius-lg);

@@ -42,6 +42,16 @@ test('库存列表：品牌/型号分列，成本/双价/库存', () => {
   assert.ok(!html.includes('款号'));
 });
 
+test('统计卡片紧凑化 + 列表斑马纹', () => {
+  const ctx = seed(newCtx());
+  const st = fresh(ctx);
+  const html = page.render(ctx, st);
+  assert.ok(html.includes('stat-grid stat-grid-compact'), '库存统计卡片使用紧凑布局');
+  assert.ok(html.includes('tbl tbl-striped'), '库存列表表格带斑马纹样式');
+  assert.ok(html.includes('商品数'), '统计卡片保留商品数');
+  assert.ok(html.includes('资金占用'), '统计卡片保留资金占用');
+});
+
 test('预警：低于阈值 3 显示，充足不显示', () => {
   const ctx = seed(newCtx({ defaultThreshold: 3 }));
   const st = fresh(ctx);
