@@ -59,8 +59,7 @@
         form: emptyForm(),
         editing: null,
         csvText: '',
-        csvResult: null,
-        priceForm: { wholesaleMargin: '', retailMargin: '' }
+        csvResult: null
       };
     },
 
@@ -69,7 +68,6 @@
     render: function (ctx, state) {
       if (state.tab === 'new') return renderForm(ctx, state);
       if (state.tab === 'csv') return renderCsv(ctx, state);
-      if (state.tab === 'price') return renderPriceSys(ctx, state);
       return renderList(ctx, state);
     },
 
@@ -146,70 +144,6 @@
       'open-csv': function (ctx, state) {
         state.tab = 'csv';
         state.csvResult = null;
-      },
-
-      /* ---------------- 价格体系（V3.5） ---------------- */
-
-      'open-price-sys': function (ctx, state) {
-        state.tab = 'price';
-        state.priceForm = {
-          wholesaleMargin: String(ctx.settings.wholesaleMargin == null ? 20 : ctx.settings.wholesaleMargin),
-          retailMargin: String(ctx.settings.retailMargin == null ? 35 : ctx.settings.retailMargin)
-        };
-      },
-
-      'cancel-price': function (ctx, state) {
-        state.tab = 'list';
-      },
-
-      'price-field': function (ctx, state, el) {
-        var name = el.getAttribute('data-name');
-        state.priceForm[name] = el.value;
-      },
-
-      /** 保存整体利润率到系统设置（随云快照同步） */
-      'save-price-sys': function (ctx, state) {
-        var w = Number(state.priceForm.wholesaleMargin);
-        var r = Number(state.priceForm.retailMargin);
-        if (isNaN(w) || w < 0 || isNaN(r) || r < 0) {
-          ui.toast('利润率需为不小于 0 的数字', 'err');
-          return false;
-        }
-        ctx.settings.wholesaleMargin = w;
-        ctx.settings.retailMargin = r;
-        if (ERP.app && ERP.app.saveSettings) {
-          ERP.app.saveSettings().catch(function () {});
-        }
-        repo.log(ctx, '设置价格体系', '批发利润率 ' + w + '% / 零售利润率 ' + r + '%');
-        ui.toast('已保存整体利润率（批发 ' + w + '% / 零售 ' + r + '%）', 'ok');
-        return true;
-      },
-
-      /** 一键按系统价格更新全部商品：批发/零售统一按 成本×(1+利润率) 重算并取整到元 */
-      'apply-price-sys': function (ctx, state) {
-        var list = ctx.data.products || [];
-        if (!list.length) {
-          ui.toast('还没有商品，先新建商品再应用系统价格', 'ok');
-          return true;
-        }
-        var n = 0;
-        list.forEach(function (p) {
-          var auto = product.autoPrices(ctx, p.cost);
-          if (p.priceWholesale !== auto.priceWholesale || p.priceRetail !== auto.priceRetail) {
-            p.priceWholesale = auto.priceWholesale;
-            p.priceRetail = auto.priceRetail;
-            ctx.touch('products', p);
-            n++;
-          }
-        });
-        if (n) {
-          repo.log(ctx, '一键应用系统价格', n + ' 款商品按利润率重新定价（取整到元）');
-          if (ERP.app && ERP.app.render) ERP.app.render();
-          ui.toast('已按系统价格更新 ' + n + ' 款商品（批发/零售统一取整到元）', 'ok');
-        } else {
-          ui.toast('所有商品价格已符合系统价格，无需更新', 'ok');
-        }
-        return true;
       },
 
       'csv-text': function (ctx, state, el) {
@@ -357,7 +291,6 @@
     h += '<div class="page-head"><h2>商品档案</h2>' +
       '<span class="desc">共 ' + ctx.data.products.length + ' 款商品</span>' +
       '<div class="actions">' +
-      '<button class="btn" data-act="open-price-sys">💰 价格体系</button>' +
       '<button class="btn" data-act="open-csv">📥 批量导入</button>' +
       '<button class="btn btn-primary" data-act="open-new">＋ 新建商品</button>' +
       '</div></div>';
@@ -413,45 +346,7 @@
 
   /* ---------------- 建档表单 ---------------- */
 
-  /* ---------------- 价格体系（V3.5） ---------------- */
-
-  function renderPriceSys(ctx, state) {
-    var pf = state.priceForm || {};
-    var w = pf.wholesaleMargin !== '' ? pf.wholesaleMargin : (ctx.settings.wholesaleMargin == null ? 20 : ctx.settings.wholesaleMargin);
-    var r = pf.retailMargin !== '' ? pf.retailMargin : (ctx.settings.retailMargin == null ? 35 : ctx.settings.retailMargin);
-    var h = '';
-    h += '<div class="page-head"><h2>价格体系</h2>' +
-      '<span class="desc">按整体利润率自动定价，取整到元（不含小数）</span>' +
-      '<div class="actions"><button class="btn" data-act="cancel-price">返回列表</button></div></div>';
-
-    h += '<div class="card">' +
-      '<h3 class="card-title">整体利润率（系统设置）</h3>' +
-      '<div class="row">' +
-        '<div class="field"><label>批发利润率（%）</label>' +
-          '<input class="input" data-input="price-field" data-name="wholesaleMargin" inputmode="decimal" value="' + esc(String(w)) + '"></div>' +
-        '<div class="field"><label>零售利润率（%）</label>' +
-          '<input class="input" data-input="price-field" data-name="retailMargin" inputmode="decimal" value="' + esc(String(r)) + '"></div>' +
-      '</div>' +
-      '<div class="row">' +
-        '<button class="btn" data-act="cancel-price">取消</button>' +
-        '<div class="spacer"></div>' +
-        '<button class="btn btn-primary" data-act="save-price-sys">保存利润率</button>' +
-      '</div>' +
-      '<div class="small muted mt8">新建商品时，若批发价 / 零售价留空，系统将按此利润率根据成本自动生成（您仍可手动修改任意商品价格）。</div>' +
-    '</div>';
-
-    h += '<div class="card">' +
-      '<h3 class="card-title">一键使用系统价格</h3>' +
-      '<p class="small muted">将 <b>全部商品</b> 的批发价、零售价按各自的成本 ×（1+利润率）统一重新计算，并取整到元（不含小数点）。已有自定义价格也会被覆盖。</p>' +
-      '<div class="row">' +
-        '<button class="btn" data-act="cancel-price">取消</button>' +
-        '<div class="spacer"></div>' +
-        '<button class="btn btn-primary" data-act="apply-price-sys">一键更新全部商品价格</button>' +
-      '</div>' +
-    '</div>';
-
-    return h;
-  }
+  /* ---------------- 新建 / 编辑表单（V3.5：只填成本，批发/零售自动填充） ---------------- */
 
   function renderForm(ctx, state) {
     var form = state.form;

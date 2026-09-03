@@ -11,12 +11,13 @@
   var schema = isNode ? require('../core/schema.js') : (ERP.schema || null);
   var backup = isNode ? require('../core/backup.js') : (ERP.backup || null);
   var repo = isNode ? require('../store/repo.js') : (ERP.repo || null);
-  var mod = factory(ERP, util, ui, schema, backup, repo);
+  var product = isNode ? require('../core/product.js') : (ERP.product || null);
+  var mod = factory(ERP, util, ui, schema, backup, repo, product);
   if (isNode) module.exports = mod;
   root.ERP = root.ERP || {};
   root.ERP.pages = root.ERP.pages || {};
   root.ERP.pages.setting = mod;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (ERP, util, ui, schema, backup, repo) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (ERP, util, ui, schema, backup, repo, product) {
   'use strict';
 
   var C = ui;
@@ -44,7 +45,11 @@
         pwd: '',
         pwd2: '',
         showLog: false,
-        imported: null
+        imported: null,
+        priceForm: {
+          wholesaleMargin: String(s.wholesaleMargin == null ? 20 : s.wholesaleMargin),
+          retailMargin: String(s.retailMargin == null ? 35 : s.retailMargin)
+        }
       };
     },
 
@@ -123,13 +128,79 @@
         '<button class="btn btn-sm ' + (state.showLog ? 'btn-primary' : '') + '" data-act="toggle-log" style="float:right">' +
         (state.showLog ? '收起' : '查看') + '</button></h3>' + logHtml + '</div>';
 
-      return general + security + backupCard + danger + logCard;
+      /* ---- 价格体系（V3.5：整体利润率 + 一键应用系统价格） ---- */
+      var pf = state.priceForm || {};
+      var pW = pf.wholesaleMargin !== '' ? pf.wholesaleMargin : (ctx.settings.wholesaleMargin == null ? 20 : ctx.settings.wholesaleMargin);
+      var pR = pf.retailMargin !== '' ? pf.retailMargin : (ctx.settings.retailMargin == null ? 35 : ctx.settings.retailMargin);
+      var priceCard =
+        '<div class="card mb8"><h3 class="card-title">价格体系（整体利润率）</h3>' +
+        '<p class="muted small mb8">新建/导入商品时，批发价、零售价留空将按 成本 ×（1+利润率）自动生成并取整到元；您仍可手动修改任意商品价格。已存利润率随云同步。</p>' +
+        '<div class="grid grid-2">' +
+        '<div class="form-row"><label>批发利润率（%）</label><input class="input" inputmode="decimal" data-change="price-field" data-name="wholesaleMargin" value="' + esc(String(pW)) + '"></div>' +
+        '<div class="form-row"><label>零售利润率（%）</label><input class="input" inputmode="decimal" data-change="price-field" data-name="retailMargin" value="' + esc(String(pR)) + '"></div>' +
+        '</div>' +
+        '<div class="row mt8">' +
+        '<button class="btn btn-primary" data-act="save-price-sys">保存利润率</button>' +
+        '<button class="btn" data-act="apply-price-sys">一键更新全部商品价格</button>' +
+        '</div>' +
+        '<div class="small muted mt8">「一键更新」会按最新利润率把全部商品的批发价、零售价统一重算（取整到元），已有自定义价格也会被覆盖。</div>' +
+        '</div>';
+
+      return general + priceCard + security + backupCard + danger + logCard;
     },
 
     actions: {
       field: function (ctx, state, el) {
         var name = el.getAttribute('data-name');
         if (name) state[name] = el.value;
+      },
+
+      /* ---- 价格体系（V3.5） ---- */
+      'price-field': function (ctx, state, el) {
+        var name = el.getAttribute('data-name');
+        if (name && state.priceForm) state.priceForm[name] = el.value;
+      },
+
+      'save-price-sys': function (ctx, state) {
+        var pf = state.priceForm || {};
+        var w = Number(pf.wholesaleMargin);
+        var r = Number(pf.retailMargin);
+        if (isNaN(w) || w < 0 || isNaN(r) || r < 0) {
+          if (app() && app().toast) app().toast('利润率需为不小于 0 的数字', 'err');
+          return false;
+        }
+        ctx.settings.wholesaleMargin = w;
+        ctx.settings.retailMargin = r;
+        if (app() && app().saveSettings) app().saveSettings();
+        repo.log(ctx, '设置价格体系', '批发利润率 ' + w + '% / 零售利润率 ' + r + '%');
+        if (app() && app().toast) app().toast('已保存整体利润率（批发 ' + w + '% / 零售 ' + r + '%）', 'ok');
+        return true;
+      },
+
+      'apply-price-sys': function (ctx, state) {
+        var list = ctx.data.products || [];
+        if (!list.length) {
+          if (app() && app().toast) app().toast('还没有商品，先新建商品再应用系统价格', 'ok');
+          return true;
+        }
+        var n = 0;
+        list.forEach(function (p) {
+          var auto = product.autoPrices(ctx, p.cost);
+          if (p.priceWholesale !== auto.priceWholesale || p.priceRetail !== auto.priceRetail) {
+            p.priceWholesale = auto.priceWholesale;
+            p.priceRetail = auto.priceRetail;
+            ctx.touch('products', p);
+            n++;
+          }
+        });
+        if (n) {
+          repo.log(ctx, '一键应用系统价格', n + ' 款商品按利润率重新定价（取整到元）');
+          if (app() && app().render) app().render();
+          if (app() && app().toast) app().toast('已按系统价格更新 ' + n + ' 款商品（批发/零售统一取整到元）', 'ok');
+        } else {
+          if (app() && app().toast) app().toast('所有商品价格已符合系统价格，无需更新', 'ok');
+        }
+        return true;
       },
 
       'save-settings': function (ctx, state) {

@@ -6,14 +6,15 @@
  */
 const test = require('node:test');
 const assert = require('node:assert');
-const page = require('../js/ui/page-product.js');
+const productPage = require('../js/ui/page-product.js');
+const settingPage = require('../js/ui/page-setting.js');
 const { newCtx } = require('./helpers/ctx.js');
 const product = require('../js/core/product.js');
 const schema = require('../js/core/schema.js');
 
 function fresh() {
   const ctx = newCtx();
-  const state = page.init(ctx);
+  const state = productPage.init(ctx);
   return { ctx, state };
 }
 
@@ -83,11 +84,11 @@ test('save：仅零售价留空 → 批发保留自定义、零售自动生成',
   assert.strictEqual(res.product.priceRetail, 162000, '零售价按 1200×1.35=1620 自动生成');
 });
 
-test('价格体系页面：含利润率设置与一键应用按钮', () => {
-  const { ctx, state } = fresh();
-  state.tab = 'price';
-  const html = page.render(ctx, state);
-  assert.ok(html.includes('价格体系'), '页面标题');
+test('价格体系位于 我的→设置 页面：含利润率设置与一键应用按钮', () => {
+  const ctx = newCtx();
+  const state = settingPage.init(ctx);
+  const html = settingPage.render(ctx, state);
+  assert.ok(html.includes('价格体系（整体利润率）'), '设置页含价格体系卡片');
   assert.ok(html.includes('批发利润率（%）'), '批发利润率输入');
   assert.ok(html.includes('零售利润率（%）'), '零售利润率输入');
   assert.ok(html.includes('save-price-sys'), '保存利润率按钮');
@@ -95,8 +96,19 @@ test('价格体系页面：含利润率设置与一键应用按钮', () => {
   assert.ok(html.includes('取整到元'), '提示取整到元');
 });
 
-test('一键应用系统价格：全部商品批发/零售统一按利润率重算并取整到元', () => {
+test('价格体系已从商品档案页移除：不再含价格体系按钮/页面', () => {
   const { ctx, state } = fresh();
+  const html = productPage.render(ctx, state);
+  assert.ok(!html.includes('open-price-sys'), '商品档案列表页无价格体系按钮');
+  assert.ok(!html.includes('价格体系'), '商品档案页不含价格体系页面');
+  state.tab = 'price';
+  const html2 = productPage.render(ctx, state);
+  assert.ok(!html2.includes('批发利润率'), 'price tab 已不存在（回退列表）');
+});
+
+test('一键应用系统价格：全部商品批发/零售统一按利润率重算并取整到元', () => {
+  const ctx = newCtx();
+  const state = settingPage.init(ctx);
   product.save(ctx, {
     brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
     cost: '1000', priceWholesale: '1200', priceRetail: '1399' // 自定义将被统一重算
@@ -105,7 +117,7 @@ test('一键应用系统价格：全部商品批发/零售统一按利润率重�
     brand: '格力', model: 'KFR-35', category: '空调', unit: '台',
     cost: '1800', priceWholesale: '2200', priceRetail: '2599'
   });
-  page.actions['apply-price-sys'](ctx, state);
+  settingPage.actions['apply-price-sys'](ctx, state);
   const list = ctx.data.products;
   assert.strictEqual(list.length, 2);
   const p1 = list.find(p => p.brand === '海尔');
@@ -118,7 +130,8 @@ test('一键应用系统价格：全部商品批发/零售统一按利润率重�
 });
 
 test('一键应用系统价格：跟随最新利润率设置', () => {
-  const { ctx, state } = fresh();
+  const ctx = newCtx();
+  const state = settingPage.init(ctx);
   product.save(ctx, {
     brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
     cost: '1000', priceWholesale: '1200', priceRetail: '1399'
@@ -126,8 +139,19 @@ test('一键应用系统价格：跟随最新利润率设置', () => {
   // 设置新的整体利润率后一键应用
   ctx.settings.wholesaleMargin = 25;
   ctx.settings.retailMargin = 40;
-  page.actions['apply-price-sys'](ctx, state);
+  settingPage.actions['apply-price-sys'](ctx, state);
   const p = ctx.data.products[0];
   assert.strictEqual(p.priceWholesale, 125000, '批发 1000×1.25=1250 元');
   assert.strictEqual(p.priceRetail, 140000, '零售 1000×1.4=1400 元');
+});
+
+test('设置页-保存利润率：写入系统设置并返回成功', () => {
+  const ctx = newCtx();
+  const state = settingPage.init(ctx);
+  state.priceForm.wholesaleMargin = '30';
+  state.priceForm.retailMargin = '45';
+  const r = settingPage.actions['save-price-sys'](ctx, state);
+  assert.strictEqual(r, true, '保存成功');
+  assert.strictEqual(ctx.settings.wholesaleMargin, 30);
+  assert.strictEqual(ctx.settings.retailMargin, 45);
 });
