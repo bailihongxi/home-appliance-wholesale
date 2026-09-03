@@ -108,3 +108,15 @@ test('问题2-打印版本1（不带价格）：销售单纯清单，无任何�
   assert.ok(!ph.includes('合计'), '进货单版本1 无金额合计');
   assert.ok(ph.includes('共 15 件'), '进货单版本1 保留件数');
 });
+
+test('问题3-打印页操作栏：含「打印」与「关闭（返回）」按钮，打印时自动隐藏', () => {
+  const ctx = newCtx({ shopName: '幸福家电批发' });
+  const html = printDoc.buildDocHtml(ctx, saleDoc(), 'sale');
+  assert.ok(html.includes('class="print-toolbar"'), '打印页含操作栏');
+  assert.ok(html.includes('onclick="window.print()"'), '含打印按钮（window.print）');
+  assert.ok(html.includes('onclick="window.close()"'), '含关闭按钮（window.close 可返回）');
+  assert.ok(html.includes('>关闭<'), '关闭按钮文案');
+  assert.ok(printDoc.PRINT_CSS.includes('@media print { .print-toolbar { display: none !important; } }'),
+    '打印时操作栏自动隐藏，不打印在单据上');
+  assert.ok(printDoc.PRINT_CSS.includes('position: sticky'), '操作栏吸顶显示');
+});
