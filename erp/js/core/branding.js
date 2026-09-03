@@ -15,7 +15,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  var DEFAULT_LOGO = 'assets/icon-192.png';
+  var DEFAULT_LOGO = 'assets/favicon.png';
   var DEFAULT_SHOP = '我的电器店';
 
   var api = {};

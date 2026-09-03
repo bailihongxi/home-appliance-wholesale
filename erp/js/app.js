@@ -630,7 +630,7 @@
         .join('');
     }
     var brand = document.querySelector('.app-header .brand');
-    var brandLogo = (ERP.branding ? ERP.branding.logoHref(app.ctx.settings) : ((app.ctx.settings.avatar) ? app.ctx.settings.avatar : 'assets/icon-192.png'));
+    var brandLogo = (ERP.branding ? ERP.branding.logoHref(app.ctx.settings) : ((app.ctx.settings.avatar) ? app.ctx.settings.avatar : 'assets/favicon.png'));
     if (brand) brand.innerHTML = '<img class="brand-logo" src="' + brandLogo + '" alt="">' + (app.ctx.settings.shopName || '我的电器店');
     var sbrand = document.querySelector('.app-sidebar .brand');
     if (sbrand) sbrand.innerHTML = '<img class="logo" src="' + brandLogo + '" alt="logo"> <span>' + (app.ctx.settings.shopName || '我的电器店') + '</span>';
@@ -655,7 +655,7 @@
   function applyFavicon() {
     if (typeof document === 'undefined') return;
     var settings = app.ctx && app.ctx.settings;
-    var href = (ERP.branding ? ERP.branding.logoHref(settings) : ((settings && settings.avatar) || 'assets/icon-192.png'));
+    var href = (ERP.branding ? ERP.branding.logoHref(settings) : ((settings && settings.avatar) || 'assets/favicon.png'));
     var links = document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]');
     for (var i = 0; i < links.length; i++) {
       var l = links[i];
@@ -682,7 +682,7 @@
     mask.id = 'lock-mask';
     mask.innerHTML =
       '<div class="card lock-card">' +
-      '<img class="lock-logo" src="assets/icon-192.png" alt="">' +
+      '<img class="lock-logo" src="assets/favicon.png" alt="">' +
       '<h3 style="margin-bottom:8px">' + (app.ctx.settings.shopName || '我的电器店') + '</h3>' +
       '<p class="muted small mb8">请输入打开密码</p>' +
       '<input class="input" id="lock-pwd" type="password" inputmode="numeric" placeholder="打开密码" autocomplete="off">' +

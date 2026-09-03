@@ -178,7 +178,7 @@
     var today = todayStr();
     var dateObj = new Date(today + 'T00:00:00');
     var cnDate = dateObj.getFullYear() + '年' + (dateObj.getMonth() + 1) + '月' + dateObj.getDate() + '日';
-    var brandLogo = (ERP.branding ? ERP.branding.logoHref(ctx.settings) : ((ctx.settings.avatar) ? ctx.settings.avatar : 'assets/icon-192.png'));
+    var brandLogo = (ERP.branding ? ERP.branding.logoHref(ctx.settings) : ((ctx.settings.avatar) ? ctx.settings.avatar : 'assets/favicon.png'));
     var shopName = (ERP.branding ? ERP.branding.shopName(ctx.settings) : (ctx.settings.shopName || '我的电器店'));
 
     return (
@@ -201,7 +201,7 @@
     var today = todayStr();
     var dateObj = new Date(today + 'T00:00:00');
     var cnDate = dateObj.getFullYear() + '年' + (dateObj.getMonth() + 1) + '月' + dateObj.getDate() + '日';
-    var brandLogo = (ERP.branding ? ERP.branding.logoHref(ctx.settings) : ((ctx.settings.avatar) ? ctx.settings.avatar : 'assets/icon-192.png'));
+    var brandLogo = (ERP.branding ? ERP.branding.logoHref(ctx.settings) : ((ctx.settings.avatar) ? ctx.settings.avatar : 'assets/favicon.png'));
     var shopName = (ERP.branding ? ERP.branding.shopName(ctx.settings) : (ctx.settings.shopName || '我的电器店'));
 
     return (

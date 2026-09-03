@@ -3,10 +3,10 @@ const assert = require('node:assert');
 const branding = require('../js/core/branding.js');
 
 test('页面元数据：默认图标与店名', () => {
-  assert.strictEqual(branding.defaultLogo(), 'assets/icon-192.png');
+  assert.strictEqual(branding.defaultLogo(), 'assets/favicon.png');
   // 无自定义时回退默认
-  assert.strictEqual(branding.logoHref(null), 'assets/icon-192.png');
-  assert.strictEqual(branding.logoHref({}), 'assets/icon-192.png');
+  assert.strictEqual(branding.logoHref(null), 'assets/favicon.png');
+  assert.strictEqual(branding.logoHref({}), 'assets/favicon.png');
   assert.strictEqual(branding.shopName(null), '我的电器店');
   assert.strictEqual(branding.shopName({ shopName: '   ' }), '我的电器店');
 });
