@@ -439,52 +439,53 @@
     h += '</div>';
     h += '</div>';
 
-    /* ---------- 底部：收款（横跨整行，非右列） ---------- */
+    /* ---------- 底部：收款（横跨整行，宽度与选货+订单两列等宽，一行紧凑排布） ---------- */
     h += '<div class="sale-bottom-pay">';
     h += '<div class="card"><div class="card-title">收款</div>';
     h += '<div class="pay-grid">';
 
-    // 左：收款方式（微信 / 现金 / 支付宝）
-    h += '<div class="pay-col pay-methods"><div class="small muted mb2">收款（元）</div>' +
-      '<div class="pay-methods-row">' +
+    // 左：收款方式（微信 / 现金 / 支付宝）—— 一行
+    h += '<div class="pay-methods">' +
+      '<span class="pm-label">收款（元）</span>' +
       payInput('微信', 'pay.wechat', form.pay.wechat) +
       payInput('现金', 'pay.cash', form.pay.cash) +
       payInput('支付宝', 'pay.alipay', form.pay.alipay) +
+      '</div>';
+
+    // 中：实收 / 余款处理 / 欠款 —— 一行三个指标
+    h += '<div class="pay-stats">';
+    h += '<span class="stat"><span class="muted">实收</span><b>' + ui.money(t.received) + '</b></span>';
+    h += '<span class="stat"><span class="muted">余款处理</span>' +
+      '<button class="btn btn-sm ' + (form.useDebt ? 'btn-primary' : '') + '" data-act="toggle-debt">' +
+      (form.useDebt ? '记欠款（挂账）' : '不欠款') + '</button></span>';
+    h += '<span class="stat"><span class="muted">欠款</span>' +
+      '<b style="color:' + (t.debt > 0 ? '#dc2626' : '#16a34a') + '">' + ui.money(t.debt) + '</b></span>';
+    h += '</div>';
+
+    // 右：备注 + 取消 / 保存并出单
+    h += '<div class="pay-note">' +
+      '<div class="pm-note"><div class="small muted mb2">备注</div>' +
+      '<input class="input" data-input="field" data-name="note" placeholder="选填" value="' + esc(form.note) + '"></div>' +
+      '<div class="pay-actions">' +
+      '<button class="btn" data-act="cancel-form">取消</button>' +
+      '<button class="btn btn-primary btn-lg" data-act="save-sale">保存并出单</button>' +
       '</div></div>';
 
-    // 中：实收 / 余款处理 / 欠款（挂账客户）
-    h += '<div class="pay-col pay-stats">';
-    h += '<div class="row between"><span class="muted">实收</span><span class="strong">' + ui.money(t.received) + '</span></div>';
-    h += '<div class="row between mt4"><span class="muted">余款处理</span>' +
-      '<button class="btn btn-sm ' + (form.useDebt ? 'btn-primary' : '') + '" data-act="toggle-debt">' +
-      (form.useDebt ? '记欠款（挂账）' : '不欠款') + '</button></div>';
-    h += '<div class="row between mt4"><span class="muted">欠款</span>' +
-      '<span class="strong" style="color:' + (t.debt > 0 ? '#dc2626' : '#16a34a') + '">' + ui.money(t.debt) + '</span></div>';
+    h += '</div>'; // pay-grid
 
+    // 挂账客户（欠款时第二行）
     if (t.debt > 0 || form.useDebt) {
       var customers = debt.list(ctx, 'customer');
-      h += '<div class="field mt8"><label class="req">客户（挂账对象）</label>' +
+      h += '<div class="pay-debt"><div class="field"><label class="req">客户（挂账对象）</label>' +
         ui.select({
           name: 'customerId', value: form.customerId, on: 'field',
           options: [{ value: '', text: '选择客户' }].concat(customers.map(function (c) {
             return { value: c.id, text: c.name + (c.balance ? '（欠 ' + ui.money(c.balance) + '）' : '') };
           }))
         }) +
-        '<input class="input mt4" data-input="field" data-name="newCustomer" placeholder="或即时新建客户名称" value="' + esc(form.newCustomer) + '"></div>';
+        '<input class="input mt4" data-input="field" data-name="newCustomer" placeholder="或即时新建客户名称" value="' + esc(form.newCustomer) + '"></div></div>';
     }
-    h += '</div>';
 
-    // 右：备注 + 取消 / 保存并出单
-    h += '<div class="pay-col pay-note">' +
-      '<div class="field"><label>备注</label>' +
-      '<input class="input" data-input="field" data-name="note" placeholder="选填" value="' + esc(form.note) + '"></div>' +
-      '<div class="row mt8 pay-actions">' +
-      '<button class="btn" data-act="cancel-form">取消</button>' +
-      '<div class="spacer"></div>' +
-      '<button class="btn btn-primary btn-lg" data-act="save-sale">保存并出单</button>' +
-      '</div></div>';
-
-    h += '</div>'; // pay-grid
     h += '</div>'; // card
     h += '</div>'; // sale-bottom-pay
 
@@ -493,7 +494,7 @@
   }
 
   function payInput(label, name, val) {
-    return '<div><div class="small muted mb2">' + label + '</div>' +
+    return '<div class="pm-input"><div class="small muted mb2">' + label + '</div>' +
       '<input class="input" data-input="field" data-name="' + name + '" inputmode="decimal" placeholder="0" value="' + esc(val) + '"></div>';
   }
 

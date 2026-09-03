@@ -29,8 +29,14 @@ test('收款模块在底部横排（.sale-bottom-pay）', () => {
     '底部收款容器 .sale-bottom-pay 与上部两列之间有间距');
   assert.ok(desktop.includes('.sale-bottom-pay .pay-grid { display: flex; flex-wrap: wrap;'),
     '收款模块内为可换行的横向布局');
-  assert.ok(desktop.includes('.sale-bottom-pay .pay-methods-row { display: flex;'),
+  assert.ok(desktop.includes('.sale-bottom-pay .pay-methods { display: flex;'),
     '收款方式（微信/现金/支付宝）横向排布');
+  assert.ok(desktop.includes('.sale-bottom-pay .pay-stats { display: flex;'),
+    '实收/余款处理/欠款一行排布（非三行堆叠，降低高度）');
+  assert.ok(desktop.includes('.sale-bottom-pay .pay-note { display: flex; align-items: flex-end; gap: 12px; margin-left: auto;'),
+    '备注与按钮靠右、与左侧各项同一行');
+  assert.ok(desktop.includes('.sale-bottom-pay .pm-input { width: 88px; }'),
+    '每个收款方式输入框定宽 88px 紧凑排列');
 });
 
 test('列内卡片 flex:1 填满，应收合计卡保持自然高度', () => {

@@ -230,15 +230,23 @@
   .sale-top-col > div > .card { flex: 1; }
   .sale-col-order > .card:last-child { flex: 0 0 auto; } /* 中列「应收合计」卡保持自然高度 */
 
-  /* 底部收款模块（横跨整行）：收款方式 / 实收·余款·欠款 / 备注·按钮 三段横向排布 */
+  /* 底部收款模块（横跨整行，与上部选货+订单两列等宽）：
+   * 收款方式 / 实收·余款·欠款 / 备注·按钮 全部一行紧凑排布，显著降低模块高度；
+   * 挂账客户下拉在欠款时另起一行。 */
   .sale-bottom-pay { margin-top: 16px; }
-  .sale-bottom-pay .pay-grid { display: flex; flex-wrap: wrap; gap: 18px 32px; align-items: flex-start; }
-  .sale-bottom-pay .pay-col { flex: 1 1 220px; min-width: 0; }
-  .sale-bottom-pay .pay-methods { flex: 1 1 360px; }
-  .sale-bottom-pay .pay-methods-row { display: flex; gap: 12px; }
-  .sale-bottom-pay .pay-methods-row > div { flex: 1; min-width: 0; }
-  .sale-bottom-pay .pay-note .pay-actions { margin-top: 14px; }
-  .sale-bottom-pay .pay-note .btn-lg { width: auto; min-width: 180px; padding: 0 30px; }
+  .sale-bottom-pay .pay-grid { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 28px; }
+  .sale-bottom-pay .pay-methods { display: flex; align-items: flex-end; gap: 10px; }
+  .sale-bottom-pay .pm-label { font-size: 12px; color: #6B7280; padding-bottom: 9px; white-space: nowrap; }
+  .sale-bottom-pay .pm-input { width: 88px; }
+  .sale-bottom-pay .pm-input .input { width: 100%; }
+  .sale-bottom-pay .pay-stats { display: flex; align-items: center; gap: 20px; }
+  .sale-bottom-pay .stat { display: flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
+  .sale-bottom-pay .pay-note { display: flex; align-items: flex-end; gap: 12px; margin-left: auto; }
+  .sale-bottom-pay .pm-note { width: 150px; }
+  .sale-bottom-pay .pm-note .input { width: 100%; }
+  .sale-bottom-pay .pay-actions { display: flex; align-items: center; gap: 10px; }
+  .sale-bottom-pay .pay-actions .btn-lg { width: auto; min-width: 160px; padding: 0 28px; }
+  .sale-bottom-pay .pay-debt { margin-top: 12px; }
 
   .checkout-bar {
     position: sticky;
