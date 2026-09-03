@@ -357,11 +357,10 @@
       '<span class="desc">' + list.length + ' 张单，未结 ' + ui.money(totals.debt) + '</span>' +
       '<div class="actions"><button class="btn btn-primary" data-act="open-new">＋ 新建进货单</button></div></div>';
 
-    h += '<div class="card">' + ui.searchBar({ value: state.keyword, placeholder: '搜索单号 / 供应商 / 品牌 / 型号', scan: false });
-    h += '<div class="row wrap">' +
-      '<input class="input" type="date" data-change="filter" data-name="from" value="' + esc(state.from) + '">' +
-      '<input class="input" type="date" data-change="filter" data-name="to" value="' + esc(state.to) + '">' +
-      ui.select({
+    // 搜索模块重排（参考记账中心）：第 1 行 = 搜索框 + 供应商下拉；第 2 行 = 起止日期
+    h += '<div class="card">' + ui.searchBar({
+      value: state.keyword, placeholder: '搜索单号 / 供应商 / 品牌 / 型号', scan: false,
+      filters: ui.select({
         name: 'partnerId',
         value: state.partnerId,
         on: 'filter',
@@ -370,7 +369,11 @@
             return { value: p.id, text: p.name };
           })
         )
-      }) +
+      })
+    });
+    h += '<div class="row">' +
+      '<input class="input" type="date" data-change="filter" data-name="from" value="' + esc(state.from) + '">' +
+      '<input class="input" type="date" data-change="filter" data-name="to" value="' + esc(state.to) + '">' +
       '</div></div>';
 
     if (!pg.items.length) {

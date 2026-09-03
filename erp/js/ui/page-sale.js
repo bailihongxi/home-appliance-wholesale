@@ -574,18 +574,22 @@
       '<span class="desc">' + list.length + ' 张单</span>' +
       '<div class="actions"><button class="btn btn-primary" data-act="open-new">＋ 销售开单</button></div></div>';
 
-    h += '<div class="card">' + ui.searchBar({ value: state.keyword, placeholder: '搜索单号 / 客户 / 品牌 / 型号', scan: false });
-    h += '<div class="row wrap">' +
-      '<input class="input" type="date" data-change="filter" data-name="from" value="' + esc(state.from) + '">' +
-      '<input class="input" type="date" data-change="filter" data-name="to" value="' + esc(state.to) + '">' +
-      ui.select({
+    // 搜索模块重排（参考记账中心）：第 1 行 = 搜索框 + 类型下拉；第 2 行 = 起止日期
+    h += '<div class="card">' + ui.searchBar({
+      value: state.keyword, placeholder: '搜索单号 / 客户 / 品牌 / 型号', scan: false,
+      filters: ui.select({
         name: 'typeFilter', value: state.typeFilter, on: 'filter',
         options: [
           { value: 'all', text: '全部类型' },
           { value: 'sale', text: '销售' },
           { value: 'refund', text: '退货' }
         ]
-      }) + '</div></div>';
+      })
+    });
+    h += '<div class="row">' +
+      '<input class="input" type="date" data-change="filter" data-name="from" value="' + esc(state.from) + '">' +
+      '<input class="input" type="date" data-change="filter" data-name="to" value="' + esc(state.to) + '">' +
+      '</div></div>';
 
     if (!pg.items.length) {
       h += '<div class="card">' + ui.empty('还没有销售单，去开一单吧') + '</div>';

@@ -269,3 +269,14 @@ test('斑马纹-基础样式含交替行底色规则', () => {
   assert.ok(css.includes('tbl-striped'), 'CSS 含斑马纹规则');
   assert.ok(css.includes('nth-child(even)'), '偶数行交替底色');
 });
+
+test('搜索模块：搜索框 + 状态下拉同一行（searchBar filters）', () => {
+  const ctx = newCtx();
+  const st = page.init();
+  const html = page.render(ctx, st);
+  const sb = html.indexOf('data-input="keyword"');
+  const status = html.indexOf('data-name="filterStatus"');
+  assert.ok(sb >= 0, '搜索框存在');
+  assert.ok(status > sb && status - sb < 200, '状态下拉与搜索框同一行（filters 内）');
+  assert.ok(html.includes('全部状态'), '状态下拉含全部状态');
+});

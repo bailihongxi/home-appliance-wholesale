@@ -146,3 +146,17 @@ test('进货选货区：默认每页 15 条 + 斑马纹 + 分页导航（pick-pa
   page.actions['form-keyword'](ctx, state, { value: '品牌1' });
   assert.strictEqual(state.form.pickPage, 1, '搜索词变化回到选货第 1 页');
 });
+
+test('进货列表搜索模块：第1行搜索+供应商、第2行日期', () => {
+  const ctx = newCtx();
+  const st = fresh(ctx);
+  st.tab = 'list';
+  const html = page.render(ctx, st);
+  const sb = html.indexOf('data-input="keyword"');
+  const sup = html.indexOf('data-name="partnerId"');
+  assert.ok(sb >= 0, '搜索框存在');
+  assert.ok(sup > sb && sup - sb < 200, '供应商下拉与搜索框同一行（filters 内）');
+  assert.ok(html.includes('全部供应商'), '供应商下拉含全部供应商');
+  const from = html.indexOf('data-name="from"');
+  assert.ok(from > sup, '日期选择在第二行');
+});

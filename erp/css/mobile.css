@@ -42,8 +42,11 @@
   .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
   .grid-4 { grid-template-columns: repeat(4, 1fr); }
   .grid-3 { grid-template-columns: repeat(3, 1fr); }
-  /* 库存紧凑统计卡：移动端 4 列（宽度减半），间距收紧 */
-  .stat-grid-compact { grid-template-columns: repeat(4, 1fr); gap: 3px; }
+  /* 库存紧凑统计卡：移动端 2 列（每列够宽容纳 label+数字，避免撑破/截断），数字保持醒目 */
+  .stat-grid-compact { grid-template-columns: repeat(2, 1fr); gap: 5px; }
+  .stat-grid-compact .stat-card { min-height: 26px; padding: 3px 7px; }
+  .stat-grid-compact .stat-card .label { font-size: 11px; }
+  .stat-grid-compact .stat-card .value { font-size: 20px; margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* 记账中心头部：窄屏允许换行，统计横排紧凑 */
   .account-head { flex-wrap: wrap; row-gap: 6px; }

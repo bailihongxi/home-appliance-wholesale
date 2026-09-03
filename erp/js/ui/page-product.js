@@ -293,9 +293,9 @@
       '<button class="btn btn-primary" data-act="open-new">＋ 新建商品</button>' +
       '</div></div>';
 
-    h += '<div class="card">' + ui.searchBar({ value: state.keyword, placeholder: '搜索 品牌 / 型号 / 类型 / 条码' });
-    h += '<div class="row wrap">' +
-      ui.select({
+    h += '<div class="card">' + ui.searchBar({
+      value: state.keyword, placeholder: '搜索 品牌 / 型号 / 类型 / 条码',
+      filters: ui.select({
         name: 'filterStatus',
         value: state.filterStatus,
         on: 'filter',
@@ -304,8 +304,8 @@
           { value: 'on', text: '在售' },
           { value: 'off', text: '停售' }
         ]
-      }) +
-      '</div></div>';
+      })
+    }) + '</div>';
 
     if (!pg.items.length) {
       h += '<div class="card">' + ui.empty('没有匹配的商品，点右上角「新建商品」添加') + '</div>';

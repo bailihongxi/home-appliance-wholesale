@@ -246,3 +246,17 @@ test('选货区：默认每页 15 条 + 斑马纹 + 分页导航（pick-page）'
   page.actions['keyword'](ctx, state, { value: '品牌1' });
   assert.strictEqual(state.form.pickPage, 1, '搜索词变化回到选货第 1 页');
 });
+
+test('销售列表搜索模块：第1行搜索+类型、第2行日期', () => {
+  const ctx = newCtx();
+  const state = page.init();
+  state.tab = 'list';
+  const html = page.render(ctx, state);
+  const sb = html.indexOf('data-input="keyword"');
+  const type = html.indexOf('data-name="typeFilter"');
+  assert.ok(sb >= 0, '搜索框存在');
+  assert.ok(type > sb && type - sb < 200, '类型下拉与搜索框同一行（filters 内）');
+  assert.ok(html.includes('全部类型'), '类型下拉含全部类型');
+  const from = html.indexOf('data-name="from"');
+  assert.ok(from > type, '日期选择在第二行');
+});

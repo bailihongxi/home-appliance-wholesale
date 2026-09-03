@@ -119,11 +119,13 @@ test('统计卡片 CSS：内边距/高度/间距减半 + 数字图标放大两�
   assert.ok(compactBlock.includes('min-height: 20px'), '卡片最小高度减半（20px）');
   assert.ok(compactBlock.includes('.stat-grid-compact .stat-card .value { font-size: 24px'), '数字扩大近两倍（24px）');
   assert.ok(compactBlock.includes('width: 30px'), '图标扩大近两倍（30px）');
-  // 桌面/移动端均保持 4 列（卡片宽度减半）+ 收紧间距
+  // 桌面保持 4 列并收紧间距
   const desktop = fs.readFileSync(path.join(__dirname, '..', 'css', 'desktop.css'), 'utf8');
   assert.ok(desktop.includes('.stat-grid-compact { grid-template-columns: repeat(4, 1fr); gap: 3px; }'),
     '桌面保持 4 列并收紧间距');
+  // 移动端 2 列适配屏幕宽度（避免 4 列过窄撑破/截断），数字防溢出
   const mobile = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
-  assert.ok(mobile.includes('.stat-grid-compact { grid-template-columns: repeat(4, 1fr); gap: 3px; }'),
-    '移动端改为 4 列（卡片宽度减半）');
+  assert.ok(mobile.includes('.stat-grid-compact { grid-template-columns: repeat(2, 1fr); gap: 5px; }'),
+    '移动端改为 2 列适配屏幕宽度（修复撑破）');
+  assert.ok(mobile.includes('text-overflow: ellipsis'), '移动端数值超长防溢出截断');
 });
