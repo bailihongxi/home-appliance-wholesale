@@ -216,19 +216,29 @@
   /* 双列：列表 + 详情 */
   .two-col { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
 
-  /* v2 电脑端开单页：3 列布局。
-   * 列等高（align-items: stretch）+ 三栏撑满视口剩余高度（min-height），
-   * 列内卡片 flex:1 填满 —— 消除内容不足时页面底部大片空白，各模块（选货/订单/收款）显示全面。 */
-  .sale-three-col {
+  /* v2 电脑端开单页：上部两列（选货 + 订单）+ 底部收款横排。
+   * 顶部两列列等高（align-items: stretch）+ 撑满视口剩余高度（min-height），列内卡片 flex:1 填满；
+   * 收款模块放到网页底部（选货区与当前订单的下边），横向排布显示全面。 */
+  .sale-top-col {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 360px 240px;
+    grid-template-columns: minmax(0, 1fr) 400px;
     gap: 16px;
     align-items: stretch;
     min-height: calc(100vh - var(--topbar-h) - 124px); /* 124 = .app-main 上下 padding 24+40 + 顶部余量 */
   }
-  .sale-three-col > div { display: flex; flex-direction: column; min-width: 0; }
-  .sale-three-col > div > .card { flex: 1; }
+  .sale-top-col > div { display: flex; flex-direction: column; min-width: 0; }
+  .sale-top-col > div > .card { flex: 1; }
   .sale-col-order > .card:last-child { flex: 0 0 auto; } /* 中列「应收合计」卡保持自然高度 */
+
+  /* 底部收款模块（横跨整行）：收款方式 / 实收·余款·欠款 / 备注·按钮 三段横向排布 */
+  .sale-bottom-pay { margin-top: 16px; }
+  .sale-bottom-pay .pay-grid { display: flex; flex-wrap: wrap; gap: 18px 32px; align-items: flex-start; }
+  .sale-bottom-pay .pay-col { flex: 1 1 220px; min-width: 0; }
+  .sale-bottom-pay .pay-methods { flex: 1 1 360px; }
+  .sale-bottom-pay .pay-methods-row { display: flex; gap: 12px; }
+  .sale-bottom-pay .pay-methods-row > div { flex: 1; min-width: 0; }
+  .sale-bottom-pay .pay-note .pay-actions { margin-top: 14px; }
+  .sale-bottom-pay .pay-note .btn-lg { width: auto; min-width: 180px; padding: 0 30px; }
 
   .checkout-bar {
     position: sticky;

@@ -338,7 +338,7 @@
     var h = '<div class="page-head"><h2>销售开单</h2>' +
       '<span class="desc">搜索选品 → 点「加入」加单 → 每行可切批发/零售价 → 收款保存</span></div>';
 
-    h += '<div class="sale-three-col">';
+    h += '<div class="sale-top-col">';
 
     /* ---------- 左列：选货区 ---------- */
     h += '<div class="sale-col-pick">';
@@ -423,16 +423,21 @@
     h += '</div>';
     h += '</div>';
 
-    /* ---------- 右列：收款 ---------- */
-    h += '<div class="sale-col-pay">';
+    /* ---------- 底部：收款（横跨整行，非右列） ---------- */
+    h += '<div class="sale-bottom-pay">';
     h += '<div class="card"><div class="card-title">收款</div>';
-    h += '<div class="field"><label>收款（元）</label>' +
-      '<div class="grid grid-3">' +
+    h += '<div class="pay-grid">';
+
+    // 左：收款方式（微信 / 现金 / 支付宝）
+    h += '<div class="pay-col pay-methods"><div class="small muted mb2">收款（元）</div>' +
+      '<div class="pay-methods-row">' +
       payInput('微信', 'pay.wechat', form.pay.wechat) +
       payInput('现金', 'pay.cash', form.pay.cash) +
       payInput('支付宝', 'pay.alipay', form.pay.alipay) +
       '</div></div>';
 
+    // 中：实收 / 余款处理 / 欠款（挂账客户）
+    h += '<div class="pay-col pay-stats">';
     h += '<div class="row between"><span class="muted">实收</span><span class="strong">' + ui.money(t.received) + '</span></div>';
     h += '<div class="row between mt4"><span class="muted">余款处理</span>' +
       '<button class="btn btn-sm ' + (form.useDebt ? 'btn-primary' : '') + '" data-act="toggle-debt">' +
@@ -451,19 +456,23 @@
         }) +
         '<input class="input mt4" data-input="field" data-name="newCustomer" placeholder="或即时新建客户名称" value="' + esc(form.newCustomer) + '"></div>';
     }
+    h += '</div>';
 
-    h += '<div class="field mt8"><label>备注</label>' +
-      '<input class="input" data-input="field" data-name="note" placeholder="选填" value="' + esc(form.note) + '"></div>';
-
-    h += '<div class="row mt8">' +
+    // 右：备注 + 取消 / 保存并出单
+    h += '<div class="pay-col pay-note">' +
+      '<div class="field"><label>备注</label>' +
+      '<input class="input" data-input="field" data-name="note" placeholder="选填" value="' + esc(form.note) + '"></div>' +
+      '<div class="row mt8 pay-actions">' +
       '<button class="btn" data-act="cancel-form">取消</button>' +
       '<div class="spacer"></div>' +
       '<button class="btn btn-primary btn-lg" data-act="save-sale">保存并出单</button>' +
-      '</div>';
-    h += '</div>';
-    h += '</div>';
+      '</div></div>';
 
-    h += '</div>'; // sale-three-col
+    h += '</div>'; // pay-grid
+    h += '</div>'; // card
+    h += '</div>'; // sale-bottom-pay
+
+    h += '</div>'; // sale-top-col
     return h;
   }
 

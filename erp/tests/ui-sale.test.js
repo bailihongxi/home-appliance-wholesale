@@ -161,3 +161,18 @@ test('扫码加单：scan-input 按条码定位商品', () => {
   assert.strictEqual(state.form.items.length, 1);
   assert.strictEqual(state.form.items[0].productId, p2.id);
 });
+
+test('收款模块在页面底部横排（sale-bottom-pay + pay-grid，非右列 sale-col-pay）', () => {
+  const ctx = newCtx();
+  const state = fresh(ctx);
+  state.tab = 'new';
+  const html = page.render(ctx, state);
+  // 收款模块在底部容器中
+  assert.ok(html.includes('sale-bottom-pay'), '收款模块位于底部容器');
+  assert.ok(html.includes('pay-grid'), '收款内部为横向排布容器');
+  assert.ok(html.includes('pay-methods-row'), '收款方式（微信/现金/支付宝）横向');
+  // 不再出现旧右列结构
+  assert.ok(!html.includes('sale-col-pay'), '收款不再作为右侧独立列');
+  // 上部两列容器存在
+  assert.ok(html.includes('sale-top-col'), '上部两列容器（选货+订单）存在');
+});
