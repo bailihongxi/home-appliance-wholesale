@@ -23,7 +23,45 @@
     border-right: 1px solid var(--c-border);
     padding: 0;
     z-index: 30;
+    transition: width .18s ease, flex-basis .18s ease;
   }
+  .app-sidebar .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 16px;
+    font-weight: 700;
+    color: var(--c-mint-700);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  /* 折叠/展开按钮：吸顶右侧 */
+  .app-sidebar .side-toggle {
+    position: sticky;
+    top: 8px;
+    display: block;
+    margin: 0 8px 4px auto;
+    width: 26px;
+    height: 26px;
+    line-height: 1;
+    border: 1px solid var(--c-border);
+    border-radius: 7px;
+    background: #fff;
+    color: var(--c-text-sub);
+    font-size: 11px;
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease;
+    z-index: 1;
+  }
+  .app-sidebar .side-toggle:hover { background: var(--c-mint-50); color: var(--c-mint-700); }
+  /* 折叠态：收窄为图标栏，隐藏文字 */
+  .app-sidebar.collapsed { width: 60px; flex-basis: 60px; }
+  .app-sidebar.collapsed .brand { justify-content: center; padding: 14px 0; }
+  .app-sidebar.collapsed .brand span { display: none; }
+  .app-sidebar.collapsed .side-toggle { margin: 0 17px 4px; }
+  .app-sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; }
+  .app-sidebar.collapsed .nav-item span:not(.ico) { display: none; }
+  .app-sidebar.collapsed .nav-item .ico { width: auto; font-size: 17px; }
   .app-sidebar .nav-list {
     display: flex;
     flex-direction: column;

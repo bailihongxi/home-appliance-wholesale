@@ -517,6 +517,38 @@
   }
   app.navItems = navItems;
 
+  // 电脑端侧栏导航顺序（用户指定）：首页→进货→销售→档案→库存→记账→报表→退换→供应商→客户→我的→账户权限
+  function desktopNavOrder() {
+    return ['home', 'purchase', 'sale', 'product', 'inventory', 'account', 'report', 'exchange', 'supplier', 'customer', 'mine', 'admin'];
+  }
+  app.desktopNavOrder = desktopNavOrder;
+
+  // 电脑端侧栏折叠：切换 collapsed class + 记忆到 localStorage（收起后仅保留图标）
+  function toggleSidebar() {
+    var side = document.querySelector('.app-sidebar');
+    if (!side) return;
+    var collapsed = side.classList.toggle('collapsed');
+    try {
+      localStorage.setItem('erp_sidebar_collapsed', collapsed ? '1' : '0');
+    } catch (e) { /* ignore */ }
+    var btn = document.querySelector('.side-toggle');
+    if (btn) btn.innerHTML = collapsed ? '▶' : '◀';
+  }
+  app.toggleSidebar = toggleSidebar;
+
+  function applySidebarState() {
+    var side = document.querySelector('.app-sidebar');
+    if (!side) return;
+    var collapsed = false;
+    try {
+      collapsed = localStorage.getItem('erp_sidebar_collapsed') === '1';
+    } catch (e) { /* ignore */ }
+    if (collapsed) side.classList.add('collapsed');
+    var btn = document.querySelector('.side-toggle');
+    if (btn) btn.innerHTML = collapsed ? '▶' : '◀';
+  }
+  app.applySidebarState = applySidebarState;
+
   function renderNav(page) {
     var bar = document.querySelector('.app-tabbar');
     var side = document.querySelector('.app-sidebar .nav-list');
@@ -534,14 +566,16 @@
         .join('');
     }
     if (side) {
-      side.innerHTML = router()
-        .all()
-        .filter(function (p) {
-          return !p.hideInNav;
-        })
+      // 侧栏：按 desktopNavOrder 重排 + 支持 navTitle 自定义导航显示名
+      var byName = {};
+      router().all().forEach(function (p) { byName[p.name] = p; });
+      side.innerHTML = desktopNavOrder()
+        .map(function (n) { return byName[n]; })
+        .filter(function (p) { return p && !p.hideInNav; })
         .map(function (p) {
+          var label = p.navTitle || p.title || p.name;
           return '<button class="nav-item' + (p.name === page.name ? ' on' : '') + '" data-act="nav" data-page="' + p.name + '">' +
-            '<span class="ico">' + (p.icon || '·') + '</span><span>' + (p.title || p.name) + '</span></button>';
+            '<span class="ico">' + (p.icon || '·') + '</span><span>' + label + '</span></button>';
         })
         .join('');
     }
@@ -564,6 +598,7 @@
       if (alertCount > 0) bellDot.classList.remove('hidden');
       else bellDot.classList.add('hidden');
     }
+    applySidebarState();
   }
 
   /* 动态 favicon：跟随账号自定义头像（settings.avatar）；未设置则用电器版默认图标 */
@@ -581,6 +616,10 @@
   app.actions = {
     nav: function (ctx, state, el) {
       router().go(el.getAttribute('data-page'));
+      return false;
+    },
+    'toggle-side': function (ctx, state, el) {
+      toggleSidebar();
       return false;
     }
   };

@@ -47,6 +47,7 @@
   var page = {
     name: 'product',
     title: '商品档案',
+    navTitle: '档案管理', // 侧栏导航显示名（页面标题仍为「商品档案」）
     icon: '📦',
 
     init: function () {
