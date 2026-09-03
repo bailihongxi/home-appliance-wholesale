@@ -30,6 +30,7 @@
       };
     }
     product.stock = after;
+    product.updatedAt = util.nowISO(); // 库存变动时间戳，供跨端同步按“较新”合并
     ctx.touch('products', product);
 
     var log = {

@@ -355,9 +355,9 @@
     return parts.length ? parts.join(' / ') : '空账本';
   };
 
-  /** 把云端明文快照覆盖到本地（复用 backup.restore 的校验 + 迁移） */
-  sync.applySnapshotText = function applySnapshotText(ctx, text) {
-    return backup.restore(ctx, text);
+  /** 把云端明文快照落地到本地（复用 backup.restore 的校验 + 迁移；opts.merge 启用记录级合并） */
+  sync.applySnapshotText = function applySnapshotText(ctx, text, opts) {
+    return backup.restore(ctx, text, opts);
   };
 
   /* ---------------- GitHub Contents API ---------------- */
@@ -646,9 +646,9 @@
   };
 
   /**
-   * 一键恢复（智能比对）：下载 → 解密 → 对比本地与云端内容指纹。
+   * 一键恢复（智能合并）：下载 → 解密 → 对比本地与云端内容指纹。
    *  - 内容一致 → 无需恢复（skipped:true，不覆盖本地）
-   *  - 有差异   → 用云端快照覆盖本地
+   *  - 有差异   → 用云端快照与本地做记录级合并（保留两端独立更新，同主键取较新）
    */
   sync.syncDown = function syncDown(ctx, cfg, fetchImpl) {
     var v = sync.validateConfig(cfg);
@@ -670,7 +670,7 @@
                 reason: '本地与云端一致，无需恢复'
               };
             }
-            var r = sync.applySnapshotText(ctx, text);
+            var r = sync.applySnapshotText(ctx, text, { merge: true });
             if (!r.ok) throw new Error(r.error);
             return {
               ok: true,
