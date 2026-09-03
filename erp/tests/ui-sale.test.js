@@ -155,7 +155,8 @@ test('列表渲染：销售记录含品牌型号', () => {
   assert.ok(detail.includes('BCD-200'));
   assert.ok(detail.includes('零售'), '详情显示价格类型');
   assert.ok(detail.includes('data-act="print-doc"'), '单据弹层有打印按钮');
-  assert.ok(detail.includes('>打印<'), '打印按钮文案');
+  assert.ok(detail.includes('>打印带价<'), '带价打印按钮');
+  assert.ok(detail.includes('>打印无价<'), '无价打印按钮');
 });
 
 test('扫码加单：scan-input 按条码定位商品', () => {

@@ -102,7 +102,8 @@
         var no = el.getAttribute('data-no');
         var doc = ctx.getDoc('sales', no);
         if (!doc) return;
-        var html = printDoc.buildDocHtml(ctx, doc, 'sale');
+        var withPrice = el.getAttribute('data-price') !== '0';
+        var html = printDoc.buildDocHtml(ctx, doc, 'sale', { withPrice: withPrice });
         printDoc.openPrint(html);
       },
 
@@ -658,7 +659,8 @@
       (doc.discount ? '（折扣 ' + ui.money(doc.discount) + '）' : '') +
       '　实收 ' + ui.money(doc.received) + '　欠款 ' + ui.money(doc.debt) +
       (isRefund ? '　红冲 ' + esc(doc.refNo) : '') + '</span>' +
-      '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '">打印</button>' +
+      '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="1">打印带价</button>' +
+      '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="0">打印无价</button>' +
       '<button class="btn btn-sm" data-act="close-view">关闭</button></div></div>';
     return h;
   }

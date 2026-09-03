@@ -45,9 +45,12 @@
     '.doc-foot { margin-top: 4px; text-align: right; font-size: 10px; color: #555; }'
   ].join('\n');
 
-  /** 生成单据打印 HTML */
-  function buildDocHtml(ctx, doc, kind) {
+  /** 生成单据打印 HTML
+   *  @param opts {withPrice:boolean} withPrice===false 输出“版本1 不带价格”纯清单；默认 true 输出“版本2 带价格”完整单据
+   */
+  function buildDocHtml(ctx, doc, kind, opts) {
     var settings = (ctx && ctx.settings) || {};
+    var withPrice = !opts || opts.withPrice !== false;
     var shop = settings.shopName || '家电批发';
     var isSale = kind === 'sale';
     var title = isSale ? '销售单' : '进货单';
@@ -66,10 +69,14 @@
 
     // 表头
     h += '<table><thead><tr><th>#</th><th>品牌</th><th>型号</th><th>单位</th>';
-    if (isSale) {
-      h += '<th>价格</th><th class="num">单价</th><th class="num">数量</th><th class="num">金额</th>';
+    if (withPrice) {
+      if (isSale) {
+        h += '<th>价格</th><th class="num">单价</th><th class="num">数量</th><th class="num">金额</th>';
+      } else {
+        h += '<th class="num">成本</th><th class="num">数量</th><th class="num">金额</th>';
+      }
     } else {
-      h += '<th class="num">成本</th><th class="num">数量</th><th class="num">金额</th>';
+      h += '<th class="num">数量</th>';
     }
     h += '</tr></thead><tbody>';
 
@@ -81,30 +88,39 @@
         '<td>' + esc(it.brand || '') + '</td>' +
         '<td>' + esc(it.model || '') + (isGift ? '（赠）' : '') + '</td>' +
         '<td>' + esc(it.unit || '') + '</td>';
-      if (isSale) {
-        var pt = it.priceType === schema.PRICE_TYPE.WHOLESALE ? '批发' : '零售';
-        h += '<td>' + (isGift ? '赠送' : pt) + '</td>' +
-          '<td class="num">' + (isGift ? '—' : util.fmtYuan(it.price)) + '</td>' +
-          '<td class="num">' + it.qty + '</td>' +
-          '<td class="num">' + util.fmtYuan(amount) + '</td>';
+      if (withPrice) {
+        if (isSale) {
+          var pt = it.priceType === schema.PRICE_TYPE.WHOLESALE ? '批发' : '零售';
+          h += '<td>' + (isGift ? '赠送' : pt) + '</td>' +
+            '<td class="num">' + (isGift ? '—' : util.fmtYuan(it.price)) + '</td>' +
+            '<td class="num">' + it.qty + '</td>' +
+            '<td class="num">' + util.fmtYuan(amount) + '</td>';
+        } else {
+          h += '<td class="num">' + util.fmtYuan(it.costPrice) + '</td>' +
+            '<td class="num">' + it.qty + '</td>' +
+            '<td class="num">' + util.fmtYuan(it.amount) + '</td>';
+        }
       } else {
-        h += '<td class="num">' + util.fmtYuan(it.costPrice) + '</td>' +
-          '<td class="num">' + it.qty + '</td>' +
-          '<td class="num">' + util.fmtYuan(it.amount) + '</td>';
+        h += '<td class="num">' + it.qty + '</td>';
       }
       h += '</tr>';
     });
     h += '</tbody></table>';
 
     // 合计
-    if (isSale) {
-      h += '<div class="doc-total">应收：<b>' + util.fmtYuan(doc.payable) + '</b>' +
-        (doc.discount ? '（折扣 ' + util.fmtYuan(doc.discount) + '）' : '') +
-        '　实收：' + util.fmtYuan(doc.received) + '　欠款：' + util.fmtYuan(doc.debt) + '</div>';
-      if (doc.note) h += '<div class="doc-note">备注：' + esc(doc.note) + '</div>';
+    if (withPrice) {
+      if (isSale) {
+        h += '<div class="doc-total">应收：<b>' + util.fmtYuan(doc.payable) + '</b>' +
+          (doc.discount ? '（折扣 ' + util.fmtYuan(doc.discount) + '）' : '') +
+          '　实收：' + util.fmtYuan(doc.received) + '　欠款：' + util.fmtYuan(doc.debt) + '</div>';
+        if (doc.note) h += '<div class="doc-note">备注：' + esc(doc.note) + '</div>';
+      } else {
+        h += '<div class="doc-total">合计：<b>' + util.fmtYuan(doc.total) + '</b>' +
+          '　已付：' + util.fmtYuan(doc.paid) + '　欠款：' + util.fmtYuan(doc.debt) + '</div>';
+        if (doc.note) h += '<div class="doc-note">备注：' + esc(doc.note) + '</div>';
+      }
     } else {
-      h += '<div class="doc-total">合计：<b>' + util.fmtYuan(doc.total) + '</b>' +
-        '　已付：' + util.fmtYuan(doc.paid) + '　欠款：' + util.fmtYuan(doc.debt) + '</div>';
+      h += '<div class="doc-total">共 ' + qty + ' 件</div>';
       if (doc.note) h += '<div class="doc-note">备注：' + esc(doc.note) + '</div>';
     }
 

@@ -279,7 +279,8 @@
         var no = el.getAttribute('data-no');
         var doc = ctx.getDoc('purchases', no);
         if (!doc) return;
-        var html = printDoc.buildDocHtml(ctx, doc, 'purchase');
+        var withPrice = el.getAttribute('data-price') !== '0';
+        var html = printDoc.buildDocHtml(ctx, doc, 'purchase', { withPrice: withPrice });
         printDoc.openPrint(html);
       },
 
@@ -429,7 +430,8 @@
     h += '</tbody></table></div>' +
       '<div class="row between mt8"><span class="muted">合计 ' + qty + ' 件 · ' + ui.money(doc.total) +
       '（已付 ' + ui.money(doc.paid) + '，欠款 ' + ui.money(doc.debt) + '）</span>' +
-      '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '">打印</button>' +
+      '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="1">打印带价</button>' +
+      '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="0">打印无价</button>' +
       '<button class="btn btn-sm" data-act="close-view">关闭</button></div></div>';
     return h;
   }

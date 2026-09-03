@@ -77,3 +77,34 @@ test('进货单打印 HTML：成本价字段与合计已付欠款', () => {
   assert.ok(html.includes('已付'), '已付');
   assert.ok(html.includes('欠款'), '欠款');
 });
+
+test('问题2-打印版本2（默认/带价格）：销售单含价格类型/单价/金额', () => {
+  const ctx = newCtx({ shopName: '幸福家电批发' });
+  const html = printDoc.buildDocHtml(ctx, saleDoc(), 'sale', { withPrice: true });
+  assert.ok(html.includes('<th>价格</th>'), '带价格列');
+  assert.ok(html.includes('单价'), '含单价');
+  assert.ok(html.includes('金额'), '含金额');
+  assert.ok(html.includes('应收'), '含应收合计');
+  // 默认（不传 opts）也带价格
+  const htmlDefault = printDoc.buildDocHtml(ctx, saleDoc(), 'sale');
+  assert.ok(htmlDefault.includes('单价'), '默认带价格');
+});
+
+test('问题2-打印版本1（不带价格）：销售单纯清单，无任何价格/金额', () => {
+  const ctx = newCtx({ shopName: '幸福家电批发' });
+  const html = printDoc.buildDocHtml(ctx, saleDoc(), 'sale', { withPrice: false });
+  assert.ok(!html.includes('<th>价格</th>'), '无价格类型列');
+  assert.ok(!html.includes('单价'), '无单价列');
+  assert.ok(!html.includes('金额'), '无金额列');
+  assert.ok(!html.includes('应收'), '无应收合计');
+  assert.ok(!html.includes('实收'), '无实收');
+  assert.ok(!html.includes('欠款'), '无欠款');
+  assert.ok(html.includes('共 4 件'), '保留件数合计');
+  assert.ok(html.includes('海尔'), '明细保留');
+  assert.ok(html.includes('BCD-200'), '型号保留');
+  // 版本1 进货单：无成本列
+  const ph = printDoc.buildDocHtml(ctx, purchaseDoc(), 'purchase', { withPrice: false });
+  assert.ok(!ph.includes('成本'), '进货单版本1 无成本列');
+  assert.ok(!ph.includes('合计'), '进货单版本1 无金额合计');
+  assert.ok(ph.includes('共 15 件'), '进货单版本1 保留件数');
+});
