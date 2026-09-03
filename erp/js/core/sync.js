@@ -523,6 +523,17 @@
 
   /* ---------------- 高层流程 ---------------- */
 
+  /** 递归规范化：数组逐项处理、对象按键名排序 —— 使指纹与 JSON 字段顺序无关（跨设备/版本不误判为变更） */
+  function canonicalize(v) {
+    if (Array.isArray(v)) return v.map(canonicalize);
+    if (v && typeof v === 'object') {
+      var out = {};
+      Object.keys(v).sort().forEach(function (k) { out[k] = canonicalize(v[k]); });
+      return out;
+    }
+    return v;
+  }
+
   /**
    * 内容指纹（SHA-256）：对快照业务内容做稳定指纹，排除每次打包的动态 exportedAt。
    * 用于「本地 vs 云端」变更比对：指纹相同 = 内容一致，无需重新上传/恢复。
@@ -534,7 +545,7 @@
       var obj = JSON.parse(norm);
       if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
         delete obj.exportedAt; // 排除动态时间戳，只对业务内容取指纹
-        norm = JSON.stringify(obj);
+        norm = JSON.stringify(canonicalize(obj)); // 键名排序：字段顺序不同也判为同一内容
       }
     } catch (e) { /* 非 JSON：原样取指纹 */ }
     if (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.subtle) {

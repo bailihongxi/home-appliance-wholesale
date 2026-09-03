@@ -221,6 +221,23 @@ test('fingerprintOfText：排除 exportedAt，业务内容相同指纹相同、�
   assert.notStrictEqual(f3, f1, '业务变化后指纹不同');
 });
 
+test('fingerprintOfText：字段顺序不同但内容相同 → 指纹相同（跨设备/版本不误判为变更）', async () => {
+  const a = JSON.stringify({
+    b: 1, a: 2, c: { y: 1, x: 2 }, list: [3, 1, 2],
+    exportedAt: '2026-09-03T01:00:00'
+  });
+  const b = JSON.stringify({
+    exportedAt: '2026-09-03T02:00:00', c: { x: 2, y: 1 }, a: 2, b: 1, list: [3, 1, 2]
+  });
+  const fa = await sync.fingerprintOfText(a);
+  const fb = await sync.fingerprintOfText(b);
+  assert.strictEqual(fa, fb, '字段顺序不同、内容相同应指纹相同（不触发无意义上传/恢复）');
+  // 内容实际变化仍应判不同
+  const c = JSON.stringify({ b: 1, a: 3, c: { y: 1, x: 2 }, list: [3, 1, 2], exportedAt: '2026-09-03T03:00:00' });
+  const fc = await sync.fingerprintOfText(c);
+  assert.notStrictEqual(fc, fa, '值变化指纹仍应不同');
+});
+
 test('syncUp-内容一致：跳过上传，不产生提交（不发 PUT）', async () => {
   const ctx = newCtx();
   product.save(ctx, {
