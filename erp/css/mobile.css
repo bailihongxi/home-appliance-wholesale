@@ -57,6 +57,23 @@
   .account-head { flex-wrap: wrap; row-gap: 6px; }
   .account-head .account-tabs { margin-left: auto; }
 
+  /* 销售开单 · 手机端收款模块（修复乱套）：
+     覆盖 base 的 .pay-grid 4 列网格，改为纵向堆叠；收款方式三输入框并排、统计/按钮/备注换行排列 */
+  .sale-bottom-pay { margin-top: 14px; width: 100%; }
+  .sale-bottom-pay .pay-grid { display: flex; flex-direction: column; gap: 10px; }
+  .sale-bottom-pay .pay-row1 { display: flex; flex-direction: column; gap: 10px; }
+  .sale-bottom-pay .pay-methods { display: flex; align-items: flex-end; gap: 8px; }
+  .sale-bottom-pay .pay-methods .pm-label { display: none; } /* 手机端省略「收款（元）」标签，节省纵向空间 */
+  .sale-bottom-pay .pay-methods .pm-input { flex: 1 1 0; min-width: 0; }
+  .sale-bottom-pay .pay-methods .pm-input .input { width: 100%; }
+  .sale-bottom-pay .pay-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .sale-bottom-pay .stat { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  .sale-bottom-pay .pay-actions { display: flex; gap: 10px; }
+  .sale-bottom-pay .pay-actions .btn { flex: 1 1 0; }
+  .sale-bottom-pay .pay-note { width: 100%; min-width: 0; }
+  .sale-bottom-pay .pay-note .pm-note .input { width: 100%; }
+  .sale-bottom-pay .pay-debt { margin-top: 10px; }
+
   /* 首页显著「开单」按钮 - 手机尺寸 */
   .home-top { display: block; }
   .home-top .overview-head { padding: 12px 12px 4px; }

@@ -260,3 +260,19 @@ test('销售列表搜索模块：第1行搜索+类型、第2行日期', () => {
   const from = html.indexOf('data-name="from"');
   assert.ok(from > type, '日期选择在第二行');
 });
+
+test('手机端收款模块：覆盖 base 的 4 列网格改为纵向堆叠（修复乱套）', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
+  assert.ok(css.includes('.sale-bottom-pay .pay-grid { display: flex; flex-direction: column; gap: 10px; }'),
+    '手机端收款容器纵向堆叠（覆盖 base 4 列网格）');
+  assert.ok(css.includes('.sale-bottom-pay .pay-row1 { display: flex; flex-direction: column;'),
+    '第 1 行纵向排列');
+  assert.ok(css.includes('.sale-bottom-pay .pay-methods { display: flex; align-items: flex-end; gap: 8px; }'),
+    '收款方式三输入框并排');
+  assert.ok(css.includes('.sale-bottom-pay .pay-actions .btn { flex: 1 1 0; }'),
+    '取消/保存按钮等宽并排');
+  assert.ok(css.includes('.sale-bottom-pay .pay-note { width: 100%'),
+    '备注整行加长');
+});

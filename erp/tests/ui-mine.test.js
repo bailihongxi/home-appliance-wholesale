@@ -137,3 +137,13 @@ test('关于：版本号统一为 V3.2（与 PRD / 开发计划一致）', () =>
   assert.ok(!html.includes('版本：V3.1'), '不再显示旧版本号 V3.1');
   assert.ok(!html.includes('版本：V3.0'), '不再显示更旧版本号');
 });
+
+test('常用入口：开单改为「销售」，点击直接进入销售管理列表页（无 tab=new）', () => {
+  const { ctx, state } = fresh();
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('>销售<'), '常用入口显示「销售」');
+  assert.ok(!html.includes('开单'), '不再显示「开单」');
+  // sale 入口不带 query → 直接进入销售管理列表页
+  const m = html.match(/data-act="go" data-page="sale"[^>]*/);
+  assert.ok(m && !m[0].includes('data-query'), '销售入口无 query，直接进入销售管理列表页');
+});
