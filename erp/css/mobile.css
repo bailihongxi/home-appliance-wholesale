@@ -42,6 +42,8 @@
   .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
   .grid-4 { grid-template-columns: repeat(4, 1fr); }
   .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  /* 库存紧凑统计卡：移动端 4 列（宽度减半），间距收紧 */
+  .stat-grid-compact { grid-template-columns: repeat(4, 1fr); gap: 3px; }
 
   /* 记账中心头部：窄屏允许换行，统计横排紧凑 */
   .account-head { flex-wrap: wrap; row-gap: 6px; }

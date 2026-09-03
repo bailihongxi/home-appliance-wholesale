@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 const page = require('../js/ui/page-inventory.js');
 const { newCtx } = require('./helpers/ctx.js');
 const product = require('../js/core/product.js');
@@ -108,4 +110,20 @@ test('变动明细：show-logs 显示进货入库记录', () => {
   const html = page.render(ctx, st);
   assert.ok(html.includes('进货入库'));
   assert.ok(html.includes('+5'));
+});
+
+test('统计卡片 CSS：内边距/高度/间距减半 + 数字图标放大两倍', () => {
+  const base = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
+  const compactBlock = base.slice(base.indexOf('.stat-grid-compact'), base.indexOf('.stat {'));
+  assert.ok(compactBlock.includes('padding: 2px 5px'), '内边距减半（2px 5px）');
+  assert.ok(compactBlock.includes('min-height: 20px'), '卡片最小高度减半（20px）');
+  assert.ok(compactBlock.includes('.stat-grid-compact .stat-card .value { font-size: 24px'), '数字扩大近两倍（24px）');
+  assert.ok(compactBlock.includes('width: 30px'), '图标扩大近两倍（30px）');
+  // 桌面/移动端均保持 4 列（卡片宽度减半）+ 收紧间距
+  const desktop = fs.readFileSync(path.join(__dirname, '..', 'css', 'desktop.css'), 'utf8');
+  assert.ok(desktop.includes('.stat-grid-compact { grid-template-columns: repeat(4, 1fr); gap: 3px; }'),
+    '桌面保持 4 列并收紧间距');
+  const mobile = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
+  assert.ok(mobile.includes('.stat-grid-compact { grid-template-columns: repeat(4, 1fr); gap: 3px; }'),
+    '移动端改为 4 列（卡片宽度减半）');
 });
