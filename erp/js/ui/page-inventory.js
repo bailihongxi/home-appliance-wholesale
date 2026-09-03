@@ -63,8 +63,10 @@
         '<span class="desc">' + pageDesc(ctx, st) + '</span></div>' +
         (st.tab === 'list' ? desktopStats(ctx) : '') +
         desktopTabs(ctx, st) +
-        '<div class="card">' + ui.searchBar({ value: st.keyword, placeholder: '搜 品牌 / 型号 / 类型 / 条码' }) +
-        desktopFilters(ctx, st) +
+        '<div class="card">' + ui.searchBar({
+          value: st.keyword, placeholder: '搜 品牌 / 型号 / 类型 / 条码', scan: false,
+          filters: desktopFilters(ctx, st)
+        }) +
         '</div>' +
         body;
       return h;
@@ -228,11 +230,9 @@
       return { value: c, text: c };
     }));
     return (
-      '<div class="row wrap mt8">' +
-        ui.select({ name: 'cat', value: st.cat, on: 'filter', options: opts }) +
-        '<div class="spacer"></div>' +
-        '<button class="btn" data-act="reset-filter">重置</button>' +
-      '</div>'
+      ui.select({ name: 'cat', value: st.cat, on: 'filter', options: opts }) +
+      '<div class="spacer"></div>' +
+      '<button class="btn" data-act="reset-filter">重置</button>'
     );
   }
 

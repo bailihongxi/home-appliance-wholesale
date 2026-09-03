@@ -52,6 +52,23 @@ test('统计卡片紧凑化 + 列表斑马纹', () => {
   assert.ok(html.includes('资金占用'), '统计卡片保留资金占用');
 });
 
+test('搜索/分类/重置单行排布（searchBar filters 内）+ 取消扫码按钮', () => {
+  const ctx = seed(newCtx());
+  const st = fresh(ctx);
+  const html = page.render(ctx, st);
+  const sbStart = html.indexOf('data-input="keyword"');
+  const catSelect = html.indexOf('data-name="cat"');
+  const reset = html.indexOf('data-act="reset-filter"');
+  assert.ok(sbStart >= 0, '搜索框存在');
+  assert.ok(catSelect > sbStart, '分类下拉应紧跟搜索框在同一行');
+  assert.ok(reset > catSelect, '重置按钮与分类下拉同一行');
+  // searchBar 用 filters 承接 select+spacer+重置，整体在一个 row 内
+  const rowOpen = html.indexOf('data-input="keyword"');
+  const rowClose = html.indexOf('</div>', html.indexOf('data-act="reset-filter"'));
+  assert.ok(rowClose > rowOpen && rowClose - rowOpen < 600, '搜索/分类/重置应处于同一紧凑行');
+  assert.ok(!html.includes('data-act="scan"'), '库存搜索行取消扫码按钮，节省空间');
+});
+
 test('预警：低于阈值 3 显示，充足不显示', () => {
   const ctx = seed(newCtx({ defaultThreshold: 3 }));
   const st = fresh(ctx);
