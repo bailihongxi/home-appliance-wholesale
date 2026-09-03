@@ -169,6 +169,17 @@
   .page-head .desc { font-size: 13px; color: var(--c-text-sub); }
   .page-head .actions { margin-left: auto; display: flex; gap: 8px; }
 
+  /* 记账中心头部单行：标题 + 应付/应收合计（紧凑横排）+ 流水/应付/应收 按钮 */
+  .account-head { align-items: center; flex-wrap: nowrap; }
+  .account-head .account-sum { display: inline-flex; gap: 8px; flex: 0 0 auto; }
+  .account-head .account-sum .stat {
+    display: inline-flex; align-items: baseline; gap: 6px;
+    padding: 4px 12px; border-radius: 999px; box-shadow: none;
+  }
+  .account-head .account-sum .stat .k { font-size: 12px; white-space: nowrap; }
+  .account-head .account-sum .stat .v { font-size: 14px; margin-top: 0; white-space: nowrap; }
+  .account-head .account-tabs { margin-left: auto; display: inline-flex; gap: 6px; flex: 0 0 auto; }
+
   /* stat 4 列 */
   .stat-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; }
   .grid-4 { grid-template-columns: repeat(4, 1fr); }

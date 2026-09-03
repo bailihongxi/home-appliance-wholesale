@@ -181,12 +181,12 @@
 
   function pageHead(ctx, state) {
     var totals = debt.totals(ctx);
-    return '<div class="page-head"><h2>记账中心</h2>' +
-      '<div class="row wrap gap8">' +
+    return '<div class="page-head account-head"><h2>记账中心</h2>' +
+      '<div class="account-sum">' +
       ui.stat('应付合计', ui.money(totals.payable), 'warn') +
       ui.stat('应收合计', ui.money(totals.receivable), 'info') +
       '</div>' +
-      '<div class="tabs">' +
+      '<div class="account-tabs">' +
       tabBtn('flow', '流水', state) +
       tabBtn('payable', '应付', state) +
       tabBtn('receivable', '应收', state) +
@@ -194,7 +194,7 @@
   }
 
   function tabBtn(tab, text, state) {
-    return '<button class="tab' + (state.tab === tab ? ' on' : '') + '" data-act="tab" data-tab="' + tab + '">' + text + '</button>';
+    return '<button class="btn' + (state.tab === tab ? ' btn-primary' : '') + '" data-act="tab" data-tab="' + tab + '">' + text + '</button>';
   }
 
   /* ---------------- 流水 ---------------- */

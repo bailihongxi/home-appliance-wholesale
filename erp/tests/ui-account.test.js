@@ -40,3 +40,22 @@ test('筛选区两行排布：第1行 搜索框+全部类型，第2行 日期+�
   assert.ok(html.includes('btn-primary" data-act="open-manual"'), '记一笔按钮使用强调色 btn-primary');
   assert.ok(html.includes('＋ 记一笔'), '按钮文案为记一笔');
 });
+
+test('头部单行排布：标题 + 应付/应收合计 + 流水/应付/应收按钮 同一行', () => {
+  const ctx = newCtx();
+  const st = fresh(ctx);
+  const html = page.render(ctx, st);
+  assert.ok(html.includes('page-head account-head'), '记账中心头部使用单行专用布局');
+  assert.ok(html.includes('account-sum'), '应付/应收合计同处 account-sum');
+  // 应付/应收合计在标题之后、且比筛选区靠前（都在头部）
+  const h2 = html.indexOf('记账中心');
+  const sumStart = html.indexOf('account-sum');
+  assert.ok(sumStart > h2, '统计合计位于标题后');
+  // 流水/应付/应收 tab 使用 btn 样式（激活项 btn-primary）
+  assert.ok(html.includes('class="btn btn-primary" data-act="tab" data-tab="flow"'), '当前流水 tab 高亮 btn-primary');
+  assert.ok(html.includes('class="btn" data-act="tab" data-tab="payable"'), '应付 tab 用普通按钮');
+  assert.ok(html.includes('class="btn" data-act="tab" data-tab="receivable"'), '应收 tab 用普通按钮');
+  assert.ok(html.includes('account-tabs'), 'tab 按钮在 account-tabs 容器内');
+  // 统计卡紧凑：应付/应收 用 stat（k/v 横排由 CSS 控制），位于头部而非单独卡片行
+  assert.ok(html.includes('应付合计') && html.includes('应收合计'), '应付/应收合计存在');
+});

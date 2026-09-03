@@ -43,6 +43,10 @@
   .grid-4 { grid-template-columns: repeat(4, 1fr); }
   .grid-3 { grid-template-columns: repeat(3, 1fr); }
 
+  /* 记账中心头部：窄屏允许换行，统计横排紧凑 */
+  .account-head { flex-wrap: wrap; row-gap: 6px; }
+  .account-head .account-tabs { margin-left: auto; }
+
   /* 首页显著「开单」按钮 - 手机尺寸 */
   .home-top { display: block; }
   .home-top .overview-head { padding: 12px 12px 4px; }
