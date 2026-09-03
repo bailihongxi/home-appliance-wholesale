@@ -42,3 +42,18 @@ test('问题4-页面 theme-color 与首页图表 SVG 为蓝色', () => {
   assert.ok(home.includes('stop-color="#60A5FA"'), '首页趋势图渐变用蓝色');
   assert.ok(home.includes('stroke="#2563EB"'), '首页趋势图线条用蓝色');
 });
+
+test('问题1-手机端「我的」头部经营信息缩略显示（单行省略号）', () => {
+  const mobile = read('css/mobile.css');
+  // 限定手机端作用域（max-width: 767px）
+  assert.ok(mobile.includes('@media (max-width: 767px)'), 'mobile.css 整体在手机端媒体查询内');
+  // 缩略规则存在
+  assert.ok(mobile.includes('.shop-info-card .sub'), '手机端存在经营信息缩略规则');
+  assert.ok(mobile.includes('white-space: nowrap'), '经营信息单行不换行');
+  assert.ok(mobile.includes('text-overflow: ellipsis'), '经营信息超出显示省略号');
+  assert.ok(mobile.includes('overflow: hidden'), '经营信息溢出隐藏');
+  // 规则应位于 @media 块内（在文件靠后位置、media 结束 } 之前）
+  const mediaStart = mobile.indexOf('@media (max-width: 767px)');
+  const ruleIdx = mobile.indexOf('.shop-info-card .sub');
+  assert.ok(ruleIdx > mediaStart, '缩略规则位于手机端媒体查询内');
+});

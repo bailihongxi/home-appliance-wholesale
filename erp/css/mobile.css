@@ -188,6 +188,14 @@
   /* v2 库存 segmented：手机端顶部间距 */
   .inventory-seg { margin: 4px 12px 12px; }
 
+  /* 手机端「我的」头部经营信息缩略显示（单行省略，不换行撑高） */
+  .shop-info-card .sub {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
   /* 概览标题在手机上小一档 */
   .overview-head .title { font-size: 22px; letter-spacing: 1px; }
 }
