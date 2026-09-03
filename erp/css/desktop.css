@@ -221,7 +221,7 @@
    * 收款模块放到网页底部（选货区与当前订单的下边），横向排布显示全面。 */
   .sale-top-col {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 400px;
+    grid-template-columns: repeat(2, minmax(0, 1fr)); /* 选货区与当前订单等宽两列 */
     gap: 16px;
     align-items: stretch;
     min-height: calc(100vh - var(--topbar-h) - 124px); /* 124 = .app-main 上下 padding 24+40 + 顶部余量 */
@@ -230,11 +230,11 @@
   .sale-top-col > div > .card { flex: 1; }
   .sale-col-order > .card:last-child { flex: 0 0 auto; } /* 中列「应收合计」卡保持自然高度 */
 
-  /* 底部收款模块（横跨整行，与上部选货+订单两列等宽）：
+  /* 底部收款模块（横跨两列铺满整行，与上部选货+订单两列等宽）：
    * 两行紧凑排布 —— 第1行 pay-row1（收款方式输入框 flex 拉伸 + 实收/余款/欠款 + 按钮），
    * 第2行 pay-note 备注输入框独占整行加长；整体随页面宽度自适应拉伸/收缩（响应式）。
    * 手机端（<768px）不命中此规则，保持单列堆叠。 */
-  .sale-bottom-pay { margin-top: 16px; }
+  .sale-bottom-pay { margin-top: 16px; grid-column: 1 / -1; } /* grid 内横跨两列，铺满底部整行 */
   .sale-bottom-pay .pay-grid { display: flex; flex-direction: column; gap: 12px; }
   .sale-bottom-pay .pay-row1 { display: flex; align-items: flex-end; gap: 24px 32px; flex-wrap: wrap; }
   .sale-bottom-pay .pay-methods { display: flex; align-items: flex-end; gap: 16px; flex: 1 1 420px; min-width: 0; }

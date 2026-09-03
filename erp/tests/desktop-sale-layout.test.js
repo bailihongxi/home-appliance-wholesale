@@ -10,13 +10,15 @@ const path = require('node:path');
 
 const desktop = fs.readFileSync(path.join(__dirname, '..', 'css', 'desktop.css'), 'utf8');
 
-test('开单页上部两列（选货+订单）为列等高 grid 布局', () => {
+test('开单页上部两列（选货+订单）为列等高、等宽 grid 布局', () => {
   const block = desktop.slice(desktop.indexOf('.sale-top-col'));
   const seg = block.slice(0, block.indexOf('}'));
   assert.ok(seg.includes('.sale-top-col'), '存在上部两列容器 .sale-top-col');
   assert.ok(seg.includes('align-items: stretch'), '两列列等高');
   assert.ok(seg.includes('display: grid'), 'grid 布局');
   assert.ok(seg.includes('grid-template-columns'), '保持列模板');
+  assert.ok(/grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/.test(desktop),
+    '选货区与当前订单等宽（1fr 1fr）');
 });
 
 test('开单页上部两列 min-height 撑满视口剩余高度', () => {
@@ -25,8 +27,8 @@ test('开单页上部两列 min-height 撑满视口剩余高度', () => {
 });
 
 test('收款模块在底部横排（.sale-bottom-pay）', () => {
-  assert.ok(desktop.includes('.sale-bottom-pay { margin-top: 16px; }'),
-    '底部收款容器 .sale-bottom-pay 与上部两列之间有间距');
+  assert.ok(desktop.includes('.sale-bottom-pay { margin-top: 16px; grid-column: 1 / -1; }'),
+    '底部收款容器 grid-column 横跨两列铺满整行');
   assert.ok(desktop.includes('.sale-bottom-pay .pay-grid { display: flex; flex-direction: column; gap: 12px; }'),
     '收款模块内为纵向两行布局（第1行输入框+指标+按钮，第2行备注）');
   assert.ok(desktop.includes('.sale-bottom-pay .pay-row1 { display: flex;'),
