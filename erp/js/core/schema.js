@@ -213,6 +213,7 @@
     data.schemaVersion = S.VERSION;
     data.meta = Array.isArray(raw.meta) ? raw.meta.slice() : [];
     data.settings = raw.settings || null;
+    data.account = raw.account || null; // 脱敏账户档案（店铺名/头像/经营范围），跨端同步用
     data.exportedAt = raw.exportedAt || null;
     data.summary = raw.summary || null;
     return { ok: true, data: data, from: from, to: S.VERSION, notes: notes };

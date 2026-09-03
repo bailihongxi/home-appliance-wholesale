@@ -39,7 +39,7 @@
    * 组装备份对象（不落盘，返回普通对象，便于 JSON 序列化）
    * @param ctx 工作上下文
    */
-  backup.build = function build(ctx) {
+  backup.build = function build(ctx, opts) {
     var data = ctx.data || {};
     var out = {
       app: 'appliance-erp',
@@ -49,6 +49,8 @@
       settings: ctx.settings || null,
       meta: (data.meta || []).slice()
     };
+    // 脱敏账户档案（不含密码哈希/令牌）随快照同步，供手机端同账户恢复时对齐店铺名/头像/经营范围
+    if (opts && opts.account) out.account = opts.account;
     schema.DATA_STORES.forEach(function (name) {
       out[name] = (data[name] || []).slice();
     });
@@ -157,7 +159,8 @@
       from: migrated.from,
       to: migrated.to,
       notes: migrated.notes,
-      summary: d.summary || countSummary(ctx.data)
+      summary: d.summary || countSummary(ctx.data),
+      account: (d.account && typeof d.account === 'object') ? d.account : null
     };
   };
 

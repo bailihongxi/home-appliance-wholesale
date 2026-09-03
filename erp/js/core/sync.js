@@ -333,8 +333,11 @@
   /* ---------------- 快照打包 / 落地 ---------------- */
 
   /** 组装本机账本快照的明文 JSON 字符串（含统计摘要，供上传前提示） */
-  sync.buildSnapshotText = function buildSnapshotText(ctx) {
-    var obj = backup.build(ctx);
+  /**
+   * 生成待上传/比对的快照明文（account 为脱敏账户档案，随快照同步：店铺名/头像/经营范围）
+   */
+  sync.buildSnapshotText = function buildSnapshotText(ctx, account) {
+    var obj = backup.build(ctx, account ? { account: account } : undefined);
     // Token / 口令绝不进快照（配置本就不在 settings 里，这里再兜一层）
     if (obj.settings && obj.settings.sync) delete obj.settings.sync;
     var text = JSON.stringify(obj);
@@ -582,10 +585,10 @@
    *  - 内容一致 → 跳过上传（skipped:true，不产生新提交）
    *  - 有差异   → gzip 压缩 → 加密 → 上传前大小拦截 → 上传覆盖
    */
-  sync.syncUp = function syncUp(ctx, cfg, fetchImpl) {
+  sync.syncUp = function syncUp(ctx, cfg, fetchImpl, account) {
     var v = sync.validateConfig(cfg);
     if (!v.ok) return Promise.resolve({ ok: false, error: v.errors.join('；') });
-    var snap = sync.buildSnapshotText(ctx);
+    var snap = sync.buildSnapshotText(ctx, account);
     return Promise.all([sync.fingerprintOfText(snap.text), fetchCloudFingerprint(cfg, fetchImpl)])
       .then(function (res) {
         var localFp = res[0];
@@ -648,12 +651,14 @@
   /**
    * 一键恢复（智能合并）：下载 → 解密 → 对比本地与云端内容指纹。
    *  - 内容一致 → 无需恢复（skipped:true，不覆盖本地）
-   *  - 有差异   → 用云端快照与本地做记录级合并（保留两端独立更新，同主键取较新）
+   *  - 有差异   → 用云端快照与本地做记录级合并（保留两端独立更新，同主键取较新），
+   *               并返回云端账户档案（account，供上层写回店铺名/头像/经营范围等账户设置）
+   * account 为本地当前账户的脱敏档案，用于与云端同构比对（内容一致时跳过）
    */
-  sync.syncDown = function syncDown(ctx, cfg, fetchImpl) {
+  sync.syncDown = function syncDown(ctx, cfg, fetchImpl, account) {
     var v = sync.validateConfig(cfg);
     if (!v.ok) return Promise.resolve({ ok: false, error: v.errors.join('；') });
-    var local = sync.buildSnapshotText(ctx);
+    var local = sync.buildSnapshotText(ctx, account);
     return sync
       .pull(cfg, fetchImpl)
       .then(function (env) {
@@ -677,7 +682,8 @@
               skipped: false,
               at: env.at,
               summary: r.summary,
-              summaryText: sync.summaryText(r.summary)
+              summaryText: sync.summaryText(r.summary),
+              account: r.account || null
             };
           });
         });

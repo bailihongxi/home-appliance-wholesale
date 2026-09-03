@@ -148,3 +148,16 @@ test('常用入口：开单改为「销售」，点击直接进入销售管理�
   const m = html.match(/data-act="go" data-page="sale"[^>]*/);
   assert.ok(m && !m[0].includes('data-query'), '销售入口无 query，直接进入销售管理列表页');
 });
+
+test('V3.4-同步接线：syncUp/syncDown 传入脱敏账户档案，恢复后写回账户设置（店铺名/头像/经营范围，不含密码）', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'js', 'ui', 'page-mine.js'), 'utf8');
+  // 上传与恢复都携带当前账户公开档案
+  assert.ok(src.includes('sync.syncUp(ctx, state.cfg, undefined, currentAccountPublic())'), '同步到云端携带当前账户档案');
+  assert.ok(src.includes('sync.syncDown(ctx, state.cfg, undefined, currentAccountPublic())'), '从云端恢复携带当前账户档案');
+  // 恢复成功后写回账户设置（店铺名/头像/经营范围；不含密码哈希）
+  assert.ok(src.includes('accounts.update(store(), ERP.currentAccount.id, {'), '恢复后写回账户设置');
+  assert.ok(src.includes('shopName: r.account.shopName'), '写回店铺名');
+  assert.ok(src.includes('avatar: r.account.avatar'), '写回头像');
+  assert.ok(src.includes('scopeCategories: r.account.scopeCategories'), '写回经营范围');
+  assert.ok(!src.includes('r.account.hash'), '账户密码哈希不参与同步写回');
+});

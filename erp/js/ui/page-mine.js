@@ -47,6 +47,18 @@
     return (ERP && ERP.currentAccount && ERP.currentAccount.id) || null;
   }
 
+  /** V3.4：当前登录账户的脱敏公开档案（随云快照同步：店铺名/头像/经营范围，不含密码哈希） */
+  function currentAccountPublic() {
+    if (!accounts || !ERP || !ERP.currentAccount) return null;
+    try {
+      var list = accounts.load(store());
+      var acct = accounts.getById(list, ERP.currentAccount.id);
+      return acct ? accounts.strip(acct) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   /** 首次进入：读本机配置（V3 按账号），owner/repo 为空时尝试从当前网址猜 */
   function initCfg() {
     var cfg = sync.loadConfig(store(), currentAcctId());
@@ -143,7 +155,7 @@
         state.busy = true;
         state.msg = '正在加密并上传…';
         state.msgType = 'ok';
-        sync.syncUp(ctx, state.cfg).then(function (r) {
+        sync.syncUp(ctx, state.cfg, undefined, currentAccountPublic()).then(function (r) {
           if (!r.ok) {
             finish(state, '同步失败：' + r.error, 'err');
             return;
@@ -181,7 +193,7 @@
           state.busy = true;
           state.msg = '正在下载并解密…';
           state.msgType = 'ok';
-          sync.syncDown(ctx, state.cfg).then(function (r) {
+          sync.syncDown(ctx, state.cfg, undefined, currentAccountPublic()).then(function (r) {
             if (!r.ok) {
               finish(state, '恢复失败：' + r.error, 'err');
               return;
@@ -190,6 +202,16 @@
               // 本地与云端内容一致：无需恢复
               finish(state, '✓ ' + (r.reason || '本地与云端一致，无需恢复'), 'ok');
               return;
+            }
+            // V3.4：写回云端账户档案（店铺名/头像/经营范围，不含密码哈希），保持双端账户设置一致
+            if (r.account && accounts && ERP && ERP.currentAccount) {
+              accounts.update(store(), ERP.currentAccount.id, {
+                shopName: r.account.shopName,
+                avatar: r.account.avatar,
+                scopeCategories: r.account.scopeCategories
+              });
+              if (r.account.shopName) ERP.currentAccount.shopName = r.account.shopName;
+              if (r.account.avatar) ERP.currentAccount.avatar = r.account.avatar;
             }
             state.cfg.lastPullAt = util.nowISO();
             state.cfg = sync.saveConfig(store(), state.cfg, currentAcctId());
