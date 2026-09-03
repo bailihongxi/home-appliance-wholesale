@@ -78,17 +78,45 @@
         state.tab = 'new';
         state.editing = null;
         state.form = emptyForm();
+        state._priceTouchedW = false;
+        state._priceTouchedR = false;
       },
 
       'cancel-form': function (ctx, state) {
         state.tab = 'list';
         state.form = emptyForm();
         state.editing = null;
+        state._priceTouchedW = false;
+        state._priceTouchedR = false;
+      },
+
+      /** 成本输入联动（V3.5）：只填成本，批发/零售自动按整体利润率填充（取整到元）；用户手动改过则不再覆盖 */
+      'cost-field': function (ctx, state, el) {
+        state.form.cost = el.value;
+        var costFen = util.parseMoney(el.value);
+        var auto = product.autoPrices(ctx, costFen);
+        if (!state._priceTouchedW) {
+          state.form.priceWholesale = util.fenToYuan(auto.priceWholesale);
+          if (typeof document !== 'undefined' && document) {
+            var wInp = document.querySelector('[data-input="field"][data-name="priceWholesale"]');
+            if (wInp) wInp.value = util.fenToYuan(auto.priceWholesale);
+          }
+        }
+        if (!state._priceTouchedR) {
+          state.form.priceRetail = util.fenToYuan(auto.priceRetail);
+          if (typeof document !== 'undefined' && document) {
+            var rInp = document.querySelector('[data-input="field"][data-name="priceRetail"]');
+            if (rInp) rInp.value = util.fenToYuan(auto.priceRetail);
+          }
+        }
       },
 
       field: function (ctx, state, el) {
         var name = el.getAttribute('data-name');
-        state.form[name] = el.value;
+        if (name) state.form[name] = el.value;
+        // 用户手动编辑过批发/零售 → 标记为自定义，成本联动不再覆盖
+        if (name === 'priceWholesale') state._priceTouchedW = true;
+        if (name === 'priceRetail') state._priceTouchedR = true;
       },
 
       'save-product': function (ctx, state) {
@@ -192,11 +220,12 @@
 
       'download-template': function (ctx, state, el) {
         if (!ERP.app || !ERP.app.download) return;
+        // V3.5：模板只体现成本，批发价/零售价留空 → 导入后按整体利润率自动生成（取整到元）
         var csv = util.toCSV(
-          ['品牌', '型号', '类型', '单位', '成本', '批发价', '零售价', '备注', '原厂条码', '期初库存'],
+          ['品牌', '型号', '类型', '单位', '成本', '备注', '原厂条码', '期初库存'],
           [
-            ['海尔', 'BCD-200', '冰箱', '台', '1000', '1200', '1399', '风冷', '6901234567892', ''],
-            ['格力', 'KFR-35', '空调', '台', '1800', '2200', '2599', '', '6923456789012', '5']
+            ['海尔', 'BCD-200', '冰箱', '台', '1000', '风冷', '6901234567892', ''],
+            ['格力', 'KFR-35', '空调', '台', '1800', '', '6923456789012', '5']
           ]
         );
         ERP.app.download('商品导入模板.csv', csv, 'text/csv');
@@ -376,11 +405,12 @@
       '</div>';
     h += '<div class="grid grid-3">' +
       '<div class="field"><label>成本（元）</label>' +
-      '<input class="input" data-input="field" data-name="cost" inputmode="decimal" placeholder="如 1000" value="' + esc(form.cost) + '"></div>' +
-      '<div class="field"><label>批发价（元）</label>' +
-      '<input class="input" data-input="field" data-name="priceWholesale" inputmode="decimal" placeholder="如 1200" value="' + esc(form.priceWholesale) + '"></div>' +
-      '<div class="field"><label>零售价（元）</label>' +
-      '<input class="input" data-input="field" data-name="priceRetail" inputmode="decimal" placeholder="如 1399" value="' + esc(form.priceRetail) + '"></div>' +
+      '<input class="input" data-input="cost-field" data-name="cost" inputmode="decimal" placeholder="如 1000" value="' + esc(form.cost) + '">' +
+      '<div class="small muted mt4">只填成本，批发/零售按整体利润率自动生成</div></div>' +
+      '<div class="field"><label>批发价（元）<span class="muted">（自动）</span></label>' +
+      '<input class="input" data-input="field" data-name="priceWholesale" inputmode="decimal" placeholder="留空按利润率自动" value="' + esc(form.priceWholesale) + '"></div>' +
+      '<div class="field"><label>零售价（元）<span class="muted">（自动）</span></label>' +
+      '<input class="input" data-input="field" data-name="priceRetail" inputmode="decimal" placeholder="留空按利润率自动" value="' + esc(form.priceRetail) + '"></div>' +
       '</div>';
     h += '<div class="field"><label>备注</label>' +
       '<input class="input" data-input="field" data-name="note" placeholder="选填，如：一级能效" value="' + esc(form.note) + '"></div>';
@@ -406,14 +436,15 @@
 
   function renderCsv(ctx, state) {
     var h = '<div class="page-head"><h2>批量导入商品</h2>' +
-      '<span class="desc">表头需含：品牌、型号、类型；可选：单位、成本、批发价、零售价、备注、原厂条码、期初库存</span></div>';
+      '<span class="desc">必填：品牌、型号、类型；成本可选——<b>批发价/零售价无需填写，导入后按整体利润率自动生成（取整到元）</b>；还支持：单位、备注、原厂条码、期初库存</span></div>';
     h += '<div class="card">' +
       '<div class="field"><label>① 直接选择文件导入（支持 CSV / Excel .xlsx .xls）</label>' +
       '<input class="input" type="file" accept=".csv,.xlsx,.xls,text/csv" data-change="pick-import-file">' +
       '<div class="small muted mt4">选择本地 CSV 或 Excel 文件，内容将自动填入下方粘贴框，可修改后点「开始导入」。</div></div>' +
       '<div class="field"><label>② 或粘贴 CSV 内容（Excel 另存为 CSV 后全选复制）</label>' +
-      '<textarea class="input" data-input="csv-text" style="min-height:160px" placeholder="品牌,型号,类型,单位,成本,批发价,零售价">' +
-      esc(state.csvText) + '</textarea></div>' +
+      '<textarea class="input" data-input="csv-text" style="min-height:160px" placeholder="品牌,型号,类型,单位,成本">' +
+      esc(state.csvText) + '</textarea>' +
+      '<div class="small muted mt4">示例：海尔,BCD-200,冰箱,台,1000（批发/零售留空，导入后自动按利润率生成）</div></div>' +
       '<div class="row">' +
       '<button class="btn" data-act="download-template">下载模板</button>' +
       '<div class="spacer"></div>' +

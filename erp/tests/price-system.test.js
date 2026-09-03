@@ -155,3 +155,82 @@ test('设置页-保存利润率：写入系统设置并返回成功', () => {
   assert.strictEqual(ctx.settings.wholesaleMargin, 30);
   assert.strictEqual(ctx.settings.retailMargin, 45);
 });
+
+/* ---------------- 问题2：新建/导入只填成本，批发/零售自动生成 ---------------- */
+
+test('问题2-新建表单：成本联动字段 + 批发/零售「自动」提示（无需手动填价格）', () => {
+  const { ctx, state } = fresh();
+  productPage.actions['open-new'](ctx, state);
+  const html = productPage.render(ctx, state);
+  assert.ok(html.includes('data-input="cost-field"'), '成本输入走 cost-field 联动');
+  assert.ok(html.includes('批发价（元）<span class="muted">（自动）</span>'), '批发价标「自动」');
+  assert.ok(html.includes('零售价（元）<span class="muted">（自动）</span>'), '零售价标「自动」');
+  assert.ok(html.includes('留空按利润率自动'), '批发/零售 placeholder 提示自动');
+  assert.ok(html.includes('只填成本，批发/零售按整体利润率自动生成'), '成本提示文案');
+});
+
+test('问题2-cost-field 联动：填成本自动填充批发/零售（按整体利润率，取整到元）', () => {
+  const { ctx, state } = fresh();
+  productPage.actions['open-new'](ctx, state);
+  productPage.actions['cost-field'](ctx, state, { value: '1000' });
+  assert.strictEqual(state.form.cost, '1000');
+  assert.strictEqual(state.form.priceWholesale, 1200, '批发自动填 1000×1.2=1200');
+  assert.strictEqual(state.form.priceRetail, 1350, '零售自动填 1000×1.35=1350');
+  // 改成本再联动
+  productPage.actions['cost-field'](ctx, state, { value: '1800' });
+  assert.strictEqual(state.form.priceWholesale, 2160, '批发 1800×1.2=2160');
+  assert.strictEqual(state.form.priceRetail, 2430, '零售 1800×1.35=2430');
+});
+
+test('问题2-用户手动修改批发/零售后，成本联动不再覆盖', () => {
+  const { ctx, state } = fresh();
+  productPage.actions['open-new'](ctx, state);
+  productPage.actions['cost-field'](ctx, state, { value: '1000' });
+  assert.strictEqual(state.form.priceWholesale, 1200);
+  // 用户手动改批发价为自定义值
+  state._priceTouchedW = true;
+  productPage.actions['field'](ctx, state, { getAttribute: () => 'priceWholesale', value: '1555' });
+  productPage.actions['cost-field'](ctx, state, { value: '2000' });
+  assert.strictEqual(state.form.priceWholesale, '1555', '自定义批发价保留');
+  assert.strictEqual(state.form.priceRetail, 2700, '零售仍自动 2000×1.35=2700');
+});
+
+test('问题2-导入模板只体现成本：不含批发价/零售价列', () => {
+  let downloaded = null;
+  const oldApp = globalThis.ERP && globalThis.ERP.app;
+  if (globalThis.ERP && globalThis.ERP.app) {
+    globalThis.ERP.app.download = (name, csv) => { downloaded = csv; };
+  }
+  const { ctx, state } = fresh();
+  // mock app.download 以便捕获
+  productPage.render(ctx, state); // 确保 page 模块就绪
+  const orig = globalThis.ERP.app;
+  globalThis.ERP.app = { download: (n, c) => { downloaded = c; } };
+  try {
+    productPage.actions['download-template'](ctx, state);
+  } finally {
+    globalThis.ERP.app = orig;
+  }
+  assert.ok(downloaded, '模板已生成');
+  assert.ok(downloaded.includes('品牌,型号,类型,单位,成本'), '表头含成本列');
+  assert.ok(!downloaded.includes('批发价'), '模板不含批发价列');
+  assert.ok(!downloaded.includes('零售价'), '模板不含零售价列');
+});
+
+test('问题2-导入仅含成本的 CSV：批发/零售自动按利润率生成（取整到元）', () => {
+  const ctx = newCtx();
+  const rows = [
+    ['品牌', '型号', '类型', '单位', '成本'],
+    ['海尔', 'BCD-200', '冰箱', '台', '1000'],
+    ['格力', 'KFR-35', '空调', '台', '1800']
+  ];
+  const res = product.importFromRows(rows, ctx);
+  assert.strictEqual(res.created, 2, '导入 2 款');
+  assert.strictEqual(res.errors.length, 0, '无错误');
+  const p1 = ctx.data.products.find(p => p.brand === '海尔');
+  const p2 = ctx.data.products.find(p => p.brand === '格力');
+  assert.strictEqual(p1.priceWholesale, 120000, '批发自动 1200 元');
+  assert.strictEqual(p1.priceRetail, 135000, '零售自动 1350 元');
+  assert.strictEqual(p2.priceWholesale, 216000, '批发自动 2160 元');
+  assert.strictEqual(p2.priceRetail, 243000, '零售自动 2430 元');
+});

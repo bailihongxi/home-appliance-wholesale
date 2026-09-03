@@ -152,7 +152,10 @@ test('导入模板：包含电器版表头', () => {
   if (globalThis.ERP) globalThis.ERP.app = origApp;
   if (captured) {
     assert.ok(captured.name.includes('商品导入模板'));
-    assert.ok(captured.csv.includes('品牌,型号,类型,单位,成本,批发价,零售价'));
+    // V3.5：模板只体现成本，批发/零售留空导入后自动生成
+    assert.ok(captured.csv.includes('品牌,型号,类型,单位,成本'));
+    assert.ok(!captured.csv.includes('批发价'), '模板不含批发价列');
+    assert.ok(!captured.csv.includes('零售价'), '模板不含零售价列');
   }
 });
 
