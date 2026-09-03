@@ -291,8 +291,10 @@ button, input, select, textarea {
 .search-bar .ico { flex: 0 0 auto; font-size: 17px; color: var(--c-text-sub); }
 .search-bar .input { flex: 1; min-width: 0; }
 .search-bar .btn { flex: 0 0 auto; }
-/* 下拉与搜索框同行时保持固定宽度，避免缩成内容宽度（V3.5 方案B：仅微调下拉宽度） */
-.search-bar .select { flex: 0 0 auto; min-width: 130px; }
+/* 下拉与搜索框同行时保持固定宽度，避免缩成内容宽度或撑满容器（V3.5 方案B 加强）：
+   base 的 .select { width:100% } 会让 flex-basis 取 100% 把下拉撑满、挤窄搜索框，
+   此处 width:auto 覆盖，使下拉按内容宽度展示（min-width 保底 130px），搜索框 flex:1 占满剩余 */
+.search-bar .select { flex: 0 0 auto; width: auto; min-width: 130px; }
 
 /* ---------- 表单 ---------- */
 

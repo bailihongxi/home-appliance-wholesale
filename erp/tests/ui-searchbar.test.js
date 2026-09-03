@@ -13,11 +13,11 @@ function read(name) {
   return fs.readFileSync(path.join(__dirname, '..', name), 'utf8');
 }
 
-test('方案B-电脑端下拉菜单固定宽度：search-bar 内 select 设 min-width 130px', () => {
+test('方案B-电脑端下拉菜单固定宽度：search-bar 内 select 不撑满容器且固定 min-width 130px', () => {
   const base = read('css/base.css');
   const block = base.slice(base.indexOf('.search-bar'), base.indexOf('.matrix'));
-  assert.ok(block.includes('.search-bar .select { flex: 0 0 auto; min-width: 130px; }'),
-    'search-bar 内下拉固定宽度 min-width 130px（不被压缩成内容宽度）');
+  assert.ok(block.includes('.search-bar .select { flex: 0 0 auto; width: auto; min-width: 130px; }'),
+    'search-bar 内下拉 width:auto 覆盖 base .select 的 width:100%（防止撑满容器挤窄搜索框），min-width 130px 保底');
 });
 
 test('方案B-手机端下拉仍独占一行：不受电脑端固定宽度影响', () => {
