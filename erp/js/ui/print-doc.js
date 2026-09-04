@@ -79,16 +79,19 @@
       '<span>共 ' + qty + ' 件</span></div>';
 
     // 表头（所有文字居左，型号列放宽，单价/数量/金额列缩窄，取消价格列）
+    // v3.15：品牌列缩短至原 90%（14%→12.6%），单位列缩短至原 50%（8%→4%），
+    //        单位列前面新增类型列（宽度与单位列相同 4%）
     h += '<table><colgroup>' +
       '<col style="width:6%">' +    // #
-      '<col style="width:14%">' +   // 品牌
+      '<col style="width:12.6%">' + // 品牌（原 14% 缩短至 90%）
       '<col style="width:32%">' +   // 型号（放宽一倍）
-      '<col style="width:8%">' +    // 单位
+      '<col style="width:4%">' +    // 类型（新增，宽度与单位列相同）
+      '<col style="width:4%">' +    // 单位（原 8% 缩短至 50%）
       (withPrice ? (isSale
         ? '<col style="width:14%"><col style="width:10%"><col style="width:16%">'  // 单价/数量/金额（缩窄）
         : '<col style="width:14%"><col style="width:10%"><col style="width:16%">') // 成本/数量/金额
         : '<col style="width:10%">') + // 数量（不带价格版）
-      '</colgroup><thead><tr><th>#</th><th>品牌</th><th>型号</th><th>单位</th>';
+      '</colgroup><thead><tr><th>#</th><th>品牌</th><th>型号</th><th>类型</th><th>单位</th>';
     if (withPrice) {
       if (isSale) {
         h += '<th>单价</th><th>数量</th><th>金额</th>';
@@ -107,6 +110,7 @@
         '<td>' + (i + 1) + '</td>' +
         '<td>' + esc(it.brand || '') + '</td>' +
         '<td>' + esc(it.model || '') + (isGift ? '（赠）' : '') + '</td>' +
+        '<td>' + esc(it.category || '') + '</td>' +
         '<td>' + esc(it.unit || '') + '</td>';
       if (withPrice) {
         if (isSale) {

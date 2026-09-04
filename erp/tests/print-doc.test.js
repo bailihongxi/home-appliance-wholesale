@@ -143,9 +143,12 @@ test('问题4-打印表格：取消价格列、型号列放宽、所有文字居
   assert.ok(!html.includes('<th>价格</th>'), '销售单打印取消价格列');
   assert.ok(!html.includes('>批发<') && !html.includes('>零售<'), '取消价格类型（批发/零售）显示');
 
-  // 型号列放宽（colgroup 中型号列宽度 32%，明显大于品牌 14%）
+  // 型号列放宽（colgroup 中型号列宽度 32%，明显大于品牌 12.6%）
   assert.ok(html.includes('<col style="width:32%">'), '型号列放宽至 32%');
-  assert.ok(html.includes('<col style="width:14%">'), '品牌列 14%');
+  // V3.15 问题2：品牌列缩短至原宽度的 90%（14% → 12.6%）
+  assert.ok(html.includes('<col style="width:12.6%">'), '品牌列缩短至 12.6%（原 14% 的 90%）');
+  assert.ok(!html.includes('<col style="width:14%">') || html.indexOf('<col style="width:14%">') > html.indexOf('<col style="width:4%">'),
+    '14% 宽度不再是品牌列');
 
   // 所有文字居左：表格单元格无 class="num"（右对齐类）
   assert.ok(!html.includes('class="num"'), '所有表格单元格无 num 右对齐类，全部居左');
@@ -154,9 +157,78 @@ test('问题4-打印表格：取消价格列、型号列放宽、所有文字居
   assert.ok(html.includes('<col style="width:10%">'), '数量列缩窄至 10%');
   assert.ok(html.includes('<col style="width:16%">'), '金额列缩窄至 16%');
 
-  // 表头列顺序：# 品牌 型号 单位 单价 数量 金额
-  assert.ok(html.includes('<th>#</th><th>品牌</th><th>型号</th><th>单位</th><th>单价</th><th>数量</th><th>金额</th>'),
-    '表头列顺序正确（无价格列）');
+  // 表头列顺序：# 品牌 型号 类型 单位 单价 数量 金额（V3.15 问题2 新增类型列）
+  assert.ok(html.includes('<th>#</th><th>品牌</th><th>型号</th><th>类型</th><th>单位</th><th>单价</th><th>数量</th><th>金额</th>'),
+    '表头列顺序正确（类型列位于单位列前，无价格列）');
+});
+
+test('V3.15-问题2：打印模板品牌列90%/单位列50%、单位列前新增类型列（宽度相同）', () => {
+  const ctx = newCtx({ shopName: '幸福家电批发' });
+  const html = printDoc.buildDocHtml(ctx, saleDoc(), 'sale');
+
+  // 品牌列缩短至原宽度 90%：14% × 0.9 = 12.6%
+  assert.ok(html.includes('<col style="width:12.6%">'), '品牌列 12.6%（原 14% 的 90%）');
+  // 单位列缩短至原宽度 50%：8% × 0.5 = 4%
+  // 类型列新增且宽度与单位列相同（均为 4%）
+  const typeCol = '<col style="width:4%">';
+  assert.strictEqual(html.split(typeCol).length - 1, 2, '类型列与单位列各占 4%（宽度相同的两个 4% 列）');
+
+  // 列顺序：类型列必须位于单位列之前
+  const colgroup = html.slice(html.indexOf('<colgroup>'), html.indexOf('</colgroup>'));
+  const brandIdx = colgroup.indexOf('width:12.6%');
+  const modelIdx = colgroup.indexOf('width:32%');
+  const unitIdx = colgroup.indexOf('width:4%');
+  assert.ok(brandIdx < modelIdx && modelIdx < unitIdx, '列顺序：品牌 → 型号 → 类型 → 单位');
+  const thOrder = html.indexOf('<th>类型</th>');
+  const thUnit = html.indexOf('<th>单位</th>');
+  assert.ok(thOrder > -1 && thOrder < thUnit, '表头中类型列在单位列之前');
+
+  // 明细行输出类型数据（销售单/进货单/不带价格版均输出）
+  const saleDocCat = {
+    no: 'XS20260905001', date: '2026-09-05', type: 'sale', partnerName: '红星电器行',
+    items: [{ brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台', qty: 2, price: 139900, priceType: 'retail', type: 'sale' }],
+    payable: 279800, received: 279800, debt: 0, discount: 0, note: '', createdAt: '2026-09-05T10:00:00+08:00'
+  };
+  const withCat = printDoc.buildDocHtml(ctx, saleDocCat, 'sale');
+  assert.ok(withCat.includes('<td>冰箱</td>'), '明细行输出类型列数据');
+
+  // 不带价格版（版本1）同样有类型列
+  const noPrice = printDoc.buildDocHtml(ctx, saleDocCat, 'sale', { withPrice: false });
+  assert.ok(noPrice.includes('<th>类型</th><th>单位</th>'), '不带价格版同样含类型列（单位前）');
+  assert.ok(noPrice.includes('<td>冰箱</td>'), '不带价格版明细输出类型');
+
+  // 进货单同样新增类型列
+  const ph = printDoc.buildDocHtml(ctx, purchaseDoc(), 'purchase');
+  assert.ok(ph.includes('<th>类型</th><th>单位</th>'), '进货单表头含类型列（单位前）');
+  assert.ok(ph.includes('<col style="width:12.6%">'), '进货单品牌列同为 12.6%');
+});
+
+test('V3.15-问题2：engine 单据明细携带商品类型 category（供打印模板类型列）', () => {
+  const engine = require('../js/core/engine.js');
+  const product = require('../js/core/product.js');
+  const ctx = newCtx({ shopName: '幸福家电批发' });
+  const p = product.save(ctx, {
+    brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
+    cost: '1000', priceWholesale: '1200', priceRetail: '1399'
+  });
+  assert.ok(p.ok, '商品保存成功');
+
+  // 进货单明细携带 category
+  const buy = engine.savePurchase(ctx, {
+    date: '2026-09-05', partnerName: '测试供应商',
+    items: [{ productId: ctx.data.products[0].id, qty: 5, costPrice: '1000' }]
+  });
+  assert.ok(buy.ok, '进货单保存成功');
+  assert.strictEqual(ctx.data.purchases[0].items[0].category, '冰箱', '进货单明细携带 category');
+
+  // 销售单明细携带 category
+  const sale = engine.saveSale(ctx, {
+    date: '2026-09-05',
+    items: [{ productId: ctx.data.products[0].id, qty: 1, price: '1399', priceType: 'retail' }],
+    payments: [{ method: 'cash', amount: '1399' }]
+  });
+  assert.ok(sale.ok, '销售单保存成功');
+  assert.strictEqual(ctx.data.sales[0].items[0].category, '冰箱', '销售单明细携带 category');
 });
 
 test('问题4-进货单打印：成本列、无价格列、型号放宽', () => {
