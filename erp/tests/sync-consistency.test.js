@@ -145,3 +145,70 @@ test('问题5-独立新增不丢失：云端新增商品合并到本地，本地
   assert.ok(phone.data.products.some(p => p.brand === '海尔'), '商品A 仍在');
   assert.ok(phone.data.products.some(p => p.brand === '格力'), '商品B 仍在');
 });
+
+test('问题3-库存回滚修复：云端「后改档案但库存旧」不覆盖本地「新进货库存新」', async () => {
+  // 本地：库存 13（stockAt 新，T2），档案 updatedAt 旧（T1）——本地后来才进货、档案更早没改
+  const local = newCtx();
+  const lp = product.save(local, { brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台', cost: '1000', priceWholesale: '1200', priceRetail: '1399' });
+  assert.ok(lp.ok);
+  const localP = local.data.products[0];
+  localP.stock = 13;
+  localP.stockAt = '2026-09-05T10:00:00+08:00'; // 库存新
+  localP.updatedAt = '2026-09-04T08:00:00+08:00'; // 档案旧
+
+  // 云端：库存 10（stockAt 旧，T0），档案 updatedAt 新（T3）——云端后改过档案但库存是旧数
+  const cloud = newCtx();
+  const cp = product.save(cloud, { brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台', cost: '1000', priceWholesale: '1200', priceRetail: '1399' });
+  assert.ok(cp.ok);
+  const cloudP = cloud.data.products[0];
+  cloudP.stock = 10;
+  cloudP.stockAt = '2026-09-01T00:00:00+08:00'; // 库存旧
+  cloudP.updatedAt = '2026-09-05T09:00:00+08:00'; // 档案新（比本地 updatedAt 新）
+  cloudP.note = '云端后改的备注';
+
+  // 云端快照合并到本地
+  const json = JSON.stringify(backup.build(cloud));
+  const r = backup.restore(local, json, { merge: true });
+  assert.ok(r.ok, '合并恢复成功');
+  const merged = local.data.products[0];
+  assert.strictEqual(merged.id, localP.id, '同一主键合并');
+  // 关键断言：库存保留本地较新的 13，不被云端旧库存 10 覆盖（避免回滚）
+  assert.strictEqual(merged.stock, 13, '库存按 stockAt 取较新（本地13）不回滚');
+  // 档案字段按 updatedAt 取较新（云端备注生效）
+  assert.strictEqual(merged.note, '云端后改的备注', '档案字段按 updatedAt 取较新');
+});
+
+test('问题3-库存正常合并：云端库存确实较新时覆盖本地旧库存', async () => {
+  const local = newCtx();
+  const lp = product.save(local, { brand: '格力', model: 'KFR-35', category: '空调', unit: '台', cost: '1800', priceWholesale: '2200', priceRetail: '2599' });
+  assert.ok(lp.ok);
+  const localP = local.data.products[0];
+  localP.stock = 5;
+  localP.stockAt = '2026-09-01T00:00:00+08:00'; // 库存旧
+  localP.updatedAt = '2026-09-01T00:00:00+08:00';
+
+  const cloud = newCtx();
+  const cp = product.save(cloud, { brand: '格力', model: 'KFR-35', category: '空调', unit: '台', cost: '1800', priceWholesale: '2200', priceRetail: '2599' });
+  assert.ok(cp.ok);
+  const cloudP = cloud.data.products[0];
+  cloudP.stock = 9;
+  cloudP.stockAt = '2026-09-05T10:00:00+08:00'; // 云端库存确实较新
+  cloudP.updatedAt = '2026-09-05T09:00:00+08:00';
+
+  const r = backup.restore(local, JSON.stringify(backup.build(cloud)), { merge: true });
+  assert.ok(r.ok);
+  assert.strictEqual(local.data.products[0].stock, 9, '云端较新库存正常覆盖');
+});
+
+test('问题3-库存变动写入 stockAt 独立时间戳', () => {
+  const ctx = newCtx();
+  const r = product.save(ctx, { brand: '美的', model: 'M1', category: '厨房电器', unit: '台', cost: '800', priceWholesale: '999', priceRetail: '1199' });
+  assert.ok(r.ok);
+  const p = ctx.data.products[0];
+  assert.strictEqual(p.stock, 0, '初始库存 0');
+  const t = inv.applyStocktake(ctx, { date: '2026-09-06', counts: { [p.id]: 7 } });
+  assert.ok(t.ok, '盘点设置库存成功');
+  assert.strictEqual(ctx.data.products[0].stock, 7);
+  assert.ok(ctx.data.products[0].stockAt, '库存变动后写入 stockAt 时间戳');
+  assert.strictEqual(ctx.data.products[0].stockAt, ctx.data.products[0].updatedAt, '本次库存变动同时更新 stockAt 与 updatedAt');
+});

@@ -59,6 +59,19 @@
     }
   }
 
+  /**
+   * 同步/恢复后把 ctx 脏数据落库（问题3修复）。
+   * 根因：从云端恢复只改了内存 ctx.data 并 touch，未写 IndexedDB，
+   * 导致「已恢复成功」但刷新 / 重新登录后又从旧库 loadAll → 数据回滚到旧值。
+   * 恢复（sync-down）完成后必须显式 commit 写盘。
+   */
+  function flushNow(ctx) {
+    var g = (typeof globalThis !== 'undefined' ? globalThis : (typeof self !== 'undefined' ? self : null));
+    var app = (g && g.ERP && g.ERP.app) || ERP.app;
+    if (app && typeof app.commit === 'function') return app.commit();
+    return Promise.resolve(null);
+  }
+
   /** 首次进入：读本机配置（V3 按账号），owner/repo 为空时尝试从当前网址猜 */
   function initCfg() {
     var cfg = sync.loadConfig(store(), currentAcctId());
@@ -155,25 +168,28 @@
         state.busy = true;
         state.msg = '正在加密并上传…';
         state.msgType = 'ok';
-        sync.syncUp(ctx, state.cfg, undefined, currentAccountPublic()).then(function (r) {
-          if (!r.ok) {
-            finish(state, '同步失败：' + r.error, 'err');
-            return;
-          }
-          if (r.skipped) {
-            // 本地与云端内容一致：跳过上传
-            finish(state, '✓ ' + (r.reason || '本地与云端一致，无需重新上传'), 'ok');
-            return;
-          }
-          state.cfg.lastPushAt = r.at;
-          state.cfg = sync.saveConfig(store(), state.cfg, currentAcctId());
-          var up = Math.max(1, Math.round((r.uploadBytes || r.bytes) / 1024));
-          finish(
-            state,
-            '☁️ 已同步到云端（' + r.summaryText + '，上传 ' + up + ' KB' +
-            (r.compressed ? ' · 已压缩' : '') + '），云端历史已被覆盖',
-            'ok'
-          );
+        // 问题3：上传前先把脏数据落库，保证本地 IndexedDB 与云端快照内容一致（避免刷新后本地仍是旧数据）
+        return flushNow(ctx).then(function () {
+          return sync.syncUp(ctx, state.cfg, undefined, currentAccountPublic()).then(function (r) {
+            if (!r.ok) {
+              finish(state, '同步失败：' + r.error, 'err');
+              return;
+            }
+            if (r.skipped) {
+              // 本地与云端内容一致：跳过上传
+              finish(state, '✓ ' + (r.reason || '本地与云端一致，无需重新上传'), 'ok');
+              return;
+            }
+            state.cfg.lastPushAt = r.at;
+            state.cfg = sync.saveConfig(store(), state.cfg, currentAcctId());
+            var up = Math.max(1, Math.round((r.uploadBytes || r.bytes) / 1024));
+            finish(
+              state,
+              '☁️ 已同步到云端（' + r.summaryText + '，上传 ' + up + ' KB' +
+              (r.compressed ? ' · 已压缩' : '') + '），云端历史已被覆盖',
+              'ok'
+            );
+          });
         });
       },
 
@@ -215,7 +231,10 @@
             }
             state.cfg.lastPullAt = util.nowISO();
             state.cfg = sync.saveConfig(store(), state.cfg, currentAcctId());
-            finish(state, '⬇️ 已用云端快照覆盖本机（' + r.summaryText + '）', 'ok');
+            // 问题3修复：恢复的合并结果必须落库，否则刷新 / 重新登录后从旧库 loadAll → 数据回滚
+            return flushNow(ctx).then(function () {
+              finish(state, '⬇️ 已用云端快照覆盖本机（' + r.summaryText + '）', 'ok');
+            });
           });
         };
         if (ui.confirm) {

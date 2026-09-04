@@ -7,6 +7,10 @@ const test = require('node:test');
 const assert = require('node:assert');
 const page = require('../js/ui/page-mine.js');
 const sync = require('../js/core/sync.js');
+const backup = require('../js/core/backup.js');
+const schema = require('../js/core/schema.js');
+const dbMod = require('../js/store/db.js');
+const repo = require('../js/store/repo.js');
 const { newCtx } = require('./helpers/ctx.js');
 
 function fresh() {
@@ -161,4 +165,104 @@ test('V3.4-同步接线：syncUp/syncDown 传入脱敏账户档案，恢复后�
   assert.ok(src.includes('avatar: r.account.avatar'), '写回头像');
   assert.ok(src.includes('scopeCategories: r.account.scopeCategories'), '写回经营范围');
   assert.ok(!src.includes('r.account.hash'), '账户密码哈希不参与同步写回');
+});
+
+test('问题3-从云端恢复后落库：合并结果写入本地库，重新加载不回滚', async () => {
+  const memBackend = dbMod.memoryBackend();
+  const db = await dbMod.create({ backend: memBackend, name: 'q3persist', version: 1 });
+  // 本地初始：库存 5（旧）
+  const data = schema.emptyData();
+  data.products.push({
+    id: 'p1', brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
+    cost: 1000, priceWholesale: 1200, priceRetail: 1399, stock: 5, note: '',
+    barcodes: [], status: 'on', createdAt: '2026-09-01T00:00:00Z',
+    updatedAt: '2026-09-01T00:00:00Z', stockAt: '2026-09-01T00:00:00Z'
+  });
+  const ctx = repo.createContext(data);
+  ctx.touch('products', data.products[0]);
+  await repo.flush(ctx, db); // 旧库存落库
+
+  // 云端快照：库存 13（新）
+  const cloud = newCtx();
+  cloud.data.products.push({
+    id: 'p1', brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
+    cost: 1000, priceWholesale: 1200, priceRetail: 1399, stock: 13, note: '',
+    barcodes: [], status: 'on', createdAt: '2026-09-01T00:00:00Z',
+    updatedAt: '2026-09-02T00:00:00Z', stockAt: '2026-09-02T00:00:00Z'
+  });
+  const cloudText = JSON.stringify(backup.build(cloud));
+
+  // mock 云端下载：真实走 backup.restore 记录级合并（与 sync.syncDown 内部一致）
+  const orig = sync.syncDown;
+  sync.syncDown = (c, cfg, fetchImpl, acct) => {
+    const r = backup.restore(c, cloudText, { merge: true });
+    return Promise.resolve({ ok: true, skipped: false, at: 'x', summary: r.summary, summaryText: '商品1/库存13', account: null });
+  };
+  const oldApp = globalThis.ERP && globalThis.ERP.app;
+  globalThis.ERP = globalThis.ERP || {};
+  globalThis.ERP.app = { commit: () => repo.flush(ctx, db) };
+  try {
+    const state = page.init(ctx);
+    fullCfg(state);
+    page.actions['sync-down'](ctx, state); // ui.confirm 无 DOM → 确认后异步 run()
+    await sleep(120);
+    // 关键：恢复后数据已落库 —— 重新加载（模拟重登）不回滚
+    const reloaded = await repo.loadAll(db);
+    const p = reloaded.products.find((x) => x.id === 'p1');
+    assert.ok(p, '重新加载后商品仍在');
+    assert.strictEqual(p.stock, 13, '恢复后的新库存已落库，重新加载不回滚到旧库存5');
+  } finally {
+    sync.syncDown = orig;
+    globalThis.ERP.app = oldApp;
+  }
+});
+
+test('问题3-从云端恢复后落库：合并结果写入本地库，重新加载不回滚', async () => {
+  const memBackend = dbMod.memoryBackend();
+  const db = await dbMod.create({ backend: memBackend, name: 'q3persist', version: 1 });
+  // 本地初始：库存 5（旧）
+  const data = schema.emptyData();
+  data.products.push({
+    id: 'p1', brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
+    cost: 1000, priceWholesale: 1200, priceRetail: 1399, stock: 5, note: '',
+    barcodes: [], status: 'on', createdAt: '2026-09-01T00:00:00Z',
+    updatedAt: '2026-09-01T00:00:00Z', stockAt: '2026-09-01T00:00:00Z'
+  });
+  const ctx = repo.createContext(data);
+  ctx.touch('products', data.products[0]);
+  await repo.flush(ctx, db); // 旧库存落库
+
+  // 云端快照：库存 13（新）
+  const cloud = newCtx();
+  cloud.data.products.push({
+    id: 'p1', brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
+    cost: 1000, priceWholesale: 1200, priceRetail: 1399, stock: 13, note: '',
+    barcodes: [], status: 'on', createdAt: '2026-09-01T00:00:00Z',
+    updatedAt: '2026-09-02T00:00:00Z', stockAt: '2026-09-02T00:00:00Z'
+  });
+  const cloudText = JSON.stringify(backup.build(cloud));
+
+  // mock 云端下载：真实走 backup.restore 记录级合并（与 sync.syncDown 内部一致）
+  const orig = sync.syncDown;
+  sync.syncDown = (c, cfg, fetchImpl, acct) => {
+    const r = backup.restore(c, cloudText, { merge: true });
+    return Promise.resolve({ ok: true, skipped: false, at: 'x', summary: r.summary, summaryText: '商品1/库存13', account: null });
+  };
+  const oldApp = globalThis.ERP && globalThis.ERP.app;
+  globalThis.ERP = globalThis.ERP || {};
+  globalThis.ERP.app = { commit: () => repo.flush(ctx, db) };
+  try {
+    const state = page.init(ctx);
+    fullCfg(state);
+    page.actions['sync-down'](ctx, state); // ui.confirm 无 DOM → 确认后异步 run()
+    await sleep(120);
+    // 关键：恢复后数据已落库 —— 重新加载（模拟重登）不回滚
+    const reloaded = await repo.loadAll(db);
+    const p = reloaded.products.find((x) => x.id === 'p1');
+    assert.ok(p, '重新加载后商品仍在');
+    assert.strictEqual(p.stock, 13, '恢复后的新库存已落库，重新加载不回滚到旧库存5');
+  } finally {
+    sync.syncDown = orig;
+    globalThis.ERP.app = oldApp;
+  }
 });

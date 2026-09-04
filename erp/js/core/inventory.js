@@ -31,6 +31,7 @@
     }
     product.stock = after;
     product.updatedAt = util.nowISO(); // 库存变动时间戳，供跨端同步按“较新”合并
+    product.stockAt = util.nowISO();   // 库存独立时间戳：与档案编辑(updatedAt)解耦，跨端合并时库存按 stockAt 取新，避免「后改档案库存旧」覆盖「新进货库存新」
     ctx.touch('products', product);
 
     var log = {

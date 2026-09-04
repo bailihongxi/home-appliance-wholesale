@@ -103,13 +103,36 @@
     return k === undefined || k === null ? null : String(k);
   }
 
+  /**
+   * 记录级合并（sync-down 用，问题3修复）：
+   *  - products 表：库存是派生强一致字段，不能与档案编辑混用 updatedAt——否则「云端后改档案但库存旧」的
+   *    记录会覆盖「本地新进货库存新」的记录（库存回滚）。因此对 products 拆分为：
+   *      库存（stock/stockAt）按 stockAt 独立取较新；其余字段（品牌/型号/成本/价格/备注…）按 updatedAt 取较新。
+   *    旧记录无 stockAt 时不参与库存覆盖（保守，保留本地）。
+   *  - 其余表：同主键两边都有 → 取较新（updatedAt || createdAt || date）；云端独有 → 加入；本地独有 → 保留。
+   */
   function mergeStore(localArr, cloudArr, store) {
+    var isProduct = store === 'products';
     var map = Object.create(null);
     function put(r) {
       var k = keyOf(r, store);
       var ek = k === null ? '__null__' : k;
       var exist = map[ek];
       if (!exist) { map[ek] = r; return; }
+      if (isProduct) {
+        // 主记录（档案字段）取 updatedAt 较新
+        var base = recTime(r) >= recTime(exist) ? r : exist;
+        var other = base === r ? exist : r;
+        var merged = Object.assign({}, base);
+        var baseAt = base.stockAt || '', otherAt = other.stockAt || '';
+        // 库存按 stockAt 独立取较新（仅当另一方确有更新的库存时间戳且带库存值）
+        if (otherAt > baseAt && other.stock !== undefined) {
+          merged.stock = other.stock;
+          merged.stockAt = other.stockAt;
+        }
+        map[ek] = merged;
+        return;
+      }
       if (recTime(r) >= recTime(exist)) map[ek] = r; // 同主键取较新
     }
     (localArr || []).forEach(put); // 本地优先占位
