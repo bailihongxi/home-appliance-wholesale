@@ -97,3 +97,21 @@ test('所有 .tbl 表格默认启用斑马纹（交替行底色）', () => {
     'base.css 中存在 table.tbl tbody tr:nth-child(even) 斑马纹规则（所有表格默认启用）');
   assert.ok(base.includes('background: #f6f7f9'), '斑马纹底色为 #f6f7f9');
 });
+
+test('侧边栏折叠按钮基础样式在 base.css（不依赖媒体查询），展开态红色长条+折叠态小方形', () => {
+  const base = read('css/base.css');
+  // 展开态：红色长条
+  const expandRule = base.match(/\.app-sidebar \.side-toggle \{[\s\S]*?\}/);
+  assert.ok(expandRule, 'base.css 中存在 .app-sidebar .side-toggle 展开态规则');
+  assert.ok(expandRule[0].includes('display: block'), '展开态 display:block 撑满宽度');
+  assert.ok(expandRule[0].includes('width: auto'), '展开态 width:auto 长条覆盖侧栏宽度');
+  assert.ok(expandRule[0].includes('height: 36px'), '展开态高度 36px');
+  assert.ok(expandRule[0].includes('background: #dc2626'), '展开态红色背景 #dc2626');
+  assert.ok(expandRule[0].includes('text-align: right'), '展开态箭头右对齐');
+  // 折叠态：小方形回弹
+  const collapseRule = base.match(/\.app-sidebar\.collapsed \.side-toggle \{[\s\S]*?\}/);
+  assert.ok(collapseRule, 'base.css 中存在 .app-sidebar.collapsed .side-toggle 折叠态规则');
+  assert.ok(collapseRule[0].includes('width: 30px'), '折叠态回弹为 30px 小方形');
+  assert.ok(collapseRule[0].includes('height: 30px'), '折叠态高度 30px 正方形');
+  assert.ok(collapseRule[0].includes('text-align: center'), '折叠态箭头居中');
+});
