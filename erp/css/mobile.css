@@ -2,7 +2,7 @@
  * 关键：把整个 .app-main 顶部留出空间容纳薄荷绿 banner
  */
 
-@media (max-width: 767px) {
+@media (max-width: 599px) {
   .app-sidebar { display: none; }
 
   /* Tab 栏：v2 改用薄荷绿激活态 */

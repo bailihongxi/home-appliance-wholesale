@@ -812,7 +812,7 @@ table.matrix td.cell.hit { outline: 2px solid var(--c-primary); background: var(
 .app-sidebar .side-toggle {
   display: block;
   margin: 4px 8px;
-  width: auto;
+  width: calc(100% - 16px);
   height: 36px;
   line-height: 32px;
   border: 2px solid #dc2626;
@@ -824,7 +824,7 @@ table.matrix td.cell.hit { outline: 2px solid var(--c-primary); background: var(
   text-align: right;
   padding: 0 14px 0 0;
   cursor: pointer;
-  transition: background .12s ease, color .12s ease, width .18s ease, height .18s ease;
+  transition: background .12s ease, color .12s ease, width .18s ease, height .18s ease, margin .18s ease;
 }
 .app-sidebar .side-toggle:hover { background: #b91c1c; border-color: #b91c1c; }
 .app-sidebar.collapsed .side-toggle {

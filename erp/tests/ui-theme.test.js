@@ -45,15 +45,15 @@ test('问题4-页面 theme-color 与首页图表 SVG 为蓝色', () => {
 
 test('问题1-手机端「我的」头部经营信息缩略显示（单行省略号）', () => {
   const mobile = read('css/mobile.css');
-  // 限定手机端作用域（max-width: 767px）
-  assert.ok(mobile.includes('@media (max-width: 767px)'), 'mobile.css 整体在手机端媒体查询内');
+  // 限定手机端作用域（max-width: 599px，断点降低确保750px窗口显示桌面端）
+  assert.ok(mobile.includes('@media (max-width: 599px)'), 'mobile.css 整体在手机端媒体查询内');
   // 缩略规则存在
   assert.ok(mobile.includes('.shop-info-card .sub'), '手机端存在经营信息缩略规则');
   assert.ok(mobile.includes('white-space: nowrap'), '经营信息单行不换行');
   assert.ok(mobile.includes('text-overflow: ellipsis'), '经营信息超出显示省略号');
   assert.ok(mobile.includes('overflow: hidden'), '经营信息溢出隐藏');
   // 规则应位于 @media 块内（在文件靠后位置、media 结束 } 之前）
-  const mediaStart = mobile.indexOf('@media (max-width: 767px)');
+  const mediaStart = mobile.indexOf('@media (max-width: 599px)');
   const ruleIdx = mobile.indexOf('.shop-info-card .sub');
   assert.ok(ruleIdx > mediaStart, '缩略规则位于手机端媒体查询内');
 });
@@ -68,7 +68,7 @@ test('问题2-电脑版左侧导航折叠按钮红色醒目', () => {
   assert.ok(base.includes('.app-sidebar .side-toggle:hover { background: #b91c1c'), 'hover 红色加深');
   // desktop.css 保留 sticky 定位补充
   const desktop = read('css/desktop.css');
-  assert.ok(desktop.includes('@media (min-width: 768px)'), 'desktop.css 整体在电脑端媒体查询内');
+  assert.ok(desktop.includes('@media (min-width: 600px)'), 'desktop.css 整体在电脑端媒体查询内（断点600px）');
   assert.ok(desktop.includes('.app-sidebar .side-toggle'), 'desktop.css 保留 side-toggle sticky 定位补充');
 });
 
@@ -78,7 +78,7 @@ test('V3.8-折叠按钮展开态长条红色+折叠态小方形回弹', () => {
   // 展开态（默认）：width:auto 红色长条覆盖侧栏宽度，height:36px，箭头右对齐
   const expandRule = base.match(/\.app-sidebar \.side-toggle \{[\s\S]*?\}/);
   assert.ok(expandRule, '展开态 side-toggle 规则存在（base.css）');
-  assert.ok(expandRule[0].includes('width: auto'), '展开态 width:auto 长条覆盖侧栏宽度');
+  assert.ok(expandRule[0].includes('width: calc(100% - 16px)'), '展开态 width:calc(100%-16px) 长条覆盖侧栏宽度');
   assert.ok(expandRule[0].includes('height: 36px'), '展开态高度 36px（参考图尺寸）');
   assert.ok(expandRule[0].includes('text-align: right'), '展开态箭头右对齐');
   // 折叠态：width:30px height:30px 正方形回弹，文字居中
@@ -103,7 +103,7 @@ test('侧边栏折叠按钮基础样式在 base.css（不依赖媒体查询）�
   const expandRule = base.match(/\.app-sidebar \.side-toggle \{[\s\S]*?\}/);
   assert.ok(expandRule, 'base.css 中存在 .app-sidebar .side-toggle 展开态规则');
   assert.ok(expandRule[0].includes('display: block'), '展开态 display:block 撑满宽度');
-  assert.ok(expandRule[0].includes('width: auto'), '展开态 width:auto 长条覆盖侧栏宽度');
+  assert.ok(expandRule[0].includes('width: calc(100% - 16px)'), '展开态 width:calc(100%-16px) 长条覆盖侧栏宽度');
   assert.ok(expandRule[0].includes('height: 36px'), '展开态高度 36px');
   assert.ok(expandRule[0].includes('background: #dc2626'), '展开态红色背景 #dc2626');
   assert.ok(expandRule[0].includes('text-align: right'), '展开态箭头右对齐');

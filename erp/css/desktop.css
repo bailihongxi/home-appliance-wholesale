@@ -2,7 +2,7 @@
  * 桌面端新增：.top-bar（顶部栏：店名+搜索+铃铛+头像）、重设计 .app-sidebar/.nav-item
  */
 
-@media (min-width: 768px) {
+@media (min-width: 600px) {
   #app { flex-direction: row; }
 
   .app-tabbar { display: none; }

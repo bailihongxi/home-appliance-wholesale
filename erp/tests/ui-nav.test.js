@@ -67,3 +67,12 @@ test('问题1-账户权限管理菜单仅管理总控可见（app.isAdmin）', (
   // 还原
   globalThis.ERP.currentAccount = null;
 });
+
+test('侧边栏断点降低到600px：750px宽度显示桌面端侧边栏', () => {
+  const desktop = fs.readFileSync(path.join(__dirname, '..', 'css', 'desktop.css'), 'utf8');
+  const mobile = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
+  assert.ok(desktop.includes('@media (min-width: 600px)'), 'desktop.css 断点为 min-width:600px');
+  assert.ok(mobile.includes('@media (max-width: 599px)'), 'mobile.css 断点为 max-width:599px');
+  assert.ok(!desktop.includes('min-width: 768px'), 'desktop.css 不再使用 768px 断点');
+  assert.ok(!mobile.includes('max-width: 767px'), 'mobile.css 不再使用 767px 断点');
+});
