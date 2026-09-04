@@ -164,11 +164,15 @@
           return;
         }
         if (!ERP.btLabel.isSupported()) {
-          if (ERP.app && ERP.app.toast) ERP.app.toast('当前浏览器不支持蓝牙，请使用 Chrome/Edge', 'err');
+          var help = ERP.btLabel.getHelpInfo();
+          if (ERP.app && ERP.app.toast) {
+            ERP.app.toast(help.title + '：' + (help.platform === 'ios' ? 'iPhone请用Bluefy浏览器' : '请用Chrome/Edge浏览器打开') + '，已复制链接', 'err');
+          }
+          if (ERP.btLabel.copyLink) ERP.btLabel.copyLink().catch(function () {});
           return;
         }
         if (!ERP.btLabel.getState().connected) {
-          if (ERP.app && ERP.app.toast) ERP.app.toast('请先在「设置」中连接蓝牙打印机', 'err');
+          if (ERP.app && ERP.app.toast) ERP.app.toast('请先在「我的 → 设置」中连接蓝牙打印机', 'err');
           return;
         }
         var labelCfg = (ctx.settings && ctx.settings.label) || {};

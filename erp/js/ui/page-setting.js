@@ -90,9 +90,22 @@
           : '<button class="btn btn-primary" data-act="bt-connect">连接蓝牙打印机</button>') +
         '<span class="muted small" style="margin-left:8px;">支持凝优P50等CPCL标签机</span>' +
         '</div>' +
-        (ERP.btLabel && !ERP.btLabel.isSupported()
-          ? '<div class="notice notice-warn mt8" style="font-size:12px;">当前浏览器不支持 Web Bluetooth，请使用 Chrome/Edge 并通过 HTTPS 或 localhost 访问</div>'
-          : '') +
+        (function () {
+          if (!ERP.btLabel || ERP.btLabel.isSupported()) return '';
+          var help = ERP.btLabel.getHelpInfo();
+          var stepsHtml = help.steps.map(function (s, i) {
+            return '<div style="padding:4px 0;font-size:12px;color:#4b5563;"><span style="display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;background:#3b82f6;color:#fff;border-radius:50%;font-size:11px;margin-right:6px;">' + (i + 1) + '</span>' + esc(s) + '</div>';
+          }).join('');
+          return '<div class="notice notice-warn mt8" style="font-size:12px;">' +
+            (help.note ? '<div style="font-weight:600;margin-bottom:6px;">⚠️ ' + esc(help.note) + '</div>' : '') +
+            '<div style="font-weight:600;margin-bottom:6px;">' + esc(help.title) + '</div>' +
+            '<div style="margin-bottom:8px;">检测到：' + (help.platform === 'android' ? 'Android 手机' : help.platform === 'ios' ? 'iPhone' : '当前设备') + ' · ' + (help.browser === 'wechat' ? '微信浏览器' : help.browser === 'chrome' ? 'Chrome' : help.browser === 'edge' ? 'Edge' : help.browser === 'safari' ? 'Safari' : '当前浏览器') + '</div>' +
+            stepsHtml +
+            '<div style="margin-top:8px;">' +
+            '<button class="btn btn-sm" data-act="bt-copy-link" style="background:#3b82f6;color:#fff;border:none;">📋 复制链接到支持蓝牙的浏览器打开</button>' +
+            '</div>' +
+            '</div>';
+        })() +
         '</div>' +
         '</div>';
 
@@ -257,6 +270,17 @@
         if (ERP.btLabel) ERP.btLabel.disconnect();
         if (app() && app().toast) app().toast('已断开打印机', 'ok');
         if (app() && app().render) app().render();
+      },
+
+      /** 复制链接到支持蓝牙的浏览器打开 */
+      'bt-copy-link': function (ctx, state) {
+        if (ERP.btLabel && ERP.btLabel.copyLink) {
+          ERP.btLabel.copyLink().then(function () {
+            if (app() && app().toast) app().toast('链接已复制，请在 Chrome/Edge/Bluefy 中打开', 'ok');
+          }).catch(function () {
+            if (app() && app().toast) app().toast('复制失败，请手动复制地址栏链接', 'err');
+          });
+        }
       },
 
       'set-password': function (ctx, state) {

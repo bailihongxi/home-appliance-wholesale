@@ -104,3 +104,40 @@ test('商品档案页面包含打印标签按钮和 action', () => {
   assert.ok(src.includes("'print-label': function"), '包含 print-label action');
   assert.ok(src.includes('ERP.btLabel.printProductLabel'), '调用蓝牙打印模块');
 });
+
+test('蓝牙模块：平台检测 getPlatform/getBrowser 接口存在', () => {
+  assert.strictEqual(typeof btLabel.getPlatform, 'function', 'getPlatform 是函数');
+  assert.strictEqual(typeof btLabel.getBrowser, 'function', 'getBrowser 是函数');
+  assert.strictEqual(typeof btLabel.getHelpInfo, 'function', 'getHelpInfo 是函数');
+  assert.strictEqual(typeof btLabel.copyLink, 'function', 'copyLink 是函数');
+});
+
+test('蓝牙模块：getHelpInfo 返回结构化帮助信息（含平台、步骤、标题）', () => {
+  const info = btLabel.getHelpInfo();
+  assert.ok(info.platform, 'helpInfo 包含 platform');
+  assert.ok(info.browser, 'helpInfo 包含 browser');
+  assert.ok(info.title, 'helpInfo 包含 title');
+  assert.ok(Array.isArray(info.steps), 'helpInfo.steps 是数组');
+  assert.ok(info.steps.length >= 3, 'helpInfo.steps 至少3步引导');
+});
+
+test('蓝牙模块：getState 包含 platform 和 browser 字段', () => {
+  const s = btLabel.getState();
+  assert.ok('platform' in s, 'getState 包含 platform');
+  assert.ok('browser' in s, 'getState 包含 browser');
+});
+
+test('设置页面：不支持蓝牙时显示详细引导（平台检测+步骤+复制链接按钮）', () => {
+  const setting = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'page-setting.js'), 'utf8');
+  assert.ok(setting.includes('bt-copy-link'), '设置页有 bt-copy-link 复制链接按钮');
+  assert.ok(setting.includes('getHelpInfo'), '设置页调用 getHelpInfo 获取引导');
+  assert.ok(setting.includes('复制链接到支持蓝牙的浏览器打开'), '设置页有复制链接提示文案');
+  assert.ok(setting.includes('Bluefy'), '设置页引导 iOS 用户使用 Bluefy 浏览器');
+});
+
+test('商品档案页：打印标签按钮不支持蓝牙时自动复制链接并提示', () => {
+  const product = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'page-product.js'), 'utf8');
+  assert.ok(product.includes('getHelpInfo'), '商品页调用 getHelpInfo');
+  assert.ok(product.includes('copyLink'), '商品页不支持蓝牙时调用 copyLink');
+  assert.ok(product.includes('Bluefy'), '商品页提示 iOS 用户用 Bluefy');
+});

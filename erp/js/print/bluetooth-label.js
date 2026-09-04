@@ -51,6 +51,102 @@
     return typeof navigator !== 'undefined' && navigator.bluetooth && typeof navigator.bluetooth.requestDevice === 'function';
   }
 
+  /** 检测当前平台 */
+  function getPlatform() {
+    if (typeof navigator === 'undefined') return 'unknown';
+    var ua = navigator.userAgent || '';
+    if (/iPhone|iPad|iPod/i.test(ua)) return 'ios';
+    if (/Android/i.test(ua)) return 'android';
+    if (/Mac/i.test(ua)) return 'mac';
+    if (/Windows/i.test(ua)) return 'windows';
+    return 'unknown';
+  }
+
+  /** 检测当前浏览器 */
+  function getBrowser() {
+    if (typeof navigator === 'undefined') return 'unknown';
+    var ua = navigator.userAgent || '';
+    if (/MicroMessenger/i.test(ua)) return 'wechat';
+    if (/QQ\//i.test(ua)) return 'qq';
+    if (/Edg\//i.test(ua)) return 'edge';
+    if (/Chrome\//i.test(ua) && !/Edg\//i.test(ua)) return 'chrome';
+    if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) return 'safari';
+    if (/Firefox\//i.test(ua)) return 'firefox';
+    return 'unknown';
+  }
+
+  /** 获取不支持蓝牙时的帮助信息 */
+  function getHelpInfo() {
+    var platform = getPlatform();
+    var browser = getBrowser();
+    var info = {
+      platform: platform,
+      browser: browser,
+      title: '当前浏览器不支持蓝牙打印',
+      steps: []
+    };
+
+    if (platform === 'android') {
+      info.title = 'Android 手机蓝牙打印引导';
+      info.steps = [
+        '请在手机上安装「Chrome」或「Edge」浏览器（应用商店可下载）',
+        '复制本页面链接，在 Chrome/Edge 中打开',
+        '确保通过 HTTPS 访问（GitHub Pages 已自动支持）',
+        '回到「我的 → 设置 → 蓝牙标签打印机」点击连接',
+        '在弹出的蓝牙设备列表中选择你的标签打印机（如凝优 P50）'
+      ];
+      if (browser === 'wechat') {
+        info.note = '当前在微信内置浏览器中打开，微信不支持 Web Bluetooth API';
+      }
+    } else if (platform === 'ios') {
+      info.title = 'iPhone 蓝牙打印引导';
+      info.steps = [
+        'iPhone 的 Safari 不支持 Web Bluetooth API',
+        '请在 App Store 搜索并安装「Bluefy」浏览器（免费，支持 Web Bluetooth）',
+        '复制本页面链接，在 Bluefy 中打开',
+        '回到「我的 → 设置 → 蓝牙标签打印机」点击连接',
+        '在弹出的蓝牙设备列表中选择你的标签打印机（如凝优 P50）'
+      ];
+      if (browser === 'wechat') {
+        info.note = '当前在微信内置浏览器中打开，微信不支持 Web Bluetooth API';
+      }
+    } else {
+      info.title = '蓝牙打印环境要求';
+      info.steps = [
+        '请使用 Chrome 或 Edge 浏览器（桌面版/安卓版均支持）',
+        '确保通过 HTTPS 或 localhost 访问',
+        '电脑需要支持蓝牙（Mac 自带，Windows 需蓝牙适配器）',
+        '回到「我的 → 设置 → 蓝牙标签打印机」点击连接'
+      ];
+    }
+
+    return info;
+  }
+
+  /** 复制当前页面链接到剪贴板 */
+  function copyLink() {
+    return new Promise(function (resolve, reject) {
+      var url = typeof location !== 'undefined' ? location.href : '';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(resolve).catch(reject);
+      } else {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = url;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          resolve();
+        } catch (e) {
+          reject(e);
+        }
+      }
+    });
+  }
+
   /** 获取当前连接状态 */
   function getState() {
     return {
@@ -58,7 +154,9 @@
       connected: state.connected,
       connecting: state.connecting,
       deviceName: state.device ? state.device.name : null,
-      lastError: state.lastError
+      lastError: state.lastError,
+      platform: getPlatform(),
+      browser: getBrowser()
     };
   }
 
@@ -333,6 +431,10 @@
     printCpcl: printCpcl,
     getCpclText: getCpclText,
     mmToDots: mmToDots,
+    getPlatform: getPlatform,
+    getBrowser: getBrowser,
+    getHelpInfo: getHelpInfo,
+    copyLink: copyLink,
     DEFAULT_CONFIG: DEFAULT_CONFIG
   };
 });
