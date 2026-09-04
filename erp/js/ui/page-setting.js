@@ -86,8 +86,8 @@
         ? '<div class="notice notice-info"><span>🔒 打开密码已启用</span>' +
           '<button class="btn btn-sm" data-act="disable-lock">关闭密码</button></div>'
         : '<div class="grid grid-2">' +
-          '<div class="form-row"><label>设置密码</label><input class="input" type="password" inputmode="numeric" data-change="field" data-name="pwd" placeholder="6 位数字"></div>' +
-          '<div class="form-row"><label>确认密码</label><input class="input" type="password" inputmode="numeric" data-change="field" data-name="pwd2" placeholder="再次输入"></div>' +
+          '<div class="form-row"><label>设置密码</label><input class="input" type="password" inputmode="numeric" data-change="field" data-name="pwd" placeholder="6 位数字" value="' + esc(state.pwd || '') + '"></div>' +
+          '<div class="form-row"><label>确认密码</label><input class="input" type="password" inputmode="numeric" data-change="field" data-name="pwd2" placeholder="再次输入" value="' + esc(state.pwd2 || '') + '"></div>' +
           '</div>' +
           '<button class="btn btn-primary" data-act="set-password">启用打开密码</button>';
 
