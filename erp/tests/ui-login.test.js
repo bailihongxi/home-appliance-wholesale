@@ -78,16 +78,16 @@ test('登录校验-兼容 loginWith：按 id 登录', () => {
   assert.strictEqual(bad.ok, false, '错误密码拒绝');
 });
 
-/* ===== V2.3 管理员账号（管理总控，登录名 hawystem） ===== */
-test('V2.3-管理总控登录：登录名 hawystem / 密码 admina1b22c333 校验通过', () => {
+/* ===== V2.3 管理员账号（管理总控，登录名 hawsystem） ===== */
+test('V2.3-管理总控登录：登录名 hawsystem / 密码 admina1b22c333 校验通过', () => {
   const store = memStore();
   accounts.ensurePreset(store);
-  const ok = page.loginWithUsername(store, 'hawystem', 'admina1b22c333');
+  const ok = page.loginWithUsername(store, 'hawsystem', 'admina1b22c333');
   assert.strictEqual(ok.ok, true, '管理总控登录名+初始密码可登录');
   assert.strictEqual(ok.account.role, 'admin', '登录结果含 role=admin');
   const okById = page.loginWith(store, 'admin', 'admina1b22c333');
   assert.strictEqual(okById.ok, true, '兼容旧接口 admin 登录');
-  const bad = page.loginWithUsername(store, 'hawystem', 'wrong');
+  const bad = page.loginWithUsername(store, 'hawsystem', 'wrong');
   assert.strictEqual(bad.ok, false, '错误密码拒绝');
 });
 

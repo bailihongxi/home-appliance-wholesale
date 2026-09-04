@@ -29,9 +29,9 @@
   api.DEFAULT_PASSWORD = DEFAULT_PASSWORD;
   api.ALL_CATEGORIES = ALL_CATEGORIES;
 
-  /** 预置账号（电器版 V3.6+）：仅保留管理总控 admin，登录名 hawystem（默认店铺账户已移除） */
+  /** 预置账号（电器版 V3.6+）：仅保留管理总控 admin，登录名 hawsystem（默认店铺账户已移除） */
   api.PRESET = [
-    { id: 'admin', username: 'hawystem', shopName: '管理总控', role: 'admin', scopeCategories: null, password: 'admina1b22c333' }
+    { id: 'admin', username: 'hawsystem', shopName: '管理总控', role: 'admin', scopeCategories: null, password: 'admina1b22c333' }
   ];
 
   /** 历史默认店铺账户（V3.6 前预置 acct1-3，按 id+登录名+店名三重匹配），迁移时清理，改由管理总控新建分配账户 */
@@ -100,9 +100,9 @@
 
   /**
    * 确保预置账号存在。
-   * - 首次初始化：仅写入管理总控 admin（登录名 hawystem）；
-   * - 迁移：清理历史默认店铺账户（acct1-3），并确保 admin 登录名为 hawystem；
-   * - 后续调用：仅确保「管理总控 admin」存在（系统级账号，删除后自动补回，登录名强制 hawystem）；
+   * - 首次初始化：仅写入管理总控 admin（登录名 hawsystem）；
+   * - 迁移：清理历史默认店铺账户（acct1-3），并确保 admin 登录名为 hawsystem；
+   * - 后续调用：仅确保「管理总控 admin」存在（系统级账号，删除后自动补回，登录名强制 hawsystem）；
    *   用户删除的普通账户不会被自动补回。
    */
   api.ensurePreset = function ensurePreset(store) {
@@ -138,12 +138,12 @@
       list = cleaned;
       changed = true;
     }
-    // 系统级管理员账号必须存在：缺失即补回；存在则登录名强制 hawystem
+    // 系统级管理员账号必须存在：缺失即补回；存在则登录名强制 hawsystem
     var admin = api.getById(list, 'admin');
     if (!admin) {
       pushOne(api.PRESET[0]);
-    } else if (admin.username !== 'hawystem') {
-      admin.username = 'hawystem';
+    } else if (admin.username !== 'hawsystem') {
+      admin.username = 'hawsystem';
       changed = true;
     }
     if (changed) api.save(store, list);

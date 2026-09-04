@@ -41,14 +41,20 @@
 
     var h = '<div class="login-page">' +
       '<div class="login-card">' +
-      '<div class="login-brand"><img src="assets/favicon.png" alt="logo"><div class="login-title">我的电器店</div>' +
-      '<div class="login-sub">电器批发进销存 · 请登录</div></div>' +
-      // 登录人头像（默认系统图标）
+      // 标题区域：完全移除图片，只保留文字，杜绝第一个头像
+      '<div class="login-brand">' +
+          '<div class="login-title">我的电器店</div>' +
+          '<div class="login-sub">电器批发进销存 · 请登录</div>' +
+      '</div>' +
+      // 全局只保留这1处头像
       '<div class="login-head-avatar"><img src="assets/favicon.png" alt=""></div>' +
+
       '<div class="field mt8"><label>登录账号</label>' +
       '<input class="input" data-input="username" data-live="1" placeholder="请输入登录账号" value="' + esc(state.username) + '" autocomplete="username"></div>' +
+
       '<div class="field mt8"><label>登录密码</label>' +
-      '<input class="input" type="password" data-input="pwd" data-live="1" placeholder="输入密码" autocomplete="current-password"></div>' +
+      '<input class="input" type="password" data-input="pwd" data-live="1" placeholder="输入密码" value="' + esc(state.pwd) + '" autocomplete="current-password"></div>' +
+
       '<div class="row mt12">' +
       '<button class="btn btn-block btn-primary" data-act="do-login">登 录</button></div>';
 
@@ -57,7 +63,8 @@
 
     h += '</div></div>';
     return h;
-  };
+};
+
 
   /** 纯校验：登录账号+密码 → {ok, account|error}（Node 与浏览器共用，便于单测） */
   page.loginWithUsername = function loginWithUsername(store, username, pwd) {

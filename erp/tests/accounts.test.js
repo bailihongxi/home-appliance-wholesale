@@ -17,13 +17,13 @@ function memStore(init) {
   };
 }
 
-test('预置账号：首次 ensurePreset 仅创建管理总控（登录名 hawystem），默认店铺账户已移除', () => {
+test('预置账号：首次 ensurePreset 仅创建管理总控（登录名 hawsystem），默认店铺账户已移除', () => {
   const store = memStore();
   const list = accounts.ensurePreset(store);
   assert.strictEqual(list.length, 1, '仅保留管理总控一个预置账户');
   const admin = accounts.getById(list, 'admin');
   assert.ok(admin, 'admin 存在');
-  assert.strictEqual(admin.username, 'hawystem', '管理总控登录名 hawystem');
+  assert.strictEqual(admin.username, 'hawsystem', '管理总控登录名 hawsystem');
   assert.strictEqual(admin.shopName, '管理总控');
   // 历史默认店铺账户不存在
   ['acct1', 'acct2', 'acct3'].forEach(id => {
@@ -31,12 +31,12 @@ test('预置账号：首次 ensurePreset 仅创建管理总控（登录名 hawys
   });
 });
 
-test('管理员账号：预置 admin（管理总控），登录名 hawystem，初始密码 admina1b22c333 可登录，role=admin，经营范围全部分类', () => {
+test('管理员账号：预置 admin（管理总控），登录名 hawsystem，初始密码 admina1b22c333 可登录，role=admin，经营范围全部分类', () => {
   const store = memStore();
   const list = accounts.ensurePreset(store);
   const admin = accounts.getById(list, 'admin');
   assert.ok(admin, 'admin 账号存在');
-  assert.strictEqual(admin.username, 'hawystem');
+  assert.strictEqual(admin.username, 'hawsystem');
   assert.strictEqual(admin.shopName, '管理总控');
   assert.strictEqual(admin.role, 'admin', '角色为管理员');
   assert.strictEqual(accounts.verify(admin, 'admina1b22c333'), true, '初始密码可登录');
@@ -60,7 +60,7 @@ test('管理员账号：删除 admin 后 ensurePreset 自动补回（系统级�
   const list = accounts.ensurePreset(store);
   assert.ok(accounts.getById(list, 'admin'), 'admin 被补回');
   assert.strictEqual(accounts.getById(list, 'admin').role, 'admin');
-  assert.strictEqual(accounts.getById(list, 'admin').username, 'hawystem', '补回的管理总控登录名 hawystem');
+  assert.strictEqual(accounts.getById(list, 'admin').username, 'hawsystem', '补回的管理总控登录名 hawsystem');
 });
 
 test('管理员账号：publicList/strip 透出 role，自建账号默认 user', () => {
@@ -86,7 +86,7 @@ test('管理员账号：update 修改店名/密码不改变 role', () => {
   assert.strictEqual(accounts.verify(admin, 'newpass999'), true, '新密码生效');
 });
 
-test('历史默认店铺账户：迁移清理——旧数据（admin 旧登录名 + acct1-3）只保留管理总控并改登录名 hawystem', () => {
+test('历史默认店铺账户：迁移清理——旧数据（admin 旧登录名 + acct1-3）只保留管理总控并改登录名 hawsystem', () => {
   // 模拟 V3.6 前的旧账户数据
   const util = require('../js/core/util.js');
   const oldRaw = JSON.stringify([
@@ -100,7 +100,7 @@ test('历史默认店铺账户：迁移清理——旧数据（admin 旧登录�
   assert.strictEqual(list.length, 1, '迁移后仅保留管理总控');
   const admin = accounts.getById(list, 'admin');
   assert.ok(admin, 'admin 保留');
-  assert.strictEqual(admin.username, 'hawystem', '旧登录名 admin 迁移为 hawystem');
+  assert.strictEqual(admin.username, 'hawsystem', '旧登录名 admin 迁移为 hawsystem');
   assert.strictEqual(accounts.verify(admin, 'admina1b22c333'), true, '密码不变仍可登录');
   ['acct1', 'acct2', 'acct3'].forEach(id => {
     assert.strictEqual(accounts.getById(list, id), null, id + ' 已删除');
@@ -112,7 +112,7 @@ test('ensurePreset 幂等：重复调用不重复创建（仅管理总控）', (
   accounts.ensurePreset(store);
   const again = accounts.ensurePreset(store);
   assert.strictEqual(again.length, 1);
-  assert.strictEqual(again[0].username, 'hawystem');
+  assert.strictEqual(again[0].username, 'hawsystem');
 });
 
 test('自行创建账号：成功创建并可用初始密码登录；默认全部分类开放', () => {
@@ -132,7 +132,7 @@ test('创建账号：校验用户名格式、重复、密码长度、上限 10 �
   accounts.ensurePreset(store);
   assert.strictEqual(accounts.create(store, { username: 'a', password: '1234' }).ok, false, '用户名过短');
   assert.strictEqual(accounts.create(store, { username: 'bad name', password: '1234' }).ok, false, '非法字符');
-  assert.strictEqual(accounts.create(store, { username: 'hawystem', password: '1234' }).ok, false, '重复用户名（管理总控 hawystem 已占用）');
+  assert.strictEqual(accounts.create(store, { username: 'hawsystem', password: '1234' }).ok, false, '重复用户名（管理总控 hawsystem 已占用）');
   assert.strictEqual(accounts.create(store, { username: 'ok123', password: '12' }).ok, false, '密码过短');
 });
 
