@@ -178,3 +178,28 @@ test('V3.4-库存统计卡高度与内容匹配：label/value 不被拉伸、无
   assert.ok(bBlock.includes('.stat-card .value { font-size: 24px; margin-left: 6px; flex: 0 0 auto; height: auto; }'),
     '桌面数值固定内容高度（字号仍 24px 不变）');
 });
+
+test('问题1-库存管理与商品档案商品条数一致：移除scope经营范围过滤', () => {
+  // 库存管理页面不再使用 schema.inScope 过滤商品
+  const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'page-inventory.js'), 'utf8');
+  assert.ok(!src.includes('schema.inScope'), '库存管理页面不再使用 inScope 经营范围过滤');
+  // 销售开单选货区也不再使用 scope 过滤
+  const saleSrc = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'page-sale.js'), 'utf8');
+  assert.ok(!saleSrc.includes('schema.inScope'), '销售开单页面不再使用 inScope 经营范围过滤');
+  assert.ok(!saleSrc.includes('scope: function'), '销售开单选货区不再传 scope 过滤函数');
+});
+
+test('问题1-库存管理显示所有商品（含不在原经营范围的类型）', () => {
+  const ctx = seed(newCtx());
+  // 添加一个特殊类型商品
+  const p1 = ctx.data.products[0];
+  p1.category = '冰箱';
+  // 模拟账号设置了有限经营范围（但现在应该不生效）
+  ctx.settings.scopeCategories = ['空调'];
+  const st = fresh(ctx);
+  const html = page.render(ctx, st);
+  // 冰箱类型商品应该显示在库存管理中
+  assert.ok(html.includes('冰箱'), '不在原经营范围的商品也显示在库存管理中');
+  // 分类下拉菜单应包含所有商品类型
+  assert.ok(html.includes('冰箱'), '分类下拉菜单包含所有类型');
+});

@@ -223,7 +223,6 @@
   function desktopFilters(ctx, st) {
     var cats = [];
     (ctx.data.products || []).forEach(function (p) {
-      if (!schema.inScope(ctx.settings, p.category)) return;
       if (p.category && cats.indexOf(p.category) < 0) cats.push(p.category);
     });
     var opts = [{ value: '', text: '全部分类' }].concat(cats.map(function (c) {
@@ -246,7 +245,6 @@
     var kw = String(st.keyword || '').trim().toUpperCase();
     var cat = String(st.cat || '');
     return ctx.data.products.filter(function (p) {
-      if (!schema.inScope(ctx.settings, p.category)) return false;
       if (cat && String(p.category || '') !== cat) return false;
       if (!kw) return true;
       var bc = (Array.isArray(p.barcodes) ? p.barcodes : []).some(function (b) {
@@ -354,7 +352,6 @@
   function renderTake(ctx, st) {
     var kw = String(st.take.keyword || '').trim().toUpperCase();
     var list = ctx.data.products.filter(function (p) {
-      if (!schema.inScope(ctx.settings, p.category)) return false;
       if (!kw) return true;
       return String(p.brand || '').toUpperCase().indexOf(kw) >= 0 ||
         String(p.model || '').toUpperCase().indexOf(kw) >= 0 ||

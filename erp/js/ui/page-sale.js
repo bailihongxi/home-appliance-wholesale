@@ -371,7 +371,6 @@
     var pick = util.pickProductsPaged(ctx.data.products, kw, {
       limit: 15,
       page: form.pickPage || 1,
-      scope: function (cat) { return schema.inScope(ctx.settings, cat); },
       offStatus: schema.STATUS.OFF
     });
     if (!pick.list.length) {
