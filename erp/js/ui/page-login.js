@@ -41,13 +41,13 @@
 
     var h = '<div class="login-page">' +
       '<div class="login-card">' +
-      // 标题区域：完全移除图片，只保留文字，杜绝第一个头像
+      // 全局只保留这1处头像，放置在标题文字上方
+      '<div class="login-head-avatar"><img src="assets/favicon.png" alt=""></div>' +
+      // 标题区域：完全移除图片，只保留文字
       '<div class="login-brand">' +
           '<div class="login-title">我的电器店</div>' +
           '<div class="login-sub">电器批发进销存 · 请登录</div>' +
       '</div>' +
-      // 全局只保留这1处头像
-      '<div class="login-head-avatar"><img src="assets/favicon.png" alt=""></div>' +
 
       '<div class="field mt8"><label>登录账号</label>' +
       '<input class="input" data-input="username" data-live="1" placeholder="请输入登录账号" value="' + esc(state.username) + '" autocomplete="username"></div>' +

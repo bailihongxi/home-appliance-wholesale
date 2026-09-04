@@ -6,6 +6,8 @@
  */
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
 const page = require('../js/ui/page-login.js');
 const accounts = require('../js/core/accounts.js');
 
@@ -97,4 +99,17 @@ test('V2.3-登录页提示账户由管理员统一管理', () => {
   const state = page.init(null, store);
   const html = page.render(null, state);
   assert.ok(html.includes('请输入登录账号'), '提示输入登录账号');
+});
+
+test('登录页：头像图标放置在标题文字上方（我的电器店/电器批发进销存请登录）', () => {
+  const login = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'page-login.js'), 'utf8');
+  const avatarIdx = login.indexOf('login-head-avatar');
+  const brandIdx = login.indexOf('login-brand');
+  const titleIdx = login.indexOf('我的电器店');
+  const subIdx = login.indexOf('电器批发进销存 · 请登录');
+  assert.ok(avatarIdx > -1, '存在 login-head-avatar 头像');
+  assert.ok(brandIdx > -1, '存在 login-brand 标题区域');
+  assert.ok(avatarIdx < brandIdx, '头像在标题区域之前（上方）');
+  assert.ok(avatarIdx < titleIdx, '头像在"我的电器店"标题之前');
+  assert.ok(avatarIdx < subIdx, '头像在"电器批发进销存·请登录"副标题之前');
 });
