@@ -73,15 +73,19 @@ test('问题2-电脑版左侧导航折叠按钮红色醒目', () => {
 
 test('V3.8-折叠按钮展开态长条红色+折叠态小方形回弹', () => {
   const desktop = read('css/desktop.css');
-  // 展开态（默认）：width:auto 长条覆盖侧栏宽度，margin 左右都有
+  // 展开态（默认）：width:auto 红色长条覆盖侧栏宽度，height:36px，箭头右对齐
   const expandRule = desktop.match(/\.app-sidebar \.side-toggle \{[\s\S]*?\}/);
   assert.ok(expandRule, '展开态 side-toggle 规则存在');
   assert.ok(expandRule[0].includes('width: auto'), '展开态 width:auto 长条覆盖侧栏宽度');
+  assert.ok(expandRule[0].includes('height: 36px'), '展开态高度 36px（参考图尺寸）');
+  assert.ok(expandRule[0].includes('text-align: right'), '展开态箭头右对齐');
+  assert.ok(expandRule[0].includes('padding-right: 14px'), '展开态右侧内边距');
   assert.ok(expandRule[0].includes('margin: 0 8px 4px'), '展开态 margin 左右对称形成长条');
-  assert.ok(expandRule[0].includes('text-align: center'), '展开态文字居中');
-  // 折叠态：width:30px 小方形回弹
+  // 折叠态：width:30px height:30px 正方形回弹，文字居中
   const collapseRule = desktop.match(/\.app-sidebar\.collapsed \.side-toggle \{[\s\S]*?\}/);
   assert.ok(collapseRule, '折叠态 side-toggle 规则存在');
   assert.ok(collapseRule[0].includes('width: 30px'), '折叠态回弹为 30px 小方形');
+  assert.ok(collapseRule[0].includes('height: 30px'), '折叠态高度 30px 正方形');
+  assert.ok(collapseRule[0].includes('text-align: center'), '折叠态箭头居中');
   assert.ok(collapseRule[0].includes('margin: 0 17px 4px'), '折叠态居中显示');
 });
