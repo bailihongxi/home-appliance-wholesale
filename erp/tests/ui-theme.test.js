@@ -89,3 +89,11 @@ test('V3.8-折叠按钮展开态长条红色+折叠态小方形回弹', () => {
   assert.ok(collapseRule[0].includes('text-align: center'), '折叠态箭头居中');
   assert.ok(collapseRule[0].includes('margin: 0 17px 4px'), '折叠态居中显示');
 });
+
+test('所有 .tbl 表格默认启用斑马纹（交替行底色）', () => {
+  const base = read('css/base.css');
+  // 所有 .tbl 表格（不仅限 .tbl-striped）都有斑马纹规则
+  assert.ok(/table\.tbl tbody tr:nth-child\(even\) \{/.test(base),
+    'base.css 中存在 table.tbl tbody tr:nth-child(even) 斑马纹规则（所有表格默认启用）');
+  assert.ok(base.includes('background: #f6f7f9'), '斑马纹底色为 #f6f7f9');
+});

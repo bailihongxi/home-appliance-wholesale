@@ -377,7 +377,9 @@ table.tbl th, table.tbl td {
 }
 table.tbl th { color: var(--c-text-sub); font-weight: 500; font-size: 13px; background: #fafafa; }
 table.tbl tbody tr:active { background: #f9fafb; }
-/* 斑马纹：交替行底色，长列表不易看错行（手机版/电脑版共用） */
+/* 斑马纹：交替行底色，长列表不易看错行（手机版/电脑版共用，所有 .tbl 表格默认启用） */
+table.tbl tbody tr:nth-child(even) { background: #f6f7f9; }
+table.tbl tbody tr:nth-child(even) td.cell-note { background: #f6f7f9; }
 table.tbl.tbl-striped tbody tr:nth-child(even) { background: #f6f7f9; }
 table.tbl.tbl-striped tbody tr:nth-child(even) td.cell-note { background: #f6f7f9; }
 table.tbl td.num, table.tbl th.num { text-align: right; font-variant-numeric: tabular-nums; }
