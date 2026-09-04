@@ -286,6 +286,23 @@ button, input, select, textarea {
 .btn-block { width: 100%; }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--c-primary); }
 
+/* ---------- 库存管理页标签（v3.15）：上下留出空隙，按钮高度加高不拥挤 ----------
+ * 此前用 row wrap mb8，但 mb8 未在样式中定义，标签行紧贴上方统计卡与下方搜索卡，
+ * 按钮 min-height 38px 也偏扁；现在统一由 .inv-tabs 控制上下留白与按钮高度。 */
+.inv-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  margin-bottom: 14px;
+}
+.inv-tabs .btn {
+  min-height: 44px;
+  padding: 9px 18px;
+  font-size: 15px;
+}
+
 /* 搜索栏：搜索框 + 图标按钮同行排列（库存页手机端） */
 .search-bar { display: flex; align-items: center; gap: 8px; }
 .search-bar .ico { flex: 0 0 auto; font-size: 17px; color: var(--c-text-sub); }

@@ -186,7 +186,8 @@
   }
 
   function desktopTabs(ctx, st) {
-    return '<div class="row wrap mb8">' +
+    // v3.15：标签改用专用类 inv-tabs，上下留出空隙（此前 row wrap mb8 的 mb8 未定义，标签挤在统计卡与搜索卡之间）
+    return '<div class="inv-tabs">' +
       '<button class="btn' + (st.tab === 'list' ? ' btn-primary' : '') + '" data-act="tab" data-tab="list">📦 库存查询</button>' +
       '<button class="btn' + (st.tab === 'alert' ? ' btn-warn' : '') + '" data-act="tab" data-tab="alert">⚠️ 预警 ' + inv.alertStyleCount(ctx) + '</button>' +
       '<button class="btn' + (st.tab === 'take' ? ' btn-primary' : '') + '" data-act="tab" data-tab="take">🔢 盘点</button>' +

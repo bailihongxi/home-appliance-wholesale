@@ -203,3 +203,31 @@ test('问题1-库存管理显示所有商品（含不在原经营范围的类型
   // 分类下拉菜单应包含所有商品类型
   assert.ok(html.includes('冰箱'), '分类下拉菜单包含所有类型');
 });
+
+test('V3.15-问题1：库存管理标签上下留空隙、按钮高度不拥挤', () => {
+  const ctx = seed(newCtx());
+  const st = fresh(ctx);
+  const html = page.render(ctx, st);
+
+  // 页面渲染使用专用标签容器 .inv-tabs
+  assert.ok(html.includes('<div class="inv-tabs">'), '标签行使用专用类 inv-tabs');
+  // 三个标签齐全且位于容器内
+  const tabsStart = html.indexOf('<div class="inv-tabs">');
+  const tabsEnd = html.indexOf('</div>', tabsStart);
+  const tabsHtml = html.slice(tabsStart, tabsEnd);
+  assert.ok(tabsHtml.includes('库存查询'), '标签含库存查询');
+  assert.ok(tabsHtml.includes('预警'), '标签含预警');
+  assert.ok(tabsHtml.includes('盘点'), '标签含盘点');
+  // 不再依赖未定义的 mb8 工具类
+  assert.ok(!tabsHtml.includes('mb8'), '标签行不再使用未定义的 mb8 类');
+
+  // CSS：上下留空隙（margin-top + margin-bottom）
+  const base = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
+  const block = base.slice(base.indexOf('.inv-tabs {'), base.indexOf('.inv-tabs .btn'));
+  assert.ok(block.includes('margin-top: 10px'), '标签行上方留空隙（margin-top 10px）');
+  assert.ok(block.includes('margin-bottom: 14px'), '标签行下方留空隙（margin-bottom 14px）');
+  // CSS：按钮加高、上下内边距，不再拥挤
+  const btnBlock = base.slice(base.indexOf('.inv-tabs .btn'), base.indexOf('.inv-tabs .btn') + 200);
+  assert.ok(btnBlock.includes('min-height: 44px'), '标签按钮高度加高至 44px');
+  assert.ok(btnBlock.includes('padding: 9px 18px'), '标签按钮上下内边距 9px');
+});
