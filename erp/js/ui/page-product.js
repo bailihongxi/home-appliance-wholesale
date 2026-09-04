@@ -236,6 +236,25 @@
         if (!code) return;
         state.keyword = code;
         state.page = 1;
+      },
+
+      /** 扫码：三级降级（实时摄像头 / 拍照 / 手输），识别后自动搜索商品 */
+      'scan': function (ctx, state) {
+        if (!ERP.scan || !ERP.scan.start) {
+          ui.toast('当前环境不支持扫码，可手动输入条码', 'err');
+          return;
+        }
+        ERP.scan.start({
+          onResult: function (code) {
+            state.keyword = code;
+            state.page = 1;
+            if (ERP.app) ERP.app.render();
+            ui.toast('已识别：' + code, 'ok');
+          },
+          onError: function (msg) {
+            ui.toast(msg || '扫码不可用', 'err');
+          }
+        });
       }
     }
   };

@@ -213,7 +213,7 @@
 
     // 筛选区共两行：第 1 行 = 搜索框 + 全部类型；第 2 行 = 日期选择 + 记一笔（强调色按钮）
     h += '<div class="card">' + ui.searchBar({
-      value: state.keyword, placeholder: '搜索备注 / 往来 / 单号 / 类型',
+      value: state.keyword, placeholder: '搜索备注 / 往来 / 单号 / 类型', scan: false,
       filters: typeSelect(state.type)
     });
     h += '<div class="row">' +
