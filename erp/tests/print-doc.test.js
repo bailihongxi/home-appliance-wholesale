@@ -57,13 +57,12 @@ test('销售单打印 HTML：店铺名 / 单号 / 客户 / 明细 / 合计齐全
   assert.ok(html.includes('货到付款'), '备注');
 });
 
-test('销售单打印 HTML：批发/零售价格类型与赠送零金额', () => {
+test('销售单打印 HTML：赠送行标注与单价为空', () => {
   const ctx = newCtx({ shopName: '幸福家电批发' });
   const html = printDoc.buildDocHtml(ctx, saleDoc(), 'sale');
-  assert.ok(html.includes('批发'), '价格类型：批发');
-  assert.ok(html.includes('零售'), '价格类型：零售');
   assert.ok(html.includes('（赠）'), '赠送行标注');
   assert.ok(html.includes('>—<'), '赠送行单价为空');
+  assert.ok(!html.includes('<th>价格</th>'), '已取消价格列（批发/零售类型）');
 });
 
 test('进货单打印 HTML：成本价字段与合计已付欠款', () => {
@@ -78,10 +77,10 @@ test('进货单打印 HTML：成本价字段与合计已付欠款', () => {
   assert.ok(html.includes('欠款'), '欠款');
 });
 
-test('问题2-打印版本2（默认/带价格）：销售单含价格类型/单价/金额', () => {
+test('问题2-打印版本2（默认/带价格）：销售单含单价/金额（已取消价格列）', () => {
   const ctx = newCtx({ shopName: '幸福家电批发' });
   const html = printDoc.buildDocHtml(ctx, saleDoc(), 'sale', { withPrice: true });
-  assert.ok(html.includes('<th>价格</th>'), '带价格列');
+  assert.ok(!html.includes('<th>价格</th>'), '已取消价格列');
   assert.ok(html.includes('单价'), '含单价');
   assert.ok(html.includes('金额'), '含金额');
   assert.ok(html.includes('应收'), '含应收合计');
@@ -134,4 +133,37 @@ test('问题3-手机端打印按钮放大醒目：加大按钮/字号/触控高�
   // 关闭按钮红色醒目区分
   assert.ok(printDoc.PRINT_CSS.includes('.print-toolbar .pb-close { background: #fff; color: #dc2626; border-color: #dc2626; }'),
     '关闭按钮红色边框/文字醒目');
+});
+
+test('问题4-打印表格：取消价格列、型号列放宽、所有文字居左、单价数量金额列缩窄', () => {
+  const ctx = newCtx({ shopName: '幸福家电批发' });
+  const html = printDoc.buildDocHtml(ctx, saleDoc(), 'sale');
+
+  // 取消价格列
+  assert.ok(!html.includes('<th>价格</th>'), '销售单打印取消价格列');
+  assert.ok(!html.includes('>批发<') && !html.includes('>零售<'), '取消价格类型（批发/零售）显示');
+
+  // 型号列放宽（colgroup 中型号列宽度 32%，明显大于品牌 14%）
+  assert.ok(html.includes('<col style="width:32%">'), '型号列放宽至 32%');
+  assert.ok(html.includes('<col style="width:14%">'), '品牌列 14%');
+
+  // 所有文字居左：表格单元格无 class="num"（右对齐类）
+  assert.ok(!html.includes('class="num"'), '所有表格单元格无 num 右对齐类，全部居左');
+
+  // 单价/数量/金额列缩窄（colgroup 设置较窄宽度）
+  assert.ok(html.includes('<col style="width:10%">'), '数量列缩窄至 10%');
+  assert.ok(html.includes('<col style="width:16%">'), '金额列缩窄至 16%');
+
+  // 表头列顺序：# 品牌 型号 单位 单价 数量 金额
+  assert.ok(html.includes('<th>#</th><th>品牌</th><th>型号</th><th>单位</th><th>单价</th><th>数量</th><th>金额</th>'),
+    '表头列顺序正确（无价格列）');
+});
+
+test('问题4-进货单打印：成本列、无价格列、型号放宽', () => {
+  const ctx = newCtx({ shopName: '幸福家电批发' });
+  const html = printDoc.buildDocHtml(ctx, purchaseDoc(), 'purchase');
+  assert.ok(!html.includes('<th>价格</th>'), '进货单无价格列');
+  assert.ok(html.includes('<th>成本</th><th>数量</th><th>金额</th>'), '进货单表头：成本/数量/金额');
+  assert.ok(html.includes('<col style="width:32%">'), '进货单型号列也放宽');
+  assert.ok(!html.includes('class="num"'), '进货单所有单元格居左');
 });

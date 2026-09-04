@@ -78,16 +78,25 @@
       '<span>' + partnerLabel + '：' + esc(doc.partnerName || '散客') + '</span>' +
       '<span>共 ' + qty + ' 件</span></div>';
 
-    // 表头
-    h += '<table><thead><tr><th>#</th><th>品牌</th><th>型号</th><th>单位</th>';
+    // 表头（所有文字居左，型号列放宽，单价/数量/金额列缩窄，取消价格列）
+    h += '<table><colgroup>' +
+      '<col style="width:6%">' +    // #
+      '<col style="width:14%">' +   // 品牌
+      '<col style="width:32%">' +   // 型号（放宽一倍）
+      '<col style="width:8%">' +    // 单位
+      (withPrice ? (isSale
+        ? '<col style="width:14%"><col style="width:10%"><col style="width:16%">'  // 单价/数量/金额（缩窄）
+        : '<col style="width:14%"><col style="width:10%"><col style="width:16%">') // 成本/数量/金额
+        : '<col style="width:10%">') + // 数量（不带价格版）
+      '</colgroup><thead><tr><th>#</th><th>品牌</th><th>型号</th><th>单位</th>';
     if (withPrice) {
       if (isSale) {
-        h += '<th>价格</th><th class="num">单价</th><th class="num">数量</th><th class="num">金额</th>';
+        h += '<th>单价</th><th>数量</th><th>金额</th>';
       } else {
-        h += '<th class="num">成本</th><th class="num">数量</th><th class="num">金额</th>';
+        h += '<th>成本</th><th>数量</th><th>金额</th>';
       }
     } else {
-      h += '<th class="num">数量</th>';
+      h += '<th>数量</th>';
     }
     h += '</tr></thead><tbody>';
 
@@ -101,18 +110,16 @@
         '<td>' + esc(it.unit || '') + '</td>';
       if (withPrice) {
         if (isSale) {
-          var pt = it.priceType === schema.PRICE_TYPE.WHOLESALE ? '批发' : '零售';
-          h += '<td>' + (isGift ? '赠送' : pt) + '</td>' +
-            '<td class="num">' + (isGift ? '—' : util.fmtYuan(it.price)) + '</td>' +
-            '<td class="num">' + it.qty + '</td>' +
-            '<td class="num">' + util.fmtYuan(amount) + '</td>';
+          h += '<td>' + (isGift ? '—' : util.fmtYuan(it.price)) + '</td>' +
+            '<td>' + it.qty + '</td>' +
+            '<td>' + util.fmtYuan(amount) + '</td>';
         } else {
-          h += '<td class="num">' + util.fmtYuan(it.costPrice) + '</td>' +
-            '<td class="num">' + it.qty + '</td>' +
-            '<td class="num">' + util.fmtYuan(it.amount) + '</td>';
+          h += '<td>' + util.fmtYuan(it.costPrice) + '</td>' +
+            '<td>' + it.qty + '</td>' +
+            '<td>' + util.fmtYuan(it.amount) + '</td>';
         }
       } else {
-        h += '<td class="num">' + it.qty + '</td>';
+        h += '<td>' + it.qty + '</td>';
       }
       h += '</tr>';
     });
