@@ -287,7 +287,7 @@
       }
       render();
       scheduleCommit();
-      var selector = '[data-input="' + el.getAttribute('data-input') + '"]' + (key ? '[data-name="' + key + '"]' : '');
+      var selector = inputSelector(el, key);
       var next = document.querySelector(selector);
       if (next) {
         next.focus();
@@ -299,6 +299,15 @@
       }
     }
 
+    /** 生成输入框选择器：同时支持 data-input 和 data-change（退换货等页面用 data-change+data-live） */
+    function inputSelector(el, key) {
+      var v = el.getAttribute('data-input');
+      if (v !== null) return '[data-input="' + v + '"]' + (key ? '[data-name="' + key + '"]' : '');
+      v = el.getAttribute('data-change');
+      if (v !== null) return '[data-change="' + v + '"]' + (key ? '[data-name="' + key + '"]' : '');
+      return '[data-input=""]' + (key ? '[data-name="' + key + '"]' : '');
+    }
+
     // 搜索防抖：250ms 内多次输入只渲染一次；渲染后恢复搜索框焦点与光标
     var searchState = null;
     function scheduleSearchRender(el, key) {
@@ -308,8 +317,7 @@
         var s = searchState;
         searchState = null;
         if (!s || !s.el) return;
-        var selector = '[data-input="' + (s.el.getAttribute('data-input') || '') + '"]' +
-          (s.key ? '[data-name="' + s.key + '"]' : '');
+        var selector = inputSelector(s.el, s.key);
         var next = document.querySelector(selector);
         if (next) {
           next.focus();
