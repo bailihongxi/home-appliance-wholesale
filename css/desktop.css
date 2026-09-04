@@ -1,0 +1,336 @@
+/* desktop.css —— ≥768px：左侧栏 + 顶部栏 + 内容区（v2 薄荷绿主题）
+ * 桌面端新增：.top-bar（顶部栏：店名+搜索+铃铛+头像）、重设计 .app-sidebar/.nav-item
+ */
+
+@media (min-width: 600px) {
+  #app { flex-direction: row; }
+
+  .app-tabbar { display: none; }
+
+  /* 旧 app-header 在桌面端不再使用，被 .top-bar 替代 */
+  .app-header { display: none; }
+
+  /* —— 侧栏 ——
+   * 电脑端：白底 + 薄荷绿 logo + 菜单列表（9 项）
+   * 宽度/折叠态已移到 base.css（不依赖媒体查询，修复窗口 750px 时断点不匹配问题） */
+  .app-sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    background: #fff;
+    border-right: 1px solid var(--c-border);
+    padding: 0;
+    z-index: 30;
+  }
+  .app-sidebar .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 16px;
+    font-weight: 700;
+    color: var(--c-mint-700);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  /* 折叠/展开按钮：展开态为红色长条覆盖侧栏宽度，折叠态回弹为小方形
+   * 基础样式在 base.css，此处补充桌面端 sticky 定位 */
+  .app-sidebar .side-toggle {
+    position: sticky;
+    top: 8px;
+    z-index: 1;
+  }
+  .app-sidebar .side-toggle:hover { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+  .app-sidebar .nav-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 12px 8px;
+  }
+
+  /* nav-item v2：hover 浅灰底；on 状态薄荷绿文字+左侧 3px 强调条 */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 14px;
+    border: none;
+    border-radius: var(--radius);
+    background: none;
+    color: var(--c-text);
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease;
+    position: relative;
+  }
+  .nav-item:hover { background: #f3f4f6; }
+  .nav-item.on {
+    background: var(--c-mint-50);
+    color: var(--c-mint-700);
+    font-weight: 600;
+  }
+  .nav-item.on::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    background: var(--c-mint-500);
+    border-radius: 0 2px 2px 0;
+  }
+  .nav-item .ico { width: 18px; text-align: center; font-size: 16px; }
+
+  /* —— 内容列 —— */
+  .app-column { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--c-bg); }
+
+  /* —— 顶部栏（电脑端 · v2 新增） —— */
+  .top-bar {
+    height: var(--topbar-h);
+    background: #fff;
+    border-bottom: 1px solid var(--c-border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 24px;
+    position: sticky;
+    top: 0;
+    z-index: 25;
+  }
+  .top-bar .shop-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--c-text-strong);
+  }
+  .top-bar .global-search {
+    flex: 1;
+    max-width: 420px;
+    position: relative;
+  }
+  .top-bar .global-search input {
+    width: 100%;
+    height: 36px;
+    padding: 0 14px 0 38px;
+    border-radius: 18px;
+    background: var(--c-bg);
+    border: 1px solid transparent;
+    font-size: 14px;
+    outline: none;
+    transition: all .12s ease;
+  }
+  .top-bar .global-search input:focus {
+    background: #fff;
+    border-color: var(--c-mint-500);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .15);
+  }
+  .top-bar .global-search .ico {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--c-text-weak);
+    pointer-events: none;
+  }
+  .top-bar .spacer { flex: 1; }
+  .top-bar .bell {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    position: relative;
+    font-size: 18px;
+    color: var(--c-text-sub);
+  }
+  .top-bar .bell:hover { background: var(--c-bg); }
+  .top-bar .bell .dot {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    width: 8px;
+    height: 8px;
+    background: var(--c-danger);
+    border-radius: 50%;
+  }
+  .top-bar .avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--c-mint-400), var(--c-mint-600));
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .top-bar .avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+
+  /* 主区 padding */
+  .app-main { padding: 24px 28px 40px; max-width: 1280px; width: 100%; }
+
+  .page-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .page-head h2 { font-size: 22px; }
+  .page-head .desc { font-size: 13px; color: var(--c-text-sub); }
+  .page-head .actions { margin-left: auto; display: flex; gap: 8px; }
+
+  /* 记账中心头部单行：标题 + 应付/应收合计（紧凑横排）+ 流水/应付/应收 按钮 */
+  .account-head { align-items: center; flex-wrap: nowrap; }
+  .account-head .account-sum { display: inline-flex; gap: 8px; flex: 0 0 auto; }
+  .account-head .account-sum .stat {
+    display: inline-flex; align-items: baseline; gap: 6px;
+    padding: 4px 12px; border-radius: 999px; box-shadow: none;
+  }
+  .account-head .account-sum .stat .k { font-size: 12px; white-space: nowrap; }
+  .account-head .account-sum .stat .v { font-size: 14px; margin-top: 0; white-space: nowrap; }
+  .account-head .account-tabs { margin-left: auto; display: inline-flex; gap: 6px; flex: 0 0 auto; }
+
+  /* stat 4 列 */
+  .stat-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  /* 库存紧凑统计卡：保持 4 列、收紧间距（覆盖 base 的 gap 被 desktop 覆盖问题） */
+  .stat-grid-compact { grid-template-columns: repeat(4, 1fr); gap: 3px; }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+
+  /* 概览标题在电脑上更大 */
+  .overview-head .title { font-size: 28px; letter-spacing: 2px; }
+
+  /* 首页显著「开单」按钮 - 桌面端更大 */
+  .home-top { grid-template-columns: minmax(0, 1fr) auto; gap: 16px; }
+  .home-sale-btn { min-width: 180px; padding: 22px 32px; border-radius: var(--radius-lg); }
+  .home-sale-btn .ico { font-size: 42px; }
+  .home-sale-btn .t { font-size: 24px; margin-top: 6px; }
+  .home-sale-btn .s { font-size: 13px; }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+
+  /* v2 stat-card 在电脑上更舒展 */
+  .stat-card { padding: 18px 20px; min-height: 110px; }
+  .stat-card .icon { width: 40px; height: 40px; font-size: 22px; border-radius: 12px; }
+  .stat-card .value { font-size: 28px; }
+
+  /* 库存页桌面 4 统计卡（设计图 1-5） */
+  .desktop-stats { margin-bottom: 14px; }
+  .desktop-stats .stat-card { min-height: 96px; }
+
+  /* 我的页桌面端内容宽度收窄，避免卡片过宽 */
+  .mine-desktop { max-width: 760px; }
+  .mine-desktop .quick-grid.mine-quick { grid-template-columns: repeat(3, 1fr); }
+
+  /* v2 quick-circle 6 列布局 */
+  .quick-circles { grid-template-columns: repeat(6, 1fr); gap: 16px; }
+  .quick-circle .disc { width: 56px; height: 56px; font-size: 26px; }
+  .quick-circle .text { font-size: 13px; }
+
+  .card { padding: 16px 18px; border-radius: var(--radius-lg); }
+
+  .modal-mask { align-items: center; }
+  .modal { border-radius: var(--radius-lg); max-height: 82vh; }
+
+  #toast-wrap { bottom: 40px; }
+
+  .mobile-only { display: none !important; }
+
+  /* 双列：列表 + 详情 */
+  .two-col { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+
+  /* v2 电脑端开单页：上部两列（选货 + 订单）+ 底部收款横排。
+   * 顶部两列列等高（align-items: stretch）+ 撑满视口剩余高度（min-height），列内卡片 flex:1 填满；
+   * 收款模块放到网页底部（选货区与当前订单的下边），横向排布显示全面。 */
+  .sale-top-col {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)); /* 选货区与当前订单等宽两列 */
+    gap: 16px;
+    align-items: stretch;
+    min-height: calc(100vh - var(--topbar-h) - 124px); /* 124 = .app-main 上下 padding 24+40 + 顶部余量 */
+  }
+  .sale-top-col > div { display: flex; flex-direction: column; min-width: 0; }
+  .sale-top-col > div > .card { flex: 1; }
+  .sale-col-order > .card:last-child { flex: 0 0 auto; } /* 中列「应收合计」卡保持自然高度 */
+
+  /* 底部收款模块（横跨两列铺满整行，与上部选货+订单两列等宽）：
+   * 两行紧凑排布 —— 第1行 pay-row1（收款方式输入框 flex 拉伸 + 实收/余款/欠款 + 按钮），
+   * 第2行 pay-note 备注输入框独占整行加长；整体随页面宽度自适应拉伸/收缩（响应式）。
+   * 手机端（<768px）不命中此规则，保持单列堆叠。 */
+  .sale-bottom-pay { margin-top: 16px; grid-column: 1 / -1; } /* grid 内横跨两列，铺满底部整行 */
+  .sale-bottom-pay .pay-grid { display: flex; flex-direction: column; gap: 12px; }
+  .sale-bottom-pay .pay-row1 { display: flex; align-items: flex-end; gap: 24px 32px; flex-wrap: wrap; }
+  .sale-bottom-pay .pay-methods { display: flex; align-items: flex-end; gap: 16px; flex: 1 1 420px; min-width: 0; }
+  .sale-bottom-pay .pm-label { font-size: 12px; color: #6B7280; padding-bottom: 9px; white-space: nowrap; }
+  .sale-bottom-pay .pm-input { flex: 1 1 0; min-width: 110px; }
+  .sale-bottom-pay .pm-input .input { width: 100%; }
+  .sale-bottom-pay .pay-stats { display: flex; align-items: center; gap: 24px; flex: 0 0 auto; }
+  .sale-bottom-pay .stat { display: flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
+  .sale-bottom-pay .pay-actions { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; margin-left: auto; }
+  .sale-bottom-pay .pay-actions .btn-lg { width: auto; min-width: 150px; padding: 0 26px; }
+  .sale-bottom-pay .pay-note { display: flex; align-items: flex-end; gap: 12px; width: 100%; min-width: 0; }
+  .sale-bottom-pay .pay-note .pm-note { flex: 1 1 0; min-width: 0; }
+  .sale-bottom-pay .pay-note .pm-note .input { width: 100%; }
+  .sale-bottom-pay .pay-debt { margin-top: 12px; }
+
+  .checkout-bar {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    border-top: 1px solid var(--c-border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 -2px 10px rgba(17, 24, 39, .04);
+  }
+
+  /* 趋势图更大 */
+  .trend-chart { height: 240px; }
+
+  /* 手机版首页 UI 应用到桌面：banner + 经营概览 2x2 + 快捷入口（文字与手机版一致） */
+  .home-top { display: block; }
+  .home-top .overview-head { padding: 6px 0 12px; }
+  .home-top .stat-grid.home-stat-2x2 {
+    grid-template-columns: 1fr 1fr 0.85fr;
+    gap: 14px;
+    align-items: stretch;
+  }
+  .home-stat-2x2 .stat-card {
+    padding: 18px 20px;
+    min-height: 104px;
+    max-height: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .home-stat-2x2 .stat-card .label { font-size: 13px; color: var(--c-text-sub); margin-bottom: 6px; line-height: 1.1; }
+  .home-stat-2x2 .stat-card .value { font-size: 30px; font-weight: 700; line-height: 1.1; }
+  .home-stat-2x2 .stat-card .value.profit { color: var(--c-success); }
+  .home-stat-2x2 .stat-card .value.danger { color: var(--c-danger); }
+  .home-stat-2x2 .home-sale-btn.home-sale-row {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    width: 100%;
+    min-width: 0;
+    min-height: calc(104px * 2 + 14px);
+    padding: 24px 12px;
+    border-radius: var(--radius-lg);
+    gap: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .home-stat-2x2 .home-sale-btn .ico { font-size: 40px; }
+  .home-stat-2x2 .home-sale-btn .t { font-size: 24px; margin-top: 6px; letter-spacing: 2px; }
+  .home-stat-2x2 .home-sale-btn .s { font-size: 13px; }
+}

@@ -1,0 +1,201 @@
+/* mobile.css —— <768px：底部 Tab、单列 + v2 薄荷绿适配
+ * 关键：把整个 .app-main 顶部留出空间容纳薄荷绿 banner
+ */
+
+@media (max-width: 599px) {
+  .app-sidebar { display: none; }
+
+  /* Tab 栏：v2 改用薄荷绿激活态 */
+  .app-tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    height: var(--tab-h);
+    background: #fff;
+    border-top: 1px solid var(--c-border);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tab-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border: none;
+    background: none;
+    color: var(--c-text-weak);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 0;
+    min-height: var(--tab-h);
+  }
+  .tab-item .ico { font-size: 22px; line-height: 1; }
+  .tab-item.on {
+    color: var(--c-mint-600);
+    font-weight: 600;
+  }
+
+  /* 首页 stat 卡片 2x2 */
+  .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  /* 库存紧凑统计卡：移动端 2 列自适应屏幕宽度（minmax(0,1fr) 防止内容撑破溢出），
+     卡片改竖排（标签上、数字下）保证长金额完整显示 */
+  .stat-grid-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+  .stat-grid-compact .stat-card { min-width: 0; min-height: 17px; padding: 1px 6px; flex-direction: column; align-items: flex-start; justify-content: center; }
+  .stat-grid-compact .stat-card .label { font-size: 10px; line-height: 1.1; flex: 0 0 auto; height: auto; min-height: 0; padding: 0; }
+  .stat-grid-compact .stat-card .value { font-size: 15px; margin-left: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 0 auto; height: auto; }
+
+  /* 搜索模块：手机端改回多行（搜索框+扫码一行；筛选下拉换行到第二行），便于手机操作 */
+  .search-bar { flex-wrap: wrap; }
+  .search-bar .select { flex: 1 1 100%; margin-top: 4px; }
+
+  /* 记账中心头部：窄屏允许换行，统计横排紧凑 */
+  .account-head { flex-wrap: wrap; row-gap: 6px; }
+  .account-head .account-tabs { margin-left: auto; }
+
+  /* 销售开单 · 手机端收款模块（修复乱套）：
+     覆盖 base 的 .pay-grid 4 列网格，改为纵向堆叠；收款方式三输入框并排、统计/按钮/备注换行排列 */
+  .sale-bottom-pay { margin-top: 14px; width: 100%; }
+  .sale-bottom-pay .pay-grid { display: flex; flex-direction: column; gap: 10px; }
+  .sale-bottom-pay .pay-row1 { display: flex; flex-direction: column; gap: 10px; }
+  .sale-bottom-pay .pay-methods { display: flex; align-items: flex-end; gap: 8px; }
+  .sale-bottom-pay .pay-methods .pm-label { display: none; } /* 手机端省略「收款（元）」标签，节省纵向空间 */
+  .sale-bottom-pay .pay-methods .pm-input { flex: 1 1 0; min-width: 0; }
+  .sale-bottom-pay .pay-methods .pm-input .input { width: 100%; }
+  .sale-bottom-pay .pay-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .sale-bottom-pay .stat { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  .sale-bottom-pay .pay-actions { display: flex; gap: 10px; }
+  .sale-bottom-pay .pay-actions .btn { flex: 1 1 0; }
+  .sale-bottom-pay .pay-note { width: 100%; min-width: 0; }
+  .sale-bottom-pay .pay-note .pm-note .input { width: 100%; }
+  .sale-bottom-pay .pay-debt { margin-top: 10px; }
+
+  /* 首页显著「开单」按钮 - 手机尺寸 */
+  .home-top { display: block; }
+  .home-top .overview-head { padding: 12px 12px 4px; }
+  .home-sale-btn { min-width: 92px; padding: 10px 12px; border-radius: var(--radius); }
+  .home-sale-btn .ico { font-size: 24px; }
+  .home-sale-btn .t { font-size: 16px; letter-spacing: 1px; }
+  .home-sale-btn .s { font-size: 11px; }
+
+  /* 首页 stat 2x2 + 右侧放大「开单」按钮（跨 2 行） */
+  .home-top .stat-grid.home-stat-2x2 {
+    grid-template-columns: 1fr 1fr 0.85fr;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .home-stat-2x2 .stat-card {
+    padding: 10px 12px;
+    min-height: 70px;
+    max-height: 84px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .home-stat-2x2 .stat-card .label { font-size: 12px; color: var(--c-text-sub); margin-bottom: 4px; line-height: 1.1; }
+  .home-stat-2x2 .stat-card .value { font-size: 19px; font-weight: 700; line-height: 1.1; }
+  .home-stat-2x2 .stat-card .value.profit { color: var(--c-success); }
+  .home-stat-2x2 .stat-card .value.danger { color: var(--c-danger); }
+  .home-stat-2x2 .home-sale-btn.home-sale-row {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    width: 100%;
+    min-width: 0;
+    min-height: calc(70px * 2 + 10px);
+    padding: 18px 8px;
+    border-radius: var(--radius-lg);
+    gap: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .home-stat-2x2 .home-sale-btn .ico { font-size: 30px; }
+  .home-stat-2x2 .home-sale-btn .t { font-size: 19px; margin-top: 4px; letter-spacing: 2px; }
+  .home-stat-2x2 .home-sale-btn .s { font-size: 12px; }
+
+  /* v2 stat-card 在手机上更紧凑 */
+  .stat-card { padding: 14px; min-height: 88px; }
+  .stat-card .value { font-size: 22px; }
+
+  /* v2 quick-circle 6 列布局 */
+  .quick-circles { grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .quick-circle .disc { width: 44px; height: 44px; font-size: 20px; }
+  .quick-circle .text { font-size: 11px; }
+
+  /* 主区 padding：保留底部 Tab + 安全区 */
+  .app-main { padding: 12px 12px calc(var(--tab-h) + 28px); }
+
+  /* 老式快捷入口网格（兼容旧逻辑）*/
+  .quick-grid { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .quick-item { padding: 8px 2px; font-size: 11px; }
+  .quick-item .ico { font-size: 20px; }
+
+  table.tbl { font-size: 13px; }
+  table.tbl th, table.tbl td { padding: 7px 6px; }
+
+  .modal-mask { align-items: flex-end; }
+  .modal { border-radius: var(--radius-xl) var(--radius-xl) 0 0; max-height: 88vh; }
+
+  .desktop-only { display: none !important; }
+
+  /* 开单页：底部固定结算条 */
+  .checkout-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: var(--tab-h);
+    z-index: 35;
+    background: #fff;
+    border-top: 1px solid var(--c-border);
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 -2px 10px rgba(17, 24, 39, .06);
+  }
+
+  /* 电脑端组件在手机上隐藏 */
+  .desktop-only { display: none !important; }
+
+  /* v2 薄荷绿 banner 在手机上替代旧 app-header */
+  .app-header { display: none; }
+
+  /* 电脑端顶栏（店名+全局搜索+铃铛+头像）仅在电脑端显示 */
+  .top-bar { display: none; }
+
+  /* v2 库存页 stat cards：手机端并排 2 列（左大右小） */
+  .inventory-stats {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 12px;
+    padding: 0 12px;
+    margin-bottom: 8px;
+  }
+  .stat-card-lg .big-value { font-size: 22px; font-weight: 700; line-height: 1.2; }
+  .stat-card-lg { padding: 16px; }
+  .stat-card-fund { padding: 16px; display: flex; flex-direction: column; justify-content: space-between; }
+  .stat-card-fund .value { font-size: 20px; font-weight: 700; }
+
+  /* v2 首页 stat-card：手机 2x2 紧凑 */
+  .home-top .stat-grid { padding: 0 12px; margin-top: -8px; }
+
+  /* v2 库存 segmented：手机端顶部间距 */
+  .inventory-seg { margin: 4px 12px 12px; }
+
+  /* 手机端「我的」头部经营信息缩略显示（单行省略，不换行撑高） */
+  .shop-info-card .sub {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  /* 概览标题在手机上小一档 */
+  .overview-head .title { font-size: 22px; letter-spacing: 1px; }
+}
