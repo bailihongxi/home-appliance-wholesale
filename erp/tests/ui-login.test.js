@@ -22,16 +22,16 @@ test('页面元数据', () => {
   assert.strictEqual(page.hideInNav, true);
 });
 
-test('登录页-渲染：列出全部账号（admin + 3 店）', () => {
+test('登录页-渲染：仅列出管理总控（默认店铺账户已移除）', () => {
   const store = memStore();
   accounts.ensurePreset(store);
   const state = page.init(null, store);
   const html = page.render(null, state);
-  assert.ok(html.includes('大家电店'), '列出大家电店');
-  assert.ok(html.includes('小家电店'), '列出小家电店');
-  assert.ok(html.includes('厨电店'), '列出厨电店');
-  assert.ok(html.includes('管理总控'), '列出管理员账号');
-  assert.ok(html.includes('@admin'), '显示 @admin 登录名');
+  assert.ok(html.includes('管理总控'), '列出管理总控账号');
+  assert.ok(html.includes('@hawystem'), '显示 @hawystem 登录名');
+  assert.ok(!html.includes('大家电店'), '不再列出大家电店');
+  assert.ok(!html.includes('小家电店'), '不再列出小家电店');
+  assert.ok(!html.includes('厨电店'), '不再列出厨电店');
 });
 
 test('登录页-无账户管理按钮：不含编辑/删除/新建店铺账号', () => {
@@ -49,12 +49,11 @@ test('登录页-无账户管理按钮：不含编辑/删除/新建店铺账号',
 test('登录校验：正确密码通过，错误拒绝', () => {
   const store = memStore();
   accounts.ensurePreset(store);
-  const state = page.init(null, store);
-  state.selectedId = 'acct1';
-  state.pwd = '000000';
-  const ok = page.loginWith(store, 'acct1', '000000');
+  accounts.create(store, { username: 'myshop', password: '000000', shopName: '我的电器行' });
+  const created = accounts.findByUsername(accounts.load(store), 'myshop');
+  const ok = page.loginWith(store, created.id, '000000');
   assert.ok(ok.ok, '正确密码通过');
-  const bad = page.loginWith(store, 'acct1', 'wrong');
+  const bad = page.loginWith(store, created.id, 'wrong');
   assert.strictEqual(bad.ok, false, '错误密码拒绝');
 });
 

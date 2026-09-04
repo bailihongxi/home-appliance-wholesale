@@ -573,6 +573,14 @@
   }
   app.desktopNavOrder = desktopNavOrder;
 
+  /** 当前登录账户是否为管理总控（admin）——账户权限管理菜单仅管理总控可见 */
+  function isAdmin() {
+    var g = (typeof globalThis !== 'undefined' ? globalThis : (typeof self !== 'undefined' ? self : null));
+    var a = (g && g.ERP && g.ERP.currentAccount) || (app.ctx && app.ctx.currentAccount);
+    return !!(a && (a.role === 'admin' || a.id === 'admin'));
+  }
+  app.isAdmin = isAdmin;
+
   // 电脑端侧栏折叠：切换 collapsed class + 记忆到 localStorage（收起后仅保留图标）
   function toggleSidebar() {
     var side = document.querySelector('.app-sidebar');
@@ -621,7 +629,12 @@
       router().all().forEach(function (p) { byName[p.name] = p; });
       side.innerHTML = desktopNavOrder()
         .map(function (n) { return byName[n]; })
-        .filter(function (p) { return p && !p.hideInNav; })
+        .filter(function (p) {
+          if (!p || p.hideInNav) return false;
+          // 账户权限管理菜单：仅管理总控可见（管理总控新建的普通账户无权限看到）
+          if (p.name === 'admin' && !isAdmin()) return false;
+          return true;
+        })
         .map(function (p) {
           var label = p.navTitle || p.title || p.name;
           return '<button class="nav-item' + (p.name === page.name ? ' on' : '') + '" data-act="nav" data-page="' + p.name + '">' +

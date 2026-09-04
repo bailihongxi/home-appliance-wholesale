@@ -51,3 +51,17 @@ test('手机端搜索模块：搜索框一行、筛选下拉换行第二行（�
   const base = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
   assert.ok(base.includes('.search-bar { display: flex;'), 'search-bar 基础样式存在');
 });
+
+test('问题1-账户权限管理菜单仅管理总控可见（app.isAdmin）', () => {
+  // 管理总控 → 可见
+  globalThis.ERP.currentAccount = { id: 'admin', username: 'hawystem', role: 'admin', shopName: '管理总控' };
+  assert.strictEqual(app.isAdmin(), true, '管理总控可见账户权限管理菜单');
+  // 管理总控新建的普通账户 → 不可见
+  globalThis.ERP.currentAccount = { id: 'acct9', username: 'myshop', role: 'user', shopName: '我的电器行' };
+  assert.strictEqual(app.isAdmin(), false, '普通账户无权限看到账户权限管理菜单');
+  // 未登录 → 不可见
+  globalThis.ERP.currentAccount = null;
+  assert.strictEqual(app.isAdmin(), false, '未登录不可见');
+  // 还原
+  globalThis.ERP.currentAccount = null;
+});

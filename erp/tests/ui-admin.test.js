@@ -42,16 +42,15 @@ test('非管理员访问：渲染无权限提示，不渲染管理内容', () =>
   assert.ok(!html.includes('账户权限管理'), '不渲染管理标题');
 });
 
-test('管理员访问：列出全部账号（admin+3 店），9 类分类 chip', () => {
+test('管理员访问：列出管理总控与新建分配账户，9 类分类 chip', () => {
   const store = memStore();
   accounts.ensurePreset(store);
+  accounts.create(store, { username: 'myshop', password: '123456', shopName: '我的电器行' });
   const state = page.init(null, store);
   const html = page.render(ADMIN_CTX, state);
   assert.ok(html.includes('账户权限管理'), '显示管理标题');
-  assert.ok(html.includes('管理总控'), '列出管理员自身');
-  assert.ok(html.includes('大家电店'), '列出大家电店');
-  assert.ok(html.includes('小家电店'), '列出小家电店');
-  assert.ok(html.includes('厨电店'), '列出厨电店');
+  assert.ok(html.includes('管理总控'), '列出管理总控自身');
+  assert.ok(html.includes('我的电器行'), '列出新建分配账户');
   // 9 类 chip
   ['冰箱', '洗衣机', '空调', '电视', '厨房电器', '生活小家电', '数码影音', '配件耗材', '其他'].forEach((c) => {
     assert.ok(html.includes('data-cat="' + c + '"'), '含分类 chip：' + c);
@@ -74,22 +73,22 @@ test('toggle-cat：点击分类切换勾选态', () => {
   const store = memStore();
   accounts.ensurePreset(store);
   const state = page.init(null, store);
-  state.edits = { acct3: ['厨房电器', '生活小家电'] };
-  const el = { getAttribute: (k) => (k === 'data-id' ? 'acct3' : k === 'data-cat' ? '电视' : '') };
+  state.edits = { acct9: ['厨房电器', '生活小家电'] };
+  const el = { getAttribute: (k) => (k === 'data-id' ? 'acct9' : k === 'data-cat' ? '电视' : '') };
   page.actions['admin-toggle-cat'](ADMIN_CTX, state, el);
-  assert.ok(state.edits.acct3.includes('电视'), '已加入 电视');
+  assert.ok(state.edits.acct9.includes('电视'), '已加入 电视');
   page.actions['admin-toggle-cat'](ADMIN_CTX, state, el);
-  assert.ok(!state.edits.acct3.includes('电视'), '再次点击移除 电视');
+  assert.ok(!state.edits.acct9.includes('电视'), '再次点击移除 电视');
 });
 
 test('all-cats：设为全部分类（空数组）', () => {
   const store = memStore();
   accounts.ensurePreset(store);
   const state = page.init(null, store);
-  state.edits = { acct2: ['冰箱'] };
-  const el = { getAttribute: (k) => (k === 'data-id' ? 'acct2' : '') };
+  state.edits = { acct9: ['冰箱'] };
+  const el = { getAttribute: (k) => (k === 'data-id' ? 'acct9' : '') };
   page.actions['admin-all-cats'](ADMIN_CTX, state, el);
-  assert.deepStrictEqual(state.edits.acct2, [], '全部分类 = 空数组');
+  assert.deepStrictEqual(state.edits.acct9, [], '全部分类 = 空数组');
 });
 
 test('saveEdits：保存部分勾选 → 写入账号 scopeCategories', () => {
@@ -156,17 +155,17 @@ test('我的页：普通账号不显示「权限管理」入口', () => {
 });
 
 /* ===== 账户管理（管理员统一新建/修改/删除，登录页已移除） ===== */
-test('账户管理-渲染：含新建账号按钮，店铺账号含修改/删除按钮，admin 自身无', () => {
+test('账户管理-渲染：含新建账号按钮，普通账户含修改/删除按钮，admin 自身无', () => {
   const store = memStore();
   accounts.ensurePreset(store);
+  accounts.create(store, { username: 'myshop', password: '123456', shopName: '我的电器行' });
   const state = page.init(null, store);
   const html = page.render(ADMIN_CTX, state);
   assert.ok(html.includes('admin-new-toggle'), '含新建账号按钮');
-  // 每个店铺账号（acct1/acct2/acct3）有 修改 + 删除
-  ['acct1', 'acct2', 'acct3'].forEach((id) => {
-    assert.ok(html.includes('data-act="admin-edit-account" data-id="' + id + '"'), id + ' 含修改按钮');
-    assert.ok(html.includes('data-act="admin-del-account" data-id="' + id + '"'), id + ' 含删除按钮');
-  });
+  // 新建分配账户有 修改 + 删除
+  const target = accounts.findByUsername(accounts.load(store), 'myshop');
+  assert.ok(html.includes('data-act="admin-edit-account" data-id="' + target.id + '"'), target.id + ' 含修改按钮');
+  assert.ok(html.includes('data-act="admin-del-account" data-id="' + target.id + '"'), target.id + ' 含删除按钮');
   // admin 自身无修改/删除按钮
   assert.ok(!html.includes('data-act="admin-edit-account" data-id="admin"'), 'admin 无修改按钮');
   assert.ok(!html.includes('data-act="admin-del-account" data-id="admin"'), 'admin 无删除按钮');
@@ -208,13 +207,14 @@ test('账户管理-新建：密码不一致被拦截', () => {
 test('账户管理-修改：updateAccount 改店名/登录名/密码/头像成功', () => {
   const store = memStore();
   accounts.ensurePreset(store);
-  const r = page.updateAccount(store, 'acct1', {
-    username: 'appliance_new', shopName: '西安电器总店', password: '9999', password2: '9999', avatar: 'data:image/png;base64,BB'
+  const cr = accounts.create(store, { username: 'upd1', password: '123456', shopName: '店一' });
+  const r = page.updateAccount(store, cr.account.id, {
+    username: 'upd1_new', shopName: '西安电器总店', password: '9999', password2: '9999', avatar: 'data:image/png;base64,BB'
   });
   assert.strictEqual(r.ok, true);
-  const acct = accounts.getById(accounts.load(store), 'acct1');
+  const acct = accounts.getById(accounts.load(store), cr.account.id);
   assert.strictEqual(acct.shopName, '西安电器总店');
-  assert.strictEqual(acct.username, 'appliance_new');
+  assert.strictEqual(acct.username, 'upd1_new');
   assert.strictEqual(acct.avatar, 'data:image/png;base64,BB');
   assert.strictEqual(accounts.verify(acct, '9999'), true, '新密码生效');
 });
@@ -222,10 +222,11 @@ test('账户管理-修改：updateAccount 改店名/登录名/密码/头像成�
 test('账户管理-修改：admin 不可修改；密码不一致被拦截', () => {
   const store = memStore();
   accounts.ensurePreset(store);
+  const cr = accounts.create(store, { username: 'upd2', password: '123456', shopName: '店二' });
   const r1 = page.updateAccount(store, 'admin', { username: 'admin', shopName: '改', password: '', password2: '', avatar: '' });
   assert.strictEqual(r1.ok, false, 'admin 不可修改');
   assert.ok(r1.error.includes('管理员'));
-  const r2 = page.updateAccount(store, 'acct1', { username: 'a', shopName: 'b', password: '1111', password2: '2222', avatar: '' });
+  const r2 = page.updateAccount(store, cr.account.id, { username: 'a', shopName: 'b', password: '1111', password2: '2222', avatar: '' });
   assert.strictEqual(r2.ok, false, '密码不一致拦截');
   assert.ok(r2.error.includes('不一致'));
 });
@@ -233,21 +234,22 @@ test('账户管理-修改：admin 不可修改；密码不一致被拦截', () =
 test('账户管理-修改流程：action 预填表单 → 保存生效', () => {
   const store = memStore();
   accounts.ensurePreset(store);
+  const cr = accounts.create(store, { username: 'upd3', password: '123456', shopName: '小家电店' });
   const state = page.init(null, store);
-  const el = { getAttribute: (k) => (k === 'data-id' ? 'acct2' : '') };
+  const el = { getAttribute: (k) => (k === 'data-id' ? cr.account.id : '') };
   page.actions['admin-edit-account'](ADMIN_CTX, state, el);
-  assert.strictEqual(state.editId, 'acct2');
+  assert.strictEqual(state.editId, cr.account.id);
   assert.strictEqual(state.editForm.shopName, '小家电店');
-  assert.strictEqual(state.editForm.username, 'smallapp');
+  assert.strictEqual(state.editForm.username, 'upd3');
   const html = page.render(ADMIN_CTX, state);
   assert.ok(html.includes('修改账号'), '编辑表单渲染');
   assert.ok(html.includes('data-input="admin-edit.shopName"'), '店名输入框');
-  state.editForm = { username: 'smallapp2', shopName: '小家电旗舰店', password: '', password2: '', avatar: '' };
-  const ok = page.actions['admin-save-edit'](ADMIN_CTX, state, { getAttribute: (k) => (k === 'data-id' ? 'acct2' : '') });
+  state.editForm = { username: 'upd3_new', shopName: '小家电旗舰店', password: '', password2: '', avatar: '' };
+  const ok = page.actions['admin-save-edit'](ADMIN_CTX, state, { getAttribute: (k) => (k === 'data-id' ? cr.account.id : '') });
   assert.strictEqual(ok, true);
-  const acct = accounts.getById(accounts.load(store), 'acct2');
+  const acct = accounts.getById(accounts.load(store), cr.account.id);
   assert.strictEqual(acct.shopName, '小家电旗舰店');
-  assert.strictEqual(acct.username, 'smallapp2');
+  assert.strictEqual(acct.username, 'upd3_new');
   assert.strictEqual(state.editId, null, '保存后关闭编辑');
 });
 
@@ -301,15 +303,16 @@ test('账户管理-删除：admin 不可删（action 拦截）', () => {
 test('账户管理-取消：新建/修改/删除取消不生效', () => {
   const store = memStore();
   accounts.ensurePreset(store);
+  const cr = accounts.create(store, { username: 'canc1', password: '123456', shopName: '取消店' });
   const state = page.init(null, store);
   state.showNew = true;
   page.actions['admin-new-cancel'](ADMIN_CTX, state);
   assert.strictEqual(state.showNew, false);
-  state.editId = 'acct1';
+  state.editId = cr.account.id;
   page.actions['admin-edit-cancel'](ADMIN_CTX, state);
   assert.strictEqual(state.editId, null);
-  state.delId = 'acct1';
+  state.delId = cr.account.id;
   page.actions['admin-del-cancel'](ADMIN_CTX, state);
   assert.strictEqual(state.delId, null);
-  assert.strictEqual(accounts.getById(accounts.load(store), 'acct1') !== null, true, '账号仍在');
+  assert.strictEqual(accounts.getById(accounts.load(store), cr.account.id) !== null, true, '账号仍在');
 });
