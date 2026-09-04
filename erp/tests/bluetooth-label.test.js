@@ -85,24 +85,22 @@ test('未连接时打印返回 rejected Promise', async () => {
   }
 });
 
-test('index.html 引入蓝牙打印模块', () => {
+test('系统已移除蓝牙打印：index.html 不再引入 bluetooth-label.js（原测试改为验证移除）', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-  assert.ok(html.includes('js/print/bluetooth-label.js'), 'index.html 引入 bluetooth-label.js');
+  assert.ok(!html.includes('js/print/bluetooth-label.js'), 'index.html 不再引入 bluetooth-label.js');
 });
 
-test('设置页面包含蓝牙打印机连接管理', () => {
+test('系统已移除蓝牙打印：设置页面不再有蓝牙打印机连接管理（原测试改为验证移除）', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'page-setting.js'), 'utf8');
-  assert.ok(src.includes('bt-connect'), '包含蓝牙连接按钮');
-  assert.ok(src.includes('bt-disconnect'), '包含蓝牙断开按钮');
-  assert.ok(src.includes('ERP.btLabel'), '使用 ERP.btLabel 模块');
-  assert.ok(src.includes('凝优P50'), '提及凝优P50打印机');
+  assert.ok(!src.includes('bt-connect'), '不再包含蓝牙连接按钮');
+  assert.ok(!src.includes('bt-disconnect'), '不再包含蓝牙断开按钮');
+  assert.ok(!src.includes('bt-print-section'), '不再包含蓝牙打印模块');
 });
 
-test('商品档案页面包含打印标签按钮和 action', () => {
+test('系统已移除蓝牙打印：商品档案页面不再有打印标签按钮和 action（原测试改为验证移除）', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'page-product.js'), 'utf8');
-  assert.ok(src.includes('print-label'), '包含打印标签按钮');
-  assert.ok(src.includes("'print-label': function"), '包含 print-label action');
-  assert.ok(src.includes('ERP.btLabel.printProductLabel'), '调用蓝牙打印模块');
+  assert.ok(!src.includes('print-label'), '不再包含打印标签按钮');
+  assert.ok(!src.includes("'print-label': function"), '不再包含 print-label action');
 });
 
 test('蓝牙模块：平台检测 getPlatform/getBrowser 接口存在', () => {
@@ -127,17 +125,18 @@ test('蓝牙模块：getState 包含 platform 和 browser 字段', () => {
   assert.ok('browser' in s, 'getState 包含 browser');
 });
 
-test('设置页面：不支持蓝牙时显示详细引导（平台检测+步骤+复制链接按钮）', () => {
+test('系统已移除蓝牙打印：设置页面不再有蓝牙引导和复制链接按钮（原测试改为验证移除）', () => {
   const setting = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'page-setting.js'), 'utf8');
-  assert.ok(setting.includes('bt-copy-link'), '设置页有 bt-copy-link 复制链接按钮');
-  assert.ok(setting.includes('getHelpInfo'), '设置页调用 getHelpInfo 获取引导');
-  assert.ok(setting.includes('复制链接到支持蓝牙的浏览器打开'), '设置页有复制链接提示文案');
-  assert.ok(setting.includes('Bluefy'), '设置页引导 iOS 用户使用 Bluefy 浏览器');
+  assert.ok(!setting.includes('bt-copy-link'), '设置页不再有 bt-copy-link 按钮');
+  assert.ok(!setting.includes('getHelpInfo'), '设置页不再调用 getHelpInfo');
+  assert.ok(!setting.includes('Bluefy'), '设置页不再有 Bluefy 引导');
 });
 
-test('商品档案页：打印标签按钮不支持蓝牙时自动复制链接并提示', () => {
+test('系统已移除蓝牙打印：商品档案页不再有蓝牙打印引导（原测试改为验证移除）', () => {
   const product = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'page-product.js'), 'utf8');
-  assert.ok(product.includes('getHelpInfo'), '商品页调用 getHelpInfo');
-  assert.ok(product.includes('copyLink'), '商品页不支持蓝牙时调用 copyLink');
-  assert.ok(product.includes('Bluefy'), '商品页提示 iOS 用户用 Bluefy');
+  assert.ok(!product.includes('getHelpInfo'), '商品页不再调用 getHelpInfo');
+  assert.ok(!product.includes('copyLink'), '商品页不再调用 copyLink');
+  assert.ok(!product.includes('Bluefy'), '商品页不再有 Bluefy 提示');
 });
+
+

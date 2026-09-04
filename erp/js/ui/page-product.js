@@ -154,44 +154,6 @@
         if (ERP.app && ERP.app.render) ERP.app.render();
       },
 
-      /** 蓝牙打印商品标签（凝优P50等CPCL标签机） */
-      'print-label': function (ctx, state, el) {
-        var id = el.getAttribute('data-id');
-        var p = product.getById(ctx, id);
-        if (!p) return;
-        if (!ERP.btLabel) {
-          if (ERP.app && ERP.app.toast) ERP.app.toast('蓝牙打印模块未加载', 'err');
-          return;
-        }
-        if (!ERP.btLabel.isSupported()) {
-          var help = ERP.btLabel.getHelpInfo();
-          if (ERP.app && ERP.app.toast) {
-            ERP.app.toast(help.title + '：' + (help.platform === 'ios' ? 'iPhone请用Bluefy浏览器' : '请用Chrome/Edge浏览器打开') + '，已复制链接', 'err');
-          }
-          if (ERP.btLabel.copyLink) ERP.btLabel.copyLink().catch(function () {});
-          return;
-        }
-        if (!ERP.btLabel.getState().connected) {
-          if (ERP.app && ERP.app.toast) ERP.app.toast('请先在「我的 → 设置」中连接蓝牙打印机', 'err');
-          return;
-        }
-        var labelCfg = (ctx.settings && ctx.settings.label) || {};
-        var printCfg = (ctx.settings && ctx.settings.print) || {};
-        ERP.btLabel.printProductLabel(p, {
-          widthMm: labelCfg.widthMm || 40,
-          heightMm: labelCfg.heightMm || 30,
-          dpi: labelCfg.dpi || 203,
-          density: printCfg.density || 8,
-          copies: 1
-        }, { showPrice: 'retail' })
-          .then(function () {
-            if (ERP.app && ERP.app.toast) ERP.app.toast('已发送打印：' + product.displayName(p), 'ok');
-          })
-          .catch(function (err) {
-            if (ERP.app && ERP.app.toast) ERP.app.toast('打印失败：' + (err.message || err), 'err');
-          });
-      },
-
       filter: function (ctx, state, el) {
         var key = el.getAttribute('data-name');
         state[key] = el.value;
@@ -422,7 +384,6 @@
         '<td>' + ui.badge(p.status === schema.STATUS.OFF ? '停售' : '在售', p.status === schema.STATUS.OFF ? 'off' : 'on') + '</td>' +
         '<td class="act">' +
         '<button data-act="edit-product" data-id="' + esc(p.id) + '">编辑</button>' +
-        '<button data-act="print-label" data-id="' + esc(p.id) + '" title="蓝牙打印标签">🏷️标签</button>' +
         '<button data-act="toggle-status" data-id="' + esc(p.id) + '">' +
         (p.status === schema.STATUS.OFF ? '上架' : '停售') + '</button>' +
         '</td></tr>';
