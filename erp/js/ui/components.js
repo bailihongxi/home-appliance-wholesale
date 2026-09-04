@@ -112,6 +112,8 @@
       '<div class="pager">' +
       '<button class="btn btn-sm" data-act="' + a + '" data-page="' + (page - 1) + '"' + (page <= 1 ? ' disabled' : '') + '>上一页</button>' +
       '<span class="muted small">' + page + ' / ' + pages + '　共 ' + total + ' 条</span>' +
+      '<input class="input pager-jump-input" type="number" min="1" max="' + pages + '" placeholder="跳至" style="width:60px;height:28px;padding:0 6px;font-size:12px;" data-pager-act="' + a + '">' +
+      '<button class="btn btn-sm" data-act="page-jump" data-pager-act="' + a + '">跳转</button>' +
       '<button class="btn btn-sm" data-act="' + a + '" data-page="' + (page + 1) + '"' + (page >= pages ? ' disabled' : '') + '>下一页</button>' +
       '</div>'
     );

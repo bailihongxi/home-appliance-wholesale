@@ -43,6 +43,8 @@ function needsValueBinding(t) {
   const typeMatch = t.full.match(/type\s*=\s*["']?(\w+)/);
   const type = typeMatch ? typeMatch[1].toLowerCase() : 'text';
   const skipTypes = ['checkbox', 'radio', 'file', 'hidden', 'submit', 'button', 'reset', 'image', 'range', 'color'];
+  // 分页跳转输入框是临时输入，用户输入后点击跳转，值会清空，不需要 value 绑定
+  if (/pager-jump-input/.test(t.full)) return false;
   return !skipTypes.includes(type);
 }
 

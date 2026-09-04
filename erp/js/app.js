@@ -694,6 +694,33 @@
     'toggle-side': function (ctx, state, el) {
       toggleSidebar();
       return false;
+    },
+    'page-jump': function (ctx, state, el) {
+      var pagerAct = el.getAttribute('data-pager-act') || 'page';
+      var input = el.parentElement.querySelector('.pager-jump-input[data-pager-act="' + pagerAct + '"]');
+      if (!input) return;
+      var val = parseInt(input.value, 10);
+      var max = parseInt(input.getAttribute('max'), 10) || 999;
+      if (!val || val < 1) {
+        ui().toast('请输入有效页码', 'err');
+        return;
+      }
+      if (val > max) {
+        ui().toast('页码不能超过 ' + max, 'err');
+        return;
+      }
+      // 创建临时元素触发分页 action
+      var fakeEl = document.createElement('button');
+      fakeEl.setAttribute('data-act', pagerAct);
+      fakeEl.setAttribute('data-page', String(val));
+      // 直接调用当前页面的分页 action
+      var page = ERP.currentAccount ? router().current() : null;
+      if (page && page.actions && page.actions[pagerAct]) {
+        page.actions[pagerAct](ctx, stateOf(page), fakeEl);
+        if (app.render) app.render();
+      }
+      input.value = '';
+      return false;
     }
   };
 
