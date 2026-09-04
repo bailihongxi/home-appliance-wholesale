@@ -290,15 +290,24 @@
       },
 
       'clear-data': function (ctx, state) {
-        var doClear = function () {
-          schema.DATA_STORES.forEach(function (name) {
+        var doClear = async function () {
+          // 直接清空 IndexedDB 每张表（不能依赖 flush：空列表会被 flush 跳过，导致旧数据残留）
+          var db = app() && app().db;
+          for (var i = 0; i < schema.DATA_STORES.length; i++) {
+            var name = schema.DATA_STORES[i];
             ctx.data[name] = [];
-            if (ctx.touchAll) ctx.touchAll(name);
-          });
+            if (db && typeof db.clear === 'function') {
+              try { await db.clear(name); } catch (e) { /* 忽略单表清空失败 */ }
+            }
+          }
           ctx.data.settings = schema.defaultSettings();
           ctx.settings = ctx.data.settings;
           if (ctx.data) ctx.data.lastBackupAt = null;
-          if (app() && app().commit) app().commit();
+          // 保存重置后的设置到 IndexedDB
+          if (app() && app().saveSettings) {
+            try { await app().saveSettings(); } catch (e) { /* ignore */ }
+          }
+          if (app() && app().commit) await app().commit();
           if (app() && app().toast) app().toast('已清空全部数据', 'ok');
           return true;
         };
