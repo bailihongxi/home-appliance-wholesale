@@ -133,17 +133,18 @@ test('测试连接-失败(401 Token 无效)：显示细分原因', async () => {
   }
 });
 
-test('关于：版本号统一为 V3.9（与 PRD / 开发计划一致）', () => {
+test('关于：版本号统一为 V3.10（与 PRD / 开发计划一致）', () => {
   const { ctx, state } = fresh();
   const html = page.render(ctx, state);
-  assert.ok(html.includes('版本：V3.9'), '关于页显示 V3.9');
+  assert.ok(html.includes('版本：V3.10'), '关于页显示 V3.10');
   assert.ok(html.includes('关于'), '含关于卡片');
-  assert.ok(!html.includes('版本：V3.8'), '不再显示旧版本号 V3.8');
-  assert.ok(!html.includes('版本：V3.7'), '不再显示旧版本号 V3.7');
-  assert.ok(!html.includes('版本：V3.6'), '不再显示旧版本号 V3.6');
-  assert.ok(!html.includes('版本：V3.3'), '不再显示旧版本号 V3.3');
-  assert.ok(!html.includes('版本：V3.1'), '不再显示旧版本号 V3.1');
-  assert.ok(!html.includes('版本：V3.0'), '不再显示更旧版本号');
+  assert.ok(!html.includes('版本：V3.9）'), '不再显示旧版本号 V3.9');
+  assert.ok(!html.includes('版本：V3.8）'), '不再显示旧版本号 V3.8');
+  assert.ok(!html.includes('版本：V3.7）'), '不再显示旧版本号 V3.7');
+  assert.ok(!html.includes('版本：V3.6）'), '不再显示旧版本号 V3.6');
+  assert.ok(!html.includes('版本：V3.3）'), '不再显示旧版本号 V3.3');
+  assert.ok(!html.includes('版本：V3.1）'), '不再显示旧版本号 V3.1');
+  assert.ok(!html.includes('版本：V3.0）'), '不再显示更旧版本号');
 });
 
 test('常用入口：开单改为「销售」，点击直接进入销售管理列表页（无 tab=new）', () => {
