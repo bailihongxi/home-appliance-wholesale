@@ -223,6 +223,9 @@
       '<button class="btn btn-primary" data-act="open-manual">＋ 记一笔</button>' +
       '</div></div>';
 
+    // 记一笔编辑模块：弹性出现在筛选区下方、列表上方，点击记一笔展开，保存/取消后自动隐藏
+    if (state.manualOpen) h += renderManual(ctx, state);
+
     if (!list.length) {
       h += '<div class="card">' + ui.empty('暂无流水记录') + '</div>';
     } else {
@@ -245,7 +248,6 @@
       h += '</tbody></table></div></div>';
     }
 
-    if (state.manualOpen) h += renderManual(ctx, state);
     return h;
   }
 
