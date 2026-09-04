@@ -299,13 +299,15 @@
       }
     }
 
-    /** 生成输入框选择器：同时支持 data-input 和 data-change（退换货等页面用 data-change+data-live） */
+    /** 生成输入框选择器：同时支持 data-input 和 data-change，以及 data-id 精确定位（表格中行内输入框） */
     function inputSelector(el, key) {
+      var idAttr = el.getAttribute('data-id');
+      var idPart = idAttr ? '[data-id="' + idAttr + '"]' : '';
       var v = el.getAttribute('data-input');
-      if (v !== null) return '[data-input="' + v + '"]' + (key ? '[data-name="' + key + '"]' : '');
+      if (v !== null) return '[data-input="' + v + '"]' + (key ? '[data-name="' + key + '"]' : '') + idPart;
       v = el.getAttribute('data-change');
-      if (v !== null) return '[data-change="' + v + '"]' + (key ? '[data-name="' + key + '"]' : '');
-      return '[data-input=""]' + (key ? '[data-name="' + key + '"]' : '');
+      if (v !== null) return '[data-change="' + v + '"]' + (key ? '[data-name="' + key + '"]' : '') + idPart;
+      return '[data-input=""]' + (key ? '[data-name="' + key + '"]' : '') + idPart;
     }
 
     // 搜索防抖：250ms 内多次输入只渲染一次；渲染后恢复搜索框焦点与光标
