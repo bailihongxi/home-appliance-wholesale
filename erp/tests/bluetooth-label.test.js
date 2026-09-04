@@ -1,0 +1,106 @@
+/**
+ * bluetooth-label.test.js —— 蓝牙标签打印模块测试
+ * 验证 CPCL 指令生成、商品标签构建、模块接口完整性
+ */
+const test = require('node:test');
+const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+
+const btLabel = require('../js/print/bluetooth-label.js');
+
+test('蓝牙打印模块接口完整', () => {
+  assert.ok(typeof btLabel.isSupported === 'function', 'isSupported 存在');
+  assert.ok(typeof btLabel.getState === 'function', 'getState 存在');
+  assert.ok(typeof btLabel.connect === 'function', 'connect 存在');
+  assert.ok(typeof btLabel.disconnect === 'function', 'disconnect 存在');
+  assert.ok(typeof btLabel.buildCpclLabel === 'function', 'buildCpclLabel 存在');
+  assert.ok(typeof btLabel.buildProductLabel === 'function', 'buildProductLabel 存在');
+  assert.ok(typeof btLabel.printProductLabel === 'function', 'printProductLabel 存在');
+  assert.ok(typeof btLabel.mmToDots === 'function', 'mmToDots 存在');
+});
+
+test('mmToDots 单位换算正确（203 DPI）', () => {
+  // 203 DPI = 8 dots/mm (近似)
+  assert.strictEqual(btLabel.mmToDots(40, 203), 320, '40mm = 320 dots');
+  assert.strictEqual(btLabel.mmToDots(30, 203), 240, '30mm = 240 dots');
+  assert.strictEqual(btLabel.mmToDots(10, 203), 80, '10mm = 80 dots');
+});
+
+test('CPCL 指令生成包含头部和 PRINT', () => {
+  const data = btLabel.buildCpclLabel([
+    { text: 'Test Product', x: 10, y: 10, font: 4, size: 0 },
+    { barcode: '6901234567890', x: 10, y: 50, height: 60, barcodeType: 'CODE128' }
+  ], { widthMm: 40, heightMm: 30, dpi: 203, copies: 1 });
+  assert.ok(data instanceof Uint8Array, '返回 Uint8Array');
+  const text = new TextDecoder().decode(data);
+  assert.ok(text.startsWith('! 0 203 203 240 1'), 'CPCL 头部正确（高度240 dots，1份）');
+  assert.ok(text.includes('TEXT 4 0 10 10 Test Product'), '文本指令正确');
+  assert.ok(text.includes('BARCODE CODE128 60 10 50 6901234567890'), '条码指令正确');
+  assert.ok(text.includes('PRINT'), '包含 PRINT 指令');
+  assert.ok(text.includes('DENSITY'), '包含打印浓度设置');
+  assert.ok(text.includes('PAGE-WIDTH 320'), '包含页面宽度设置');
+});
+
+test('商品标签构建包含品牌、型号、价格、条码', () => {
+  const product = {
+    brand: 'Haier',
+    model: 'BCD-200',
+    priceWholesale: 150000,
+    priceRetail: 180000,
+    barcodes: ['6901234567890']
+  };
+  const data = btLabel.buildProductLabel(product, { widthMm: 40, heightMm: 30, dpi: 203 }, { showPrice: 'retail' });
+  const text = new TextDecoder().decode(data);
+  assert.ok(text.includes('Haier'), '包含品牌');
+  assert.ok(text.includes('BCD-200'), '包含型号');
+  assert.ok(text.includes('1800.00'), '包含零售价');
+  assert.ok(text.includes('6901234567890'), '包含条码');
+});
+
+test('商品标签支持不同价格显示模式', () => {
+  const product = { brand: 'Gree', model: 'KFR-35', priceWholesale: 200000, priceRetail: 250000 };
+  // 批发价
+  let data = btLabel.buildProductLabel(product, {}, { showPrice: 'wholesale' });
+  let text = new TextDecoder().decode(data);
+  assert.ok(text.includes('2000.00'), '批发价模式');
+  // 双价格
+  data = btLabel.buildProductLabel(product, {}, { showPrice: 'both' });
+  text = new TextDecoder().decode(data);
+  assert.ok(text.includes('2000.00'), '双价格-批发');
+  assert.ok(text.includes('2500.00'), '双价格-零售');
+  // 无价格
+  data = btLabel.buildProductLabel(product, {}, { showPrice: 'none' });
+  text = new TextDecoder().decode(data);
+  assert.ok(!text.includes('2000.00') && !text.includes('2500.00'), '无价格模式');
+});
+
+test('未连接时打印返回 rejected Promise', async () => {
+  const product = { brand: '测试', model: 'T1' };
+  try {
+    await btLabel.printProductLabel(product, {}, {});
+    assert.fail('应该抛出未连接错误');
+  } catch (e) {
+    assert.ok(e.message.includes('未连接'), '错误信息包含"未连接"');
+  }
+});
+
+test('index.html 引入蓝牙打印模块', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.ok(html.includes('js/print/bluetooth-label.js'), 'index.html 引入 bluetooth-label.js');
+});
+
+test('设置页面包含蓝牙打印机连接管理', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'page-setting.js'), 'utf8');
+  assert.ok(src.includes('bt-connect'), '包含蓝牙连接按钮');
+  assert.ok(src.includes('bt-disconnect'), '包含蓝牙断开按钮');
+  assert.ok(src.includes('ERP.btLabel'), '使用 ERP.btLabel 模块');
+  assert.ok(src.includes('凝优P50'), '提及凝优P50打印机');
+});
+
+test('商品档案页面包含打印标签按钮和 action', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'ui', 'page-product.js'), 'utf8');
+  assert.ok(src.includes('print-label'), '包含打印标签按钮');
+  assert.ok(src.includes("'print-label': function"), '包含 print-label action');
+  assert.ok(src.includes('ERP.btLabel.printProductLabel'), '调用蓝牙打印模块');
+});

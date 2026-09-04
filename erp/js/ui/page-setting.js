@@ -78,6 +78,22 @@
         '<div class="form-row" style="justify-content:flex-end"><label>&nbsp;</label>' +
         '<button class="btn btn-primary" data-act="save-settings">保存设置</button></div>' +
         '</div>' +
+        /* ---- 蓝牙标签打印机 ---- */
+        '<div class="bt-print-section" style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb;">' +
+        '<div class="form-row"><label>蓝牙标签打印机</label>' +
+        '<span id="bt-status" class="bt-status" style="font-size:13px;color:' + (ERP.btLabel && ERP.btLabel.getState().connected ? '#16a34a' : '#6b7280') + '">' +
+        (ERP.btLabel && ERP.btLabel.getState().connected ? '已连接：' + (ERP.btLabel.getState().deviceName || '打印机') : '未连接') +
+        '</span></div>' +
+        '<div class="form-row"><label>&nbsp;</label>' +
+        (ERP.btLabel && ERP.btLabel.getState().connected
+          ? '<button class="btn" data-act="bt-disconnect">断开打印机</button>'
+          : '<button class="btn btn-primary" data-act="bt-connect">连接蓝牙打印机</button>') +
+        '<span class="muted small" style="margin-left:8px;">支持凝优P50等CPCL标签机</span>' +
+        '</div>' +
+        (ERP.btLabel && !ERP.btLabel.isSupported()
+          ? '<div class="notice notice-warn mt8" style="font-size:12px;">当前浏览器不支持 Web Bluetooth，请使用 Chrome/Edge 并通过 HTTPS 或 localhost 访问</div>'
+          : '') +
+        '</div>' +
         '</div>';
 
       /* ---- 打开密码 ---- */
@@ -217,6 +233,30 @@
         if (app() && app().saveSettings) app().saveSettings();
         if (app() && app().toast) app().toast('设置已保存', 'ok');
         return true;
+      },
+
+      /** 连接蓝牙标签打印机 */
+      'bt-connect': function (ctx, state) {
+        if (!ERP.btLabel || !ERP.btLabel.isSupported()) {
+          if (app() && app().toast) app().toast('当前浏览器不支持蓝牙，请使用 Chrome/Edge', 'err');
+          return;
+        }
+        if (app() && app().toast) app().toast('正在扫描蓝牙设备...', 'info');
+        ERP.btLabel.connect()
+          .then(function (s) {
+            if (app() && app().toast) app().toast('已连接：' + (s.deviceName || '打印机'), 'ok');
+            if (app() && app().render) app().render();
+          })
+          .catch(function (err) {
+            if (app() && app().toast) app().toast('连接失败：' + (err.message || err), 'err');
+          });
+      },
+
+      /** 断开蓝牙打印机 */
+      'bt-disconnect': function (ctx, state) {
+        if (ERP.btLabel) ERP.btLabel.disconnect();
+        if (app() && app().toast) app().toast('已断开打印机', 'ok');
+        if (app() && app().render) app().render();
       },
 
       'set-password': function (ctx, state) {
