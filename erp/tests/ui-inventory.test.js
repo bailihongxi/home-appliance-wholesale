@@ -112,6 +112,25 @@ test('变动明细：show-logs 显示进货入库记录', () => {
   assert.ok(html.includes('+5'));
 });
 
+test('变动明细模块位于库存明细表上方，点击关闭后自动隐藏', () => {
+  const ctx = seed(newCtx());
+  const p = ctx.data.products[0];
+  inv.applyPurchase(ctx, { date: '2026-09-01', items: [{ productId: p.id, qty: 5, cost: 100000 }], supplier: '测试' });
+  const st = fresh(ctx);
+  page.actions['show-logs'](ctx, st, { getAttribute: () => p.id });
+  const html = page.render(ctx, st);
+  // 变动明细模块必须在库存明细表之前（HTML 字符串中"变动明细"出现在"品牌</th><th>型号"之前）
+  const logsIdx = html.indexOf('变动明细');
+  const tableIdx = html.indexOf('<th>品牌</th><th>型号</th>');
+  assert.ok(logsIdx > -1, '渲染变动明细模块');
+  assert.ok(tableIdx > -1, '渲染库存明细表');
+  assert.ok(logsIdx < tableIdx, '变动明细模块位于库存明细表上方');
+  // 点击关闭后自动隐藏
+  page.actions['close-logs'](ctx, st);
+  const html2 = page.render(ctx, st);
+  assert.ok(!html2.includes('变动明细'), '关闭后变动明细模块自动隐藏');
+});
+
 test('统计卡片 CSS：内边距/高度/间距减半 + 数字图标放大两倍', () => {
   const base = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
   const compactBlock = base.slice(base.indexOf('.stat-grid-compact'), base.indexOf('.stat {'));

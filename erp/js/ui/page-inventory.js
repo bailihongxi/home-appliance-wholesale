@@ -269,26 +269,9 @@
       return '<div class="card">' + ui.empty('没有找到商品') + '</div>';
     }
 
-    var h = '<div class="card"><div class="table-wrap"><table class="tbl tbl-striped"><thead><tr>' +
-      '<th>品牌</th><th>型号</th><th>类型</th><th>单位</th>' +
-      '<th class="num">成本</th><th class="num">批发价</th><th class="num">零售价</th>' +
-      '<th class="num">库存</th><th>操作</th></tr></thead><tbody>';
-    pg.items.forEach(function (p) {
-      var low = (p.stock || 0) < thresholdOf(ctx);
-      h += '<tr>' +
-        '<td>' + esc(p.brand) + '</td>' +
-        '<td>' + esc(p.model) + '</td>' +
-        '<td>' + esc(p.category) + '</td>' +
-        '<td>' + esc(p.unit) + '</td>' +
-        '<td class="num">' + ui.money(p.cost) + '</td>' +
-        '<td class="num">' + ui.money(p.priceWholesale) + '</td>' +
-        '<td class="num">' + ui.money(p.priceRetail) + '</td>' +
-        '<td class="num' + (low ? ' low' : '') + '">' + (p.stock ? '<b>' + p.stock + '</b>' : '<span class="weak">0</span>') +
-        (low ? ' ' + ui.badge('低', 'warn') : '') + '</td>' +
-        '<td class="act"><button data-act="show-logs" data-id="' + esc(p.id) + '">明细</button></td></tr>';
-    });
-    h += '</tbody></table></div>' + ui.pager(pg.page, pg.pages, pg.total) + '</div>';
+    var h = '';
 
+    // 变动明细模块：移到库存明细表上方，点击关闭后自动隐藏（logsProduct 为空时不渲染）
     if (st.logsProduct) {
       var logs = inv.logsOfProduct(ctx, st.logsProduct);
       var p = product.getById(ctx, st.logsProduct);
@@ -310,6 +293,27 @@
       }
       h += '</div>';
     }
+
+    h += '<div class="card"><div class="table-wrap"><table class="tbl tbl-striped"><thead><tr>' +
+      '<th>品牌</th><th>型号</th><th>类型</th><th>单位</th>' +
+      '<th class="num">成本</th><th class="num">批发价</th><th class="num">零售价</th>' +
+      '<th class="num">库存</th><th>操作</th></tr></thead><tbody>';
+    pg.items.forEach(function (p) {
+      var low = (p.stock || 0) < thresholdOf(ctx);
+      h += '<tr>' +
+        '<td>' + esc(p.brand) + '</td>' +
+        '<td>' + esc(p.model) + '</td>' +
+        '<td>' + esc(p.category) + '</td>' +
+        '<td>' + esc(p.unit) + '</td>' +
+        '<td class="num">' + ui.money(p.cost) + '</td>' +
+        '<td class="num">' + ui.money(p.priceWholesale) + '</td>' +
+        '<td class="num">' + ui.money(p.priceRetail) + '</td>' +
+        '<td class="num' + (low ? ' low' : '') + '">' + (p.stock ? '<b>' + p.stock + '</b>' : '<span class="weak">0</span>') +
+        (low ? ' ' + ui.badge('低', 'warn') : '') + '</td>' +
+        '<td class="act"><button data-act="show-logs" data-id="' + esc(p.id) + '">明细</button></td></tr>';
+    });
+    h += '</tbody></table></div>' + ui.pager(pg.page, pg.pages, pg.total) + '</div>';
+
     return h;
   }
 
