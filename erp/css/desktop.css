@@ -11,19 +11,17 @@
   .app-header { display: none; }
 
   /* —— 侧栏 ——
-   * 电脑端：白底 + 薄荷绿 logo + 菜单列表（9 项）*/
+   * 电脑端：白底 + 薄荷绿 logo + 菜单列表（9 项）
+   * 宽度/折叠态已移到 base.css（不依赖媒体查询，修复窗口 750px 时断点不匹配问题） */
   .app-sidebar {
     position: sticky;
     top: 0;
-    width: var(--sidebar-w);
-    flex: 0 0 var(--sidebar-w);
     height: 100vh;
     overflow-y: auto;
     background: #fff;
     border-right: 1px solid var(--c-border);
     padding: 0;
     z-index: 30;
-    transition: width .18s ease, flex-basis .18s ease;
   }
   .app-sidebar .brand {
     display: flex;
@@ -35,36 +33,14 @@
     white-space: nowrap;
     overflow: hidden;
   }
-  /* 折叠/展开按钮：展开态为红色长条覆盖侧栏宽度，折叠态回弹为小方形 */
+  /* 折叠/展开按钮：展开态为红色长条覆盖侧栏宽度，折叠态回弹为小方形
+   * 基础样式在 base.css，此处补充桌面端 sticky 定位 */
   .app-sidebar .side-toggle {
     position: sticky;
     top: 8px;
-    display: block;
-    margin: 0 8px 4px;
-    width: auto;
-    height: 36px;
-    line-height: 32px;
-    border: 2px solid #dc2626;
-    border-radius: 8px;
-    background: #dc2626;
-    color: #fff;
-    font-size: 14px;
-    font-weight: 700;
-    text-align: right;
-    padding-right: 14px;
-    cursor: pointer;
-    transition: background .12s ease, color .12s ease;
     z-index: 1;
   }
   .app-sidebar .side-toggle:hover { background: #b91c1c; border-color: #b91c1c; color: #fff; }
-  /* 折叠态：收窄为图标栏，隐藏文字 */
-  .app-sidebar.collapsed { width: 60px; flex-basis: 60px; }
-  .app-sidebar.collapsed .brand { justify-content: center; padding: 14px 0; }
-  .app-sidebar.collapsed .brand span { display: none; }
-  .app-sidebar.collapsed .side-toggle { width: 30px; height: 30px; line-height: 26px; margin: 0 17px 4px; padding-right: 0; text-align: center; font-size: 13px; }
-  .app-sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; }
-  .app-sidebar.collapsed .nav-item span:not(.ico) { display: none; }
-  .app-sidebar.collapsed .nav-item .ico { width: auto; font-size: 17px; }
   .app-sidebar .nav-list {
     display: flex;
     flex-direction: column;

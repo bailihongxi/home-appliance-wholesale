@@ -29,8 +29,10 @@ test('折叠/展开 action 已注册（toggle-side）', () => {
 });
 
 test('侧栏折叠 CSS：收窄 + 隐藏文字 + 折叠按钮', () => {
-  const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'desktop.css'), 'utf8');
-  assert.ok(css.includes('.app-sidebar.collapsed { width: 60px'), '折叠后收窄至 60px');
+  // 折叠样式已移到 base.css（不依赖媒体查询，修复窗口 750px 时 desktop.css 断点不匹配问题）
+  const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
+  assert.ok(css.includes('.app-sidebar.collapsed {'), '折叠态规则存在（base.css）');
+  assert.ok(css.includes('width: 60px'), '折叠后收窄至 60px');
   assert.ok(css.includes('.app-sidebar.collapsed .brand span { display: none; }'), '折叠后隐藏店名文字');
   assert.ok(css.includes('.app-sidebar.collapsed .nav-item span:not(.ico) { display: none; }'),
     '折叠后隐藏菜单文字仅留图标');

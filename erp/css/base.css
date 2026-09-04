@@ -789,7 +789,23 @@ table.matrix td.cell.hit { outline: 2px solid var(--c-primary); background: var(
 .app-sidebar {
   background: #fff;
   border-right: 1px solid var(--c-border);
+  /* 宽度与折叠态放在 base.css 不依赖媒体查询：
+   * 根因是 desktop.css @media(min-width:768px) 在窗口 750px 时不匹配，
+   * 导致侧边栏无 width 撑满、collapsed 宽度不生效。
+   * 手机端 .app-sidebar 为 display:none，此处宽度无副作用。 */
+  width: var(--sidebar-w);
+  flex: 0 0 var(--sidebar-w);
+  transition: width .18s ease, flex-basis .18s ease;
 }
+.app-sidebar.collapsed {
+  width: 60px;
+  flex: 0 0 60px;
+}
+.app-sidebar.collapsed .brand { justify-content: center; padding: 14px 0; }
+.app-sidebar.collapsed .brand span { display: none; }
+.app-sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; }
+.app-sidebar.collapsed .nav-item span:not(.ico) { display: none; }
+.app-sidebar.collapsed .nav-item .ico { width: auto; font-size: 17px; }
 /* 侧边栏折叠/展开按钮：展开态红色长条覆盖侧栏宽度，折叠态回弹为小方形
  * 基础样式放在 base.css（不依赖媒体查询），确保任何视口下都正确显示；
  * 手机端 .app-sidebar 为 display:none，按钮自然不显示。 */
