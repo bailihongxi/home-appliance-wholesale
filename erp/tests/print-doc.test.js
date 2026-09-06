@@ -143,10 +143,10 @@ test('问题4-打印表格：取消价格列、型号列放宽、所有文字居
   assert.ok(!html.includes('<th>价格</th>'), '销售单打印取消价格列');
   assert.ok(!html.includes('>批发<') && !html.includes('>零售<'), '取消价格类型（批发/零售）显示');
 
-  // 型号列占剩余空间（colgroup 中型号列宽度 28%，明显大于品牌 12%）
-  assert.ok(html.includes('<col style="width:28%">'), '型号列占剩余 28%');
-  // V3.17 问题2：品牌列占 4 汉字宽 = 12%
-  assert.ok(html.includes('<col style="width:12%">'), '品牌列 12%（4 汉字宽）');
+  // 型号列占剩余空间（colgroup 中型号列宽度 32.2%，明显大于品牌 10.8%）
+  assert.ok(html.includes('<col style="width:32.2%">'), '型号列占剩余 32.2%');
+  // V3.15 问题2：品牌列减少10%，占 3.6 汉字宽 = 10.8%
+  assert.ok(html.includes('<col style="width:10.8%">'), '品牌列 10.8%（3.6 汉字宽，减少10%）');
 
   // 所有文字居左：表格单元格无 class="num"（右对齐类）
   assert.ok(!html.includes('class="num"'), '所有表格单元格无 num 右对齐类，全部居左');
@@ -166,21 +166,21 @@ function colWidths(html) {
   return (cg.match(/width:([0-9.]+%)/g) || []).map(function (s) { return s.replace('width:', ''); });
 }
 
-test('V3.17-问题2：打印模板列宽按汉字分配、列顺序（#2 品牌4 型号剩余 类型5 单位2 单价4 数量2 金额5）', () => {
+test('V3.15-问题2：打印模板列宽调整（品牌-10% 类型-20% 型号+约10%）列顺序（#2 品牌3.6 型号剩余 类型4 单位2 单价4 数量2 金额5）', () => {
   const ctx = newCtx({ shopName: '幸福家电批发' });
   const html = printDoc.buildDocHtml(ctx, saleDoc(), 'sale');
 
-  // 销售单（带价格）列宽：#(2) 品牌(4) 型号(剩余) 类型(5) 单位(2) 单价(4) 数量(2) 金额(5)
+  // 销售单（带价格）列宽：#(2) 品牌(3.6) 型号(剩余) 类型(4) 单位(2) 单价(4) 数量(2) 金额(5)
   assert.deepStrictEqual(colWidths(html),
-    ['6%', '12%', '28%', '15%', '6%', '12%', '6%', '15%'],
-    '销售单列宽：#6% 品牌12% 型号28% 类型15% 单位6% 单价12% 数量6% 金额15%');
+    ['6%', '10.8%', '32.2%', '12%', '6%', '12%', '6%', '15%'],
+    '销售单列宽：#6% 品牌10.8% 型号32.2% 类型12% 单位6% 单价12% 数量6% 金额15%');
 
-  // V3.17 问题2：列宽按汉字个数分配（每汉字 3% 宽），型号列占剩余空间
+  // V3.15 问题2：品牌减少10%(4→3.6)，类型缩小20%(5→4)，型号列(rest)自然增加
   const w = colWidths(html);
   assert.strictEqual(w[0], '6%', '# 列 2 汉字 = 6%');
-  assert.strictEqual(w[1], '12%', '品牌列 4 汉字 = 12%');
-  assert.strictEqual(w[2], '28%', '型号列占剩余空间 = 28%');
-  assert.strictEqual(w[3], '15%', '类型列 5 汉字 = 15%');
+  assert.strictEqual(w[1], '10.8%', '品牌列 3.6 汉字 = 10.8%（减少10%）');
+  assert.strictEqual(w[2], '32.2%', '型号列占剩余空间 = 32.2%（增加约15%）');
+  assert.strictEqual(w[3], '12%', '类型列 4 汉字 = 12%（缩小20%）');
   assert.strictEqual(w[4], '6%', '单位列 2 汉字 = 6%');
   assert.strictEqual(w[5], '12%', '单价列 4 汉字 = 12%');
   assert.strictEqual(w[6], '6%', '数量列 2 汉字 = 6%');
@@ -209,8 +209,8 @@ test('V3.17-问题2：打印模板列宽按汉字分配、列顺序（#2 品牌4
   const ph = printDoc.buildDocHtml(ctx, purchaseDoc(), 'purchase');
   assert.ok(ph.includes('<th>类型</th><th>单位</th>'), '进货单表头含类型列（单位前）');
   assert.deepStrictEqual(colWidths(ph),
-    ['6%', '12%', '28%', '15%', '6%', '12%', '6%', '15%'],
-    '进货单列宽：成本列同为 12%（4 汉字宽）');
+    ['6%', '10.8%', '32.2%', '12%', '6%', '12%', '6%', '15%'],
+    '进货单列宽：成本列同为 12%（4 汉字宽），品牌10.8% 类型12%');
 });
 
 test('V3.16-问题1：历史单据（明细无 category 字段）类型列按 productId 回查商品类型，不再空白', () => {
@@ -338,20 +338,20 @@ test('问题4-进货单打印：成本列、无价格列、型号放宽', () => 
   const html = printDoc.buildDocHtml(ctx, purchaseDoc(), 'purchase');
   assert.ok(!html.includes('<th>价格</th>'), '进货单无价格列');
   assert.ok(html.includes('<th>成本</th><th>数量</th><th>金额</th>'), '进货单表头：成本/数量/金额');
-  assert.ok(html.includes('<col style="width:28%">'), '进货单型号列占剩余 28%');
+  assert.ok(html.includes('<col style="width:32.2%">'), '进货单型号列占剩余 32.2%');
   assert.ok(!html.includes('class="num"'), '进货单所有单元格居左');
 });
 
-test('V3.17-问题2：不带价格版（版本1）列宽——型号列占剩余更多（#6% 品牌12% 型号55% 类型15% 单位6% 数量6%）', () => {
+test('V3.15-问题2：不带价格版（版本1）列宽——型号列占剩余更多（#6% 品牌10.8% 型号59.2% 类型12% 单位6% 数量6%）', () => {
   const ctx = newCtx({ shopName: '幸福家电批发' });
   const html = printDoc.buildDocHtml(ctx, saleDoc(), 'sale', { withPrice: false });
   assert.deepStrictEqual(colWidths(html),
-    ['6%', '12%', '55%', '15%', '6%', '6%'],
-    '销售单不带价格版列宽：型号列占剩余 55%');
+    ['6%', '10.8%', '59.2%', '12%', '6%', '6%'],
+    '销售单不带价格版列宽：型号列占剩余 59.2%');
   const ph = printDoc.buildDocHtml(ctx, purchaseDoc(), 'purchase', { withPrice: false });
   assert.deepStrictEqual(colWidths(ph),
-    ['6%', '12%', '55%', '15%', '6%', '6%'],
-    '进货单不带价格版列宽：型号列占剩余 55%');
+    ['6%', '10.8%', '59.2%', '12%', '6%', '6%'],
+    '进货单不带价格版列宽：型号列占剩余 59.2%');
   // 列顺序：品牌 → 型号 → 类型 → 单位 → 数量（无价格版无单价/金额列）
   assert.ok(html.includes('<th>品牌</th><th>型号</th><th>类型</th><th>单位</th><th>数量</th>'),
     '不带价格版表头列顺序正确（型号在品牌后、类型在单位前）');

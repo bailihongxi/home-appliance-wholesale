@@ -34,7 +34,7 @@
     '.doc-meta { display: flex; justify-content: space-between; font-size: 11px; margin: 6px 0 8px; }',
     'table { width: 100%; border-collapse: collapse; font-size: 11px; }',
     'th, td { border: 1px solid #000; padding: 3px 5px; text-align: left; vertical-align: top; }',
-    'th { background: #f2f2f2; font-weight: 700; }',
+    'th { background: #f2f2f2; font-weight: 700; font-size: 12px; text-align: center; border-bottom: 3px double #000; }',
     'th.num, td.num { text-align: right; }',
     'thead { display: table-header-group; } /* 分页时每页重复表头 */',
     'tr { page-break-inside: avoid; }',
@@ -95,15 +95,15 @@
       '<span>' + partnerLabel + '：' + esc(doc.partnerName || '散客') + '</span>' +
       '<span>共 ' + qty + ' 件</span></div>';
 
-    // V3.17 问题2：列宽按汉字个数分配（每个汉字 3% 宽），型号列占剩余空间。
-    // 列顺序：#(2汉字) 品牌(4) 型号(剩余) 类型(5) 单位(2) [单价/成本(4) 数量(2) 金额(5)]
+    // V3.15 问题2：列宽调整——品牌减少10%(4→3.6)，类型缩小20%(5→4)，型号列(rest)自然增加约10%。
+    // 列顺序：#(2汉字) 品牌(3.6) 型号(剩余) 类型(4) 单位(2) [单价/成本(4) 数量(2) 金额(5)]
     // 不带价格版（版本1）去掉单价/成本与金额，仅保留 数量(2)，型号列吃掉更多剩余宽度。
     var UNIT_PCT = 3.0;
     var cols = [
       { head: '#', chars: 2 },
-      { head: '品牌', chars: 4 },
+      { head: '品牌', chars: 3.6 },
       { head: '型号', rest: true },
-      { head: '类型', chars: 5 },
+      { head: '类型', chars: 4 },
       { head: '单位', chars: 2 }
     ];
     if (withPrice) {
