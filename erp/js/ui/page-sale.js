@@ -67,7 +67,9 @@
         keyword: '',
         page: 1,
         viewNo: null,
-        refundNo: null
+        refundNo: null,
+        payNo: null, // V3.17 销售单补回款弹窗对应单号
+        pay: { amount: '', date: util.today(), method: '', note: '' }
       };
     },
 
@@ -80,7 +82,14 @@
           if (typeof history !== 'undefined' && history.replaceState) history.replaceState(null, '', '#/sale');
         } catch (e) { /* 忽略：无法改写历史记录时仅本次生效 */ }
       }
-      if (state.tab === 'list') return renderList(ctx, state);
+      if (state.tab === 'list') {
+        var h = renderList(ctx, state);
+        if (state.payNo) {
+          var payDoc = ctx.getDoc('sales', state.payNo);
+          if (payDoc) h += payModal(payDoc, state.pay);
+        }
+        return h;
+      }
       return renderNew(ctx, state);
     },
 
@@ -263,6 +272,44 @@
       'close-refund': function (ctx, state) {
         state.refundNo = null;
         state.refundQty = {};
+      },
+
+      /** V3.17：销售单补回款（按单据分期结清） */
+      'open-pay': function (ctx, state, el) {
+        state.payNo = el.getAttribute('data-no');
+        var doc = ctx.getDoc('sales', state.payNo);
+        var remaining = doc ? Math.max(0, (doc.debt || 0) - (doc.paidExtra || 0)) : 0;
+        state.pay = {
+          amount: remaining > 0 ? util.fenToYuan(remaining) : '',
+          date: util.today(),
+          method: '',
+          note: ''
+        };
+      },
+      'close-pay': function (ctx, state) {
+        state.payNo = null;
+        state.pay = { amount: '', date: util.today(), method: '', note: '' };
+      },
+      'pay-field': function (ctx, state, el) {
+        state.pay[el.getAttribute('data-name')] = el.value;
+      },
+      'do-pay': function (ctx, state) {
+        var r = engine.paySale(ctx, {
+          no: state.payNo,
+          amount: state.pay.amount,
+          date: state.pay.date,
+          method: state.pay.method,
+          note: state.pay.note
+        });
+        if (!r.ok) {
+          ui.toast(r.error, 'err');
+          return false;
+        }
+        ui.toast('已回款 ' + util.fenToYuan(r.doc.paidExtra) +
+          (r.settled ? '，本单已结清' : '，剩余未结 ' + util.fmtYuan(r.remaining)), 'ok');
+        state.payNo = null;
+        state.pay = { amount: '', date: util.today(), method: '', note: '' };
+        return true;
       },
 
       /** 扫码 / 扫码枪输入 → 匹配商品并加入开单 */
@@ -604,19 +651,26 @@
         return it.qty;
       });
       var isRefund = d.type === schema.DOC.REFUND;
+      var remaining = Math.max(0, (d.debt || 0) - (d.paidExtra || 0));
+      var status;
+      if (d.voided) status = ui.badge('已作废', 'off');
+      else if (remaining <= 0) status = ui.badge('已结清', 'on');
+      else if ((d.paidExtra || 0) > 0) status = ui.badge('部分回款', 'warn');
+      else status = ui.badge('欠款', 'warn');
       h += '<tr' + (d.voided ? ' style="opacity:.5"' : '') + '>' +
         '<td class="mono">' + esc(d.no) + (isRefund ? ' <span class="weak small">退</span>' : '') + '</td>' +
         '<td>' + esc(d.date) + '</td>' +
         '<td>' + esc(d.partnerName || '-') + '</td>' +
         '<td class="num">' + qty + '</td>' +
         '<td class="num">' + ui.money(d.payable) + '</td>' +
-        '<td class="num">' + ui.money(d.received) + '</td>' +
-        '<td class="num">' + (d.debt ? '<b style="color:#dc2626">' + ui.money(d.debt) + '</b>' : '—') + '</td>' +
-        '<td>' + (d.voided ? ui.badge('已作废', 'off') : (d.debt ? ui.badge('欠款', 'warn') : ui.badge('已结清', 'on'))) + '</td>' +
+        '<td class="num">' + ui.money((d.received || 0) + (d.paidExtra || 0)) + '</td>' +
+        '<td class="num">' + (remaining ? '<b style="color:#dc2626">' + ui.money(remaining) + '</b>' : '—') + '</td>' +
+        '<td>' + status + '</td>' +
         '<td class="act">' +
         '<button data-act="view-doc" data-no="' + esc(d.no) + '">查看</button>' +
         (d.voided ? '' :
           (isRefund ? '' : '<button data-act="open-refund" data-no="' + esc(d.no) + '">退货</button>') +
+          (!isRefund && remaining > 0 ? '<button data-act="open-pay" data-no="' + esc(d.no) + '">回款</button>' : '') +
           '<button data-act="void-sale" data-no="' + esc(d.no) + '">作废</button>') +
         '</td></tr>';
     });
@@ -638,6 +692,8 @@
     var qty = util.sum(doc.items, function (it) {
       return it.qty;
     });
+    var paidExtra = doc.paidExtra || 0;
+    var remaining = Math.max(0, (doc.debt || 0) - paidExtra);
     var h = '<div class="card"><div class="card-title">' + (isRefund ? '退货单 ' : '销售单 ') + esc(doc.no) +
       (doc.voided ? '（已作废）' : '') +
       '<span class="more">' + esc(doc.date) + ' · ' + esc(doc.partnerName || '散客') + '</span></div>' +
@@ -656,12 +712,47 @@
     h += '</tbody></table></div>' +
       '<div class="row between mt8"><span class="muted">应收 ' + ui.money(doc.payable) +
       (doc.discount ? '（折扣 ' + ui.money(doc.discount) + '）' : '') +
-      '　实收 ' + ui.money(doc.received) + '　欠款 ' + ui.money(doc.debt) +
+      '　实收 ' + ui.money(doc.received) + (paidExtra ? ' + 补回款 ' + ui.money(paidExtra) : '') +
+      '　欠款 ' + ui.money(doc.debt) + (paidExtra ? '（剩余未结 ' + ui.money(remaining) + '）' : '') +
       (isRefund ? '　红冲 ' + esc(doc.refNo) : '') + '</span>' +
       '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="1">打印带价</button>' +
       '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="0">打印无价</button>' +
-      '<button class="btn btn-sm" data-act="close-view">关闭</button></div></div>';
+      (!isRefund && remaining > 0 && !doc.voided ? '<button class="btn btn-sm btn-primary" data-act="open-pay" data-no="' + esc(doc.no) + '">回款</button>' : '') +
+      '<button class="btn btn-sm" data-act="close-view">关闭</button></div>';
+
+    // 补回款记录（V3.17）
+    if ((doc.payLog || []).length) {
+      h += '<div class="table-wrap mt8"><table class="tbl"><thead><tr>' +
+        '<th>补回款日期</th><th class="num">金额</th><th>方式</th><th>备注</th></tr></thead><tbody>';
+      doc.payLog.forEach(function (pl) {
+        h += '<tr><td>' + esc(pl.date) + '</td><td class="num">' + ui.money(pl.amount) + '</td>' +
+          '<td>' + esc(pl.method || '—') + '</td><td>' + esc(pl.note || '') + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    h += '</div>';
     return h;
+  }
+
+  /** V3.17：销售单补回款弹窗（按单据分期结清） */
+  function payModal(doc, pay) {
+    var remaining = Math.max(0, (doc.debt || 0) - (doc.paidExtra || 0));
+    return '<div class="card"><div class="card-title">销售单补回款 · ' + esc(doc.no) +
+      '<span class="more">' + esc(doc.partnerName || '散客') + ' · 剩余未结 ' + ui.money(remaining) + '</span></div>' +
+      '<div class="grid grid-2">' +
+      '<div class="field"><label class="req">本次回款（元）</label>' +
+      '<input class="input" data-change="pay-field" data-name="amount" inputmode="decimal" placeholder="≤ ' + util.fenToYuan(remaining) + '" value="' + esc(pay.amount) + '"></div>' +
+      '<div class="field"><label>日期</label>' +
+      '<input class="input" type="date" data-change="pay-field" data-name="date" value="' + esc(pay.date) + '"></div>' +
+      '<div class="field"><label>方式</label>' +
+      '<input class="input" data-change="pay-field" data-name="method" placeholder="如：现金 / 微信 / 银行转账" value="' + esc(pay.method) + '"></div>' +
+      '<div class="field"><label>备注</label>' +
+      '<input class="input" data-change="pay-field" data-name="note" placeholder="选填" value="' + esc(pay.note) + '"></div>' +
+      '</div>' +
+      '<div class="row mt8" style="gap:8px">' +
+      '<button class="btn btn-primary" data-act="do-pay">确认回款</button>' +
+      '<button class="btn" data-act="close-pay">取消</button>' +
+      '</div></div>';
   }
 
   function refundModal(ctx, state, doc) {

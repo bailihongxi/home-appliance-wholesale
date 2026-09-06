@@ -270,7 +270,8 @@
     return { ok: true, doc: doc };
   };
 
-  /** 销售单作废：库存回滚、流水作废、欠款冲回，全部留痕 */
+  /** 销售单作废：库存回滚、流水作废、欠款冲回，全部留痕。
+   *  V3.17：若该单已登记补回款，则只回滚剩余未结部分，避免与已收款项重复冲减客户应收。 */
   engine.voidSale = function voidSale(ctx, no) {
     var doc = ctx.getDoc('sales', no);
     if (!doc) return err('单据不存在：' + no);
@@ -280,7 +281,10 @@
     if (!rev.ok) return err((rev.errors || []).join('；') || '库存回滚失败');
 
     ledger.voidByRef(ctx, no);
-    if (doc.partnerId && doc.debt) debt.reverseDoc(ctx, doc, doc.type);
+    if (doc.partnerId && doc.debt) {
+      var remaining = Math.max(0, doc.debt - (doc.paidExtra || 0));
+      debt.reverseDoc(ctx, doc, doc.type, remaining);
+    }
     doc.voided = true;
     doc.voidedAt = util.nowISO();
     ctx.touch('sales', doc);
@@ -635,6 +639,70 @@
     });
     ctx.touch('purchases', doc);
     writeLog(ctx, '进货单补付款', doc.no + ' ' + util.fmtYuan(amount) +
+      '，剩余未结 ' + util.fmtYuan(doc.debt - doc.paidExtra));
+    return {
+      ok: true,
+      doc: doc,
+      remaining: doc.debt - doc.paidExtra,
+      settled: doc.debt - doc.paidExtra <= 0
+    };
+  };
+
+  /* =========================================================
+   *  销售单补回款（按单据分期结清，V3.17）
+   * ========================================================= */
+
+  /**
+   * 销售单补回款：针对一张未结清的销售单登记后续回款。
+   * 单据新增字段（旧单据缺省视为 0/无）：
+   *   paidExtra —— 补回款累计（分）；payLog —— [{date,amount,method,note,at}]；settledAt —— 结清日期
+   * 剩余未结 = doc.debt - doc.paidExtra；补回款同时冲减客户应收余额并写回款流水（refNo 指向该单）。
+   * @param input {no, amount(元或分), date?, method?, note?}
+   */
+  engine.paySale = function paySale(ctx, input) {
+    input = input || {};
+    var doc = ctx.getDoc('sales', String(input.no || ''));
+    if (!doc) return err('销售单不存在：' + input.no);
+    if (doc.voided) return err('该销售单已作废，不能再回款');
+    if (doc.type === schema.DOC.REFUND) return err('退货单不支持补回款');
+    var amount = util.parseMoney(input.amount);
+    if (!amount || amount <= 0) return err('回款金额必须大于 0');
+    var remaining = (doc.debt || 0) - (doc.paidExtra || 0);
+    if (remaining <= 0) return err('该销售单已结清，无需再回款');
+    if (amount > remaining) {
+      return err('回款金额超过剩余未结 ' + util.fmtYuan(remaining) + '，请按未结金额填写');
+    }
+
+    doc.paidExtra = (doc.paidExtra || 0) + amount;
+    doc.payLog = doc.payLog || [];
+    doc.payLog.push({
+      date: input.date || util.today(),
+      amount: amount,
+      method: util.cleanText(input.method || ''),
+      note: util.cleanText(input.note || ''),
+      at: util.nowISO()
+    });
+    if (doc.debt - doc.paidExtra <= 0) doc.settledAt = doc.payLog[doc.payLog.length - 1].date;
+
+    // 冲减客户应收余额（夹紧到 0 不为负）
+    var p = doc.partnerId ? ctx.getPartner(doc.partnerId) : null;
+    if (p) {
+      p.balance = Math.max(0, (p.balance || 0) - amount);
+      p.lastDealAt = doc.payLog[doc.payLog.length - 1].date;
+      ctx.touch('partners', p);
+    }
+
+    ledger.fromSettle(ctx, {
+      partnerId: doc.partnerId || null,
+      partnerName: doc.partnerName || '',
+      amount: amount,
+      date: doc.payLog[doc.payLog.length - 1].date,
+      isSupplier: false,
+      refNo: doc.no,
+      note: '销售单补回款 ' + doc.no
+    });
+    ctx.touch('sales', doc);
+    writeLog(ctx, '销售单补回款', doc.no + ' ' + util.fmtYuan(amount) +
       '，剩余未结 ' + util.fmtYuan(doc.debt - doc.paidExtra));
     return {
       ok: true,
