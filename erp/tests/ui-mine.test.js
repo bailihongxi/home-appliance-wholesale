@@ -133,10 +133,10 @@ test('测试连接-失败(401 Token 无效)：显示细分原因', async () => {
   }
 });
 
-test('关于：版本号统一为 V3.17（与 PRD / 开发计划一致）', () => {
+test('关于：版本号统一为 V3.18（与 PRD / 开发计划一致）', () => {
   const { ctx, state } = fresh();
   const html = page.render(ctx, state);
-  assert.ok(html.includes('版本：V3.17'), '关于页显示 V3.17');
+  assert.ok(html.includes('版本：V3.18'), '关于页显示 V3.18');
   assert.ok(html.includes('关于'), '含关于卡片');
   assert.ok(!html.includes('版本：V3.16）'), '不再显示旧版本号 V3.16');
   assert.ok(!html.includes('版本：V3.15）'), '不再显示旧版本号 V3.15');
