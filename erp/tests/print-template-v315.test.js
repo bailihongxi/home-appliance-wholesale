@@ -44,3 +44,28 @@ test('打印表头底行使用双线（border-bottom: 3px double）', () => {
   const doc = read('js/ui/print-doc.js');
   assert.ok(doc.includes('border-bottom: 3px double #000'), '表头底行使用双线 border-bottom: 3px double');
 });
+
+test('打印模版所有表格内容左右居中显示（th,td text-align:center）', () => {
+  const doc = read('js/ui/print-doc.js');
+  assert.ok(doc.includes('th, td { border: 1px solid #000; padding: 3px 5px; text-align: center;'),
+    'th,td 默认 text-align:center 居中');
+  assert.ok(!doc.includes('th.num, td.num { text-align: right; }'),
+    '已移除 num 右对齐类，所有内容居中');
+});
+
+test('打印模版型号列添加折行样式（model-col class + word-break）', () => {
+  const doc = read('js/ui/print-doc.js');
+  assert.ok(doc.includes('td.model-col { text-align: left; word-break: break-all; word-wrap: break-word; white-space: normal; }'),
+    '型号列 td.model-col 有折行样式');
+  assert.ok(doc.includes('<td class="model-col">'), '明细行型号列 td 有 model-col class');
+});
+
+test('打印模版表格使用 table-layout:fixed 保障列宽弹性和折行', () => {
+  const doc = read('js/ui/print-doc.js');
+  assert.ok(doc.includes('table-layout: fixed'), '表格 table-layout:fixed 保障列宽固定和内容折行');
+});
+
+test('打印模版单元格垂直居中（vertical-align:middle）', () => {
+  const doc = read('js/ui/print-doc.js');
+  assert.ok(doc.includes('vertical-align: middle'), '单元格 vertical-align:middle 垂直居中');
+});

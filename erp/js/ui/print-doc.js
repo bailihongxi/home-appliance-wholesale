@@ -32,10 +32,10 @@
     '.doc-shop { font-size: 16px; font-weight: 700; }',
     '.doc-title { font-size: 15px; font-weight: 700; }',
     '.doc-meta { display: flex; justify-content: space-between; font-size: 11px; margin: 6px 0 8px; }',
-    'table { width: 100%; border-collapse: collapse; font-size: 11px; }',
-    'th, td { border: 1px solid #000; padding: 3px 5px; text-align: left; vertical-align: top; }',
+    'table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; }',
+    'th, td { border: 1px solid #000; padding: 3px 5px; text-align: center; vertical-align: middle; word-wrap: break-word; word-break: break-all; }',
     'th { background: #f2f2f2; font-weight: 700; font-size: 12px; text-align: center; border-bottom: 3px double #000; }',
-    'th.num, td.num { text-align: right; }',
+    'td.model-col { text-align: left; word-break: break-all; word-wrap: break-word; white-space: normal; }',
     'thead { display: table-header-group; } /* 分页时每页重复表头 */',
     'tr { page-break-inside: avoid; }',
     '.doc-total { margin-top: 8px; font-size: 12px; }',
@@ -131,7 +131,7 @@
       h += '<tr>' +
         '<td>' + (i + 1) + '</td>' +
         '<td>' + esc(it.brand || '') + '</td>' +
-        '<td>' + esc(it.model || '') + (isGift ? '（赠）' : '') + '</td>' +
+        '<td class="model-col">' + esc(it.model || '') + (isGift ? '（赠）' : '') + '</td>' +
         '<td>' + esc(itemCategory(ctx, it)) + '</td>' +
         '<td>' + esc(it.unit || '') + '</td>';
       if (withPrice) {
