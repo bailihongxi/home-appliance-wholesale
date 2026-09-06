@@ -289,6 +289,10 @@ button, input, select, textarea {
 .btn-lg { min-height: 50px; font-size: 17px; font-weight: 600; width: 100%; }
 .btn-block { width: 100%; }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--c-primary); }
+.btn-orange { background: #f97316; border-color: #f97316; color: #fff; }
+.btn-orange:active { background: #ea580c; }
+.btn-yellow { background: #eab308; border-color: #eab308; color: #fff; }
+.btn-yellow:active { background: #ca8a04; }
 
 /* ---------- 库存管理页标签（v3.15）：上下留出空隙，按钮高度加高不拥挤 ----------
  * 此前用 row wrap mb8，但 mb8 未在样式中定义，标签行紧贴上方统计卡与下方搜索卡，

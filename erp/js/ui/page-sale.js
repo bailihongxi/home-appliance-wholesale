@@ -715,8 +715,8 @@
       '　实收 ' + ui.money(doc.received) + (paidExtra ? ' + 补回款 ' + ui.money(paidExtra) : '') +
       '　欠款 ' + ui.money(doc.debt) + (paidExtra ? '（剩余未结 ' + ui.money(remaining) + '）' : '') +
       (isRefund ? '　红冲 ' + esc(doc.refNo) : '') + '</span>' +
-      '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="1">打印带价</button>' +
-      '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="0">打印无价</button>' +
+      '<button class="btn btn-sm btn-orange" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="1">打印带价</button>' +
+      '<button class="btn btn-sm btn-yellow" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="0">打印无价</button>' +
       (!isRefund && remaining > 0 && !doc.voided ? '<button class="btn btn-sm btn-primary" data-act="open-pay" data-no="' + esc(doc.no) + '">回款</button>' : '') +
       '<button class="btn btn-sm" data-act="close-view">关闭</button></div>';
 

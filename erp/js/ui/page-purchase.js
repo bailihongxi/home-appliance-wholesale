@@ -494,8 +494,8 @@
       '（已付 ' + ui.money((doc.paid || 0) + paidExtra) +
       (paidExtra ? '，其中补付 ' + ui.money(paidExtra) : '') +
       '，' + (remaining ? '未结 ' + ui.money(remaining) : '已结清') + '）</span>' +
-      '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="1">打印带价</button>' +
-      '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="0">打印无价</button>' +
+      '<button class="btn btn-sm btn-orange" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="1">打印带价</button>' +
+      '<button class="btn btn-sm btn-yellow" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="0">打印无价</button>' +
       '<button class="btn btn-sm" data-act="close-view">关闭</button></div>';
     // 补付款记录（V3.16）
     if ((doc.payLog || []).length) {
