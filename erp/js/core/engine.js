@@ -150,7 +150,8 @@
     if (!rev.ok) return err((rev.errors || []).join('；') || '库存回滚失败（库存可能已不足）');
 
     ledger.voidByRef(ctx, no);
-    debt.reverseDoc(ctx, doc, schema.DOC.PURCHASE);
+    // 补付款后作废：只回滚剩余未结部分（已补付部分已真实付过并冲减过应付，不能重复回滚）
+    debt.reverseDoc(ctx, doc, schema.DOC.PURCHASE, doc.debt - (doc.paidExtra || 0));
     doc.voided = true;
     doc.voidedAt = util.nowISO();
     ctx.touch('purchases', doc);
@@ -161,7 +162,8 @@
   function revertPurchaseEffects(ctx, doc) {
     inv.reverseDoc(ctx, doc, schema.DOC.PURCHASE);
     ledger.voidByRef(ctx, doc.no);
-    debt.reverseDoc(ctx, doc, schema.DOC.PURCHASE);
+    // 同 voidPurchase：只回滚剩余未结部分
+    debt.reverseDoc(ctx, doc, schema.DOC.PURCHASE, doc.debt - (doc.paidExtra || 0));
   }
 
   /* =========================================================
@@ -577,6 +579,69 @@
     if (!res.ok) return res;
     writeLog(ctx, '修改进货单', no);
     return res;
+  };
+
+  /* =========================================================
+   *  进货单补付款（按单据分期结清，V3.16）
+   * ========================================================= */
+
+  /**
+   * 进货单补付款：针对一张未结清的进货单登记后续付款。
+   * 单据新增字段（旧单据缺省视为 0/无）：
+   *   paidExtra —— 补付累计（分）；payLog —— [{date,amount,method,note,at}]；settledAt —— 结清日期
+   * 剩余未结 = doc.debt - doc.paidExtra；补付同时冲减供应商应付余额并写付款流水（refNo 指向该单）。
+   * @param input {no, amount(元或分), date?, method?, note?}
+   */
+  engine.payPurchase = function payPurchase(ctx, input) {
+    input = input || {};
+    var doc = ctx.getDoc('purchases', String(input.no || ''));
+    if (!doc) return err('进货单不存在：' + input.no);
+    if (doc.voided) return err('该进货单已作废，不能再付款');
+    var amount = util.parseMoney(input.amount);
+    if (!amount || amount <= 0) return err('付款金额必须大于 0');
+    var remaining = (doc.debt || 0) - (doc.paidExtra || 0);
+    if (remaining <= 0) return err('该进货单已结清，无需再付款');
+    if (amount > remaining) {
+      return err('付款金额超过剩余未结 ' + util.fmtYuan(remaining) + '，请按未结金额填写');
+    }
+
+    doc.paidExtra = (doc.paidExtra || 0) + amount;
+    doc.payLog = doc.payLog || [];
+    doc.payLog.push({
+      date: input.date || util.today(),
+      amount: amount,
+      method: util.cleanText(input.method || ''),
+      note: util.cleanText(input.note || ''),
+      at: util.nowISO()
+    });
+    if (doc.debt - doc.paidExtra <= 0) doc.settledAt = doc.payLog[doc.payLog.length - 1].date;
+
+    // 冲减供应商应付余额（与记账中心按供应商付款同一口径，夹紧到 0 不为负）
+    var p = doc.partnerId ? ctx.getPartner(doc.partnerId) : null;
+    if (p) {
+      p.balance = Math.max(0, (p.balance || 0) - amount);
+      p.lastDealAt = doc.payLog[doc.payLog.length - 1].date;
+      ctx.touch('partners', p);
+    }
+
+    ledger.fromSettle(ctx, {
+      partnerId: doc.partnerId || null,
+      partnerName: doc.partnerName || '',
+      amount: amount,
+      date: doc.payLog[doc.payLog.length - 1].date,
+      isSupplier: true,
+      refNo: doc.no,
+      note: '进货单补付款 ' + doc.no
+    });
+    ctx.touch('purchases', doc);
+    writeLog(ctx, '进货单补付款', doc.no + ' ' + util.fmtYuan(amount) +
+      '，剩余未结 ' + util.fmtYuan(doc.debt - doc.paidExtra));
+    return {
+      ok: true,
+      doc: doc,
+      remaining: doc.debt - doc.paidExtra,
+      settled: doc.debt - doc.paidExtra <= 0
+    };
   };
 
   /* =========================================================

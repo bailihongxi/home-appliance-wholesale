@@ -72,13 +72,20 @@
         partnerId: '',
         page: 1,
         viewNo: null,
+        payNo: null, // V3.16：补付款弹窗对应单号
+        pay: { amount: '', date: util.today(), method: '', note: '' },
         form: emptyForm()
       };
     },
 
     render: function (ctx, state) {
       if (state.tab === 'form') return renderForm(ctx, state);
-      return renderList(ctx, state);
+      var h = renderList(ctx, state);
+      if (state.payNo) {
+        var payDoc = ctx.getDoc('purchases', state.payNo);
+        if (payDoc) h += payModal(payDoc, state.pay);
+      }
+      return h;
     },
 
     actions: {
@@ -275,6 +282,52 @@
         state.viewNo = null;
       },
 
+      /* ---- V3.16：进货单补付款（按单据分期结清） ---- */
+
+      'open-pay': function (ctx, state, el) {
+        var no = el.getAttribute('data-no');
+        var doc = ctx.getDoc('purchases', no);
+        if (!doc || doc.voided) return false;
+        var remaining = (doc.debt || 0) - (doc.paidExtra || 0);
+        if (remaining <= 0) {
+          ui.toast('该进货单已结清，无需再付款', 'err');
+          return false;
+        }
+        state.payNo = no;
+        state.pay = { amount: util.fenToYuan(remaining), date: util.today(), method: '', note: '' };
+        return true;
+      },
+
+      'pay-field': function (ctx, state, el) {
+        state.pay[el.getAttribute('data-name')] = el.value;
+      },
+
+      'close-pay': function (ctx, state) {
+        state.payNo = null;
+        state.pay = { amount: '', date: util.today(), method: '', note: '' };
+        return true;
+      },
+
+      'do-pay': function (ctx, state) {
+        if (!state.payNo) return false;
+        var res = engine.payPurchase(ctx, {
+          no: state.payNo,
+          amount: state.pay.amount,
+          date: state.pay.date,
+          method: state.pay.method,
+          note: state.pay.note
+        });
+        if (!res.ok) {
+          ui.toast(res.error, 'err');
+          return false;
+        }
+        ui.toast('进货单 ' + state.payNo + ' 已付款 ' + ui.money(res.doc.payLog[res.doc.payLog.length - 1].amount) +
+          (res.settled ? '，已结清' : '，剩余未结 ' + ui.money(res.remaining)), 'ok');
+        state.payNo = null;
+        state.pay = { amount: '', date: util.today(), method: '', note: '' };
+        return true;
+      },
+
       'print-doc': function (ctx, state, el) {
         var no = el.getAttribute('data-no');
         var doc = ctx.getDoc('purchases', no);
@@ -348,7 +401,7 @@
     var totals = list.reduce(
       function (t, d) {
         t.total += d.total || 0;
-        t.debt += d.voided ? 0 : d.debt || 0;
+        t.debt += d.voided ? 0 : Math.max(0, (d.debt || 0) - (d.paidExtra || 0));
         return t;
       },
       { total: 0, debt: 0 }
@@ -389,18 +442,25 @@
       var qty = util.sum(d.items, function (it) {
         return it.qty;
       });
+      var remaining = Math.max(0, (d.debt || 0) - (d.paidExtra || 0));
+      var status;
+      if (d.voided) status = ui.badge('已作废', 'off');
+      else if (remaining <= 0) status = ui.badge('已结清', 'on');
+      else if ((d.paidExtra || 0) > 0) status = ui.badge('部分付款', 'warn');
+      else status = ui.badge('未结清', 'warn');
       h += '<tr' + (d.voided ? ' style="opacity:.5"' : '') + '>' +
         '<td class="mono">' + esc(d.no) + '</td>' +
         '<td>' + esc(d.date) + '</td>' +
         '<td>' + esc(d.partnerName || '-') + '</td>' +
         '<td class="num">' + qty + '</td>' +
         '<td class="num">' + ui.money(d.total) + '</td>' +
-        '<td class="num">' + ui.money(d.paid) + '</td>' +
-        '<td class="num">' + (d.debt ? '<b style="color:#dc2626">' + ui.money(d.debt) + '</b>' : '—') + '</td>' +
-        '<td>' + (d.voided ? ui.badge('已作废', 'off') : d.debt ? ui.badge('未结清', 'warn') : ui.badge('已结清', 'on')) + '</td>' +
+        '<td class="num">' + ui.money((d.paid || 0) + (d.paidExtra || 0)) + '</td>' +
+        '<td class="num">' + (remaining ? '<b style="color:#dc2626">' + ui.money(remaining) + '</b>' : '—') + '</td>' +
+        '<td>' + status + '</td>' +
         '<td class="act">' +
         '<button data-act="view-doc" data-no="' + esc(d.no) + '">查看</button>' +
-        (d.voided ? '' : '<button data-act="edit-purchase" data-no="' + esc(d.no) + '">修改</button>' +
+        (d.voided ? '' : (remaining ? '<button data-act="open-pay" data-no="' + esc(d.no) + '">付款</button>' : '') +
+          '<button data-act="edit-purchase" data-no="' + esc(d.no) + '">修改</button>' +
           '<button data-act="void-purchase" data-no="' + esc(d.no) + '">作废</button>') +
         '</td></tr>';
     });
@@ -417,6 +477,8 @@
     var qty = util.sum(doc.items, function (it) {
       return it.qty;
     });
+    var paidExtra = doc.paidExtra || 0;
+    var remaining = Math.max(0, (doc.debt || 0) - paidExtra);
     var h = '<div class="card"><div class="card-title">进货单 ' + esc(doc.no) +
       '<span class="more">' + esc(doc.date) + ' · ' + esc(doc.partnerName || '') + '</span></div>' +
       '<div class="table-wrap"><table class="tbl"><thead><tr><th>商品</th>' +
@@ -429,11 +491,45 @@
     });
     h += '</tbody></table></div>' +
       '<div class="row between mt8"><span class="muted">合计 ' + qty + ' 件 · ' + ui.money(doc.total) +
-      '（已付 ' + ui.money(doc.paid) + '，欠款 ' + ui.money(doc.debt) + '）</span>' +
+      '（已付 ' + ui.money((doc.paid || 0) + paidExtra) +
+      (paidExtra ? '，其中补付 ' + ui.money(paidExtra) : '') +
+      '，' + (remaining ? '未结 ' + ui.money(remaining) : '已结清') + '）</span>' +
       '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="1">打印带价</button>' +
       '<button class="btn btn-sm" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="0">打印无价</button>' +
-      '<button class="btn btn-sm" data-act="close-view">关闭</button></div></div>';
+      '<button class="btn btn-sm" data-act="close-view">关闭</button></div>';
+    // 补付款记录（V3.16）
+    if ((doc.payLog || []).length) {
+      h += '<div class="table-wrap mt8"><table class="tbl"><thead><tr>' +
+        '<th>补付款日期</th><th class="num">金额</th><th>方式</th><th>备注</th></tr></thead><tbody>';
+      doc.payLog.forEach(function (pl) {
+        h += '<tr><td>' + esc(pl.date) + '</td><td class="num">' + ui.money(pl.amount) + '</td>' +
+          '<td>' + esc(pl.method || '—') + '</td><td>' + esc(pl.note || '') + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    h += '</div>';
     return h;
+  }
+
+  /** V3.16：补付款弹窗（按单据分期结清） */
+  function payModal(doc, pay) {
+    var remaining = Math.max(0, (doc.debt || 0) - (doc.paidExtra || 0));
+    return '<div class="card"><div class="card-title">进货单补付款 · ' + esc(doc.no) +
+      '<span class="more">' + esc(doc.partnerName || '') + ' · 剩余未结 ' + ui.money(remaining) + '</span></div>' +
+      '<div class="grid grid-2">' +
+      '<div class="field"><label class="req">本次付款（元）</label>' +
+      '<input class="input" data-change="pay-field" data-name="amount" inputmode="decimal" placeholder="≤ ' + util.fenToYuan(remaining) + '" value="' + esc(pay.amount) + '"></div>' +
+      '<div class="field"><label>日期</label>' +
+      '<input class="input" type="date" data-change="pay-field" data-name="date" value="' + esc(pay.date) + '"></div>' +
+      '<div class="field"><label>方式</label>' +
+      '<input class="input" data-change="pay-field" data-name="method" placeholder="如：现金 / 微信 / 银行转账" value="' + esc(pay.method) + '"></div>' +
+      '<div class="field"><label>备注</label>' +
+      '<input class="input" data-change="pay-field" data-name="note" placeholder="选填" value="' + esc(pay.note) + '"></div>' +
+      '</div>' +
+      '<div class="row mt8" style="gap:8px">' +
+      '<button class="btn btn-primary" data-act="do-pay">确认付款</button>' +
+      '<button class="btn" data-act="close-pay">取消</button>' +
+      '</div></div>';
   }
 
   /* ---------------- 表单 ---------------- */
