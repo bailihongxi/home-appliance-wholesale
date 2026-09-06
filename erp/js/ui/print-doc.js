@@ -51,6 +51,23 @@
     '@media print { .print-toolbar { display: none !important; } }'
   ].join('\n');
 
+  /**
+   * 取明细行的商品类型。
+   * 背景：单据明细的 category 字段是 v3.15 才写入的，**历史单据（改动前创建）的明细没有该字段**，
+   * 直接读 it.category 会让打印出来的类型列一片空白。因此这里做兜底：
+   * ① 明细自带 category 优先；② 否则按 productId 回查商品档案取其类型；③ 都取不到才留空。
+   */
+  function itemCategory(ctx, it) {
+    if (it && it.category) return it.category;
+    var id = String((it && it.productId) || '');
+    if (!id) return '';
+    var list = (ctx && ctx.data && ctx.data.products) || [];
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i].id) === id) return list[i].category || '';
+    }
+    return '';
+  }
+
   /** 生成单据打印 HTML
    *  @param opts {withPrice:boolean} withPrice===false 输出“版本1 不带价格”纯清单；默认 true 输出“版本2 带价格”完整单据
    */
@@ -79,17 +96,18 @@
       '<span>共 ' + qty + ' 件</span></div>';
 
     // 表头（所有文字居左，型号列放宽，单价/数量/金额列缩窄，取消价格列）
-    // v3.15：品牌列缩短至原 90%（14%→12.6%），单位列缩短至原 50%（8%→4%），
-    //        单位列前面新增类型列（宽度与单位列相同 4%）
+    // v3.16：在上版基础上再调一轮列宽——品牌列收缩 10%（12.6%→11.34%）、
+    //        类型列增加 20%（4%→4.8%）、单位列增加 10%（4%→4.4%）、
+    //        成本/单价列收缩 10%（14%→12.6%）
     h += '<table><colgroup>' +
-      '<col style="width:6%">' +    // #
-      '<col style="width:12.6%">' + // 品牌（原 14% 缩短至 90%）
-      '<col style="width:32%">' +   // 型号（放宽一倍）
-      '<col style="width:4%">' +    // 类型（新增，宽度与单位列相同）
-      '<col style="width:4%">' +    // 单位（原 8% 缩短至 50%）
+      '<col style="width:6%">' +      // #
+      '<col style="width:11.34%">' +  // 品牌（12.6% 收缩 10%）
+      '<col style="width:32%">' +     // 型号（放宽一倍）
+      '<col style="width:4.8%">' +    // 类型（4% 增加 20%）
+      '<col style="width:4.4%">' +    // 单位（4% 增加 10%）
       (withPrice ? (isSale
-        ? '<col style="width:14%"><col style="width:10%"><col style="width:16%">'  // 单价/数量/金额（缩窄）
-        : '<col style="width:14%"><col style="width:10%"><col style="width:16%">') // 成本/数量/金额
+        ? '<col style="width:12.6%"><col style="width:10%"><col style="width:16%">'  // 单价/数量/金额（缩窄）
+        : '<col style="width:12.6%"><col style="width:10%"><col style="width:16%">') // 成本/数量/金额
         : '<col style="width:10%">') + // 数量（不带价格版）
       '</colgroup><thead><tr><th>#</th><th>品牌</th><th>型号</th><th>类型</th><th>单位</th>';
     if (withPrice) {
@@ -110,7 +128,7 @@
         '<td>' + (i + 1) + '</td>' +
         '<td>' + esc(it.brand || '') + '</td>' +
         '<td>' + esc(it.model || '') + (isGift ? '（赠）' : '') + '</td>' +
-        '<td>' + esc(it.category || '') + '</td>' +
+        '<td>' + esc(itemCategory(ctx, it)) + '</td>' +
         '<td>' + esc(it.unit || '') + '</td>';
       if (withPrice) {
         if (isSale) {

@@ -143,12 +143,10 @@ test('问题4-打印表格：取消价格列、型号列放宽、所有文字居
   assert.ok(!html.includes('<th>价格</th>'), '销售单打印取消价格列');
   assert.ok(!html.includes('>批发<') && !html.includes('>零售<'), '取消价格类型（批发/零售）显示');
 
-  // 型号列放宽（colgroup 中型号列宽度 32%，明显大于品牌 12.6%）
+  // 型号列放宽（colgroup 中型号列宽度 32%，明显大于品牌 11.34%）
   assert.ok(html.includes('<col style="width:32%">'), '型号列放宽至 32%');
-  // V3.15 问题2：品牌列缩短至原宽度的 90%（14% → 12.6%）
-  assert.ok(html.includes('<col style="width:12.6%">'), '品牌列缩短至 12.6%（原 14% 的 90%）');
-  assert.ok(!html.includes('<col style="width:14%">') || html.indexOf('<col style="width:14%">') > html.indexOf('<col style="width:4%">'),
-    '14% 宽度不再是品牌列');
+  // V3.16 问题1：品牌列再收缩 10%（12.6% → 11.34%）
+  assert.ok(html.includes('<col style="width:11.34%">'), '品牌列收缩至 11.34%（12.6% 的 90%）');
 
   // 所有文字居左：表格单元格无 class="num"（右对齐类）
   assert.ok(!html.includes('class="num"'), '所有表格单元格无 num 右对齐类，全部居左');
@@ -162,23 +160,32 @@ test('问题4-打印表格：取消价格列、型号列放宽、所有文字居
     '表头列顺序正确（类型列位于单位列前，无价格列）');
 });
 
-test('V3.15-问题2：打印模板品牌列90%/单位列50%、单位列前新增类型列（宽度相同）', () => {
+/** 解析 colgroup，返回各列宽度数组（如 ['6%','11.34%',...]） */
+function colWidths(html) {
+  const cg = html.slice(html.indexOf('<colgroup>'), html.indexOf('</colgroup>'));
+  return (cg.match(/width:([0-9.]+%)/g) || []).map(function (s) { return s.replace('width:', ''); });
+}
+
+test('V3.15-问题2 + V3.16-问题1：打印模板列宽与列顺序（品牌11.34%/类型4.8%/单位4.4%/成本12.6%）', () => {
   const ctx = newCtx({ shopName: '幸福家电批发' });
   const html = printDoc.buildDocHtml(ctx, saleDoc(), 'sale');
 
-  // 品牌列缩短至原宽度 90%：14% × 0.9 = 12.6%
-  assert.ok(html.includes('<col style="width:12.6%">'), '品牌列 12.6%（原 14% 的 90%）');
-  // 单位列缩短至原宽度 50%：8% × 0.5 = 4%
-  // 类型列新增且宽度与单位列相同（均为 4%）
-  const typeCol = '<col style="width:4%">';
-  assert.strictEqual(html.split(typeCol).length - 1, 2, '类型列与单位列各占 4%（宽度相同的两个 4% 列）');
+  // 销售单（带价格）列宽：# 品牌 型号 类型 单位 单价 数量 金额
+  assert.deepStrictEqual(colWidths(html),
+    ['6%', '11.34%', '32%', '4.8%', '4.4%', '12.6%', '10%', '16%'],
+    '销售单列宽：#6% 品牌11.34% 型号32% 类型4.8% 单位4.4% 单价12.6% 数量10% 金额16%');
+
+  // V3.15：品牌列缩短至原 90%（14%→12.6%），V3.16：再收缩 10%（12.6%→11.34%）
+  // V3.15：单位列缩短至原 50%（8%→4%），V3.16：再增加 10%（4%→4.4%）
+  // V3.15：类型列新增（与单位列同宽 4%），V3.16：增加 20%（4%→4.8%）
+  // V3.16：成本/单价列收缩 10%（14%→12.6%）
+  const w = colWidths(html);
+  assert.strictEqual(w[1], '11.34%', '品牌列 11.34%');
+  assert.strictEqual(w[3], '4.8%', '类型列 4.8%（4% 增加 20%）');
+  assert.strictEqual(w[4], '4.4%', '单位列 4.4%（4% 增加 10%）');
+  assert.strictEqual(w[5], '12.6%', '单价列 12.6%（14% 收缩 10%）');
 
   // 列顺序：类型列必须位于单位列之前
-  const colgroup = html.slice(html.indexOf('<colgroup>'), html.indexOf('</colgroup>'));
-  const brandIdx = colgroup.indexOf('width:12.6%');
-  const modelIdx = colgroup.indexOf('width:32%');
-  const unitIdx = colgroup.indexOf('width:4%');
-  assert.ok(brandIdx < modelIdx && modelIdx < unitIdx, '列顺序：品牌 → 型号 → 类型 → 单位');
   const thOrder = html.indexOf('<th>类型</th>');
   const thUnit = html.indexOf('<th>单位</th>');
   assert.ok(thOrder > -1 && thOrder < thUnit, '表头中类型列在单位列之前');
@@ -197,10 +204,59 @@ test('V3.15-问题2：打印模板品牌列90%/单位列50%、单位列前新增
   assert.ok(noPrice.includes('<th>类型</th><th>单位</th>'), '不带价格版同样含类型列（单位前）');
   assert.ok(noPrice.includes('<td>冰箱</td>'), '不带价格版明细输出类型');
 
-  // 进货单同样新增类型列
+  // 进货单：成本列收缩 10%（14%→12.6%），品牌/类型/单位列宽与销售单一致
   const ph = printDoc.buildDocHtml(ctx, purchaseDoc(), 'purchase');
   assert.ok(ph.includes('<th>类型</th><th>单位</th>'), '进货单表头含类型列（单位前）');
-  assert.ok(ph.includes('<col style="width:12.6%">'), '进货单品牌列同为 12.6%');
+  assert.deepStrictEqual(colWidths(ph),
+    ['6%', '11.34%', '32%', '4.8%', '4.4%', '12.6%', '10%', '16%'],
+    '进货单列宽：成本列同为 12.6%（收缩 10%）');
+});
+
+test('V3.16-问题1：历史单据（明细无 category 字段）类型列按 productId 回查商品类型，不再空白', () => {
+  const product = require('../js/core/product.js');
+  const ctx = newCtx({ shopName: '幸福家电批发' });
+  const r = product.save(ctx, {
+    brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
+    cost: '1000', priceWholesale: '1200', priceRetail: '1399'
+  });
+  assert.ok(r.ok, '商品保存成功');
+  const pid = ctx.data.products[0].id;
+
+  // 模拟历史进货单：明细没有 category 字段（V3.15 之前创建的单据）
+  const oldPurchase = {
+    no: 'JH20260904001', date: '2026-09-04', partnerName: '美的总代理',
+    items: [{ productId: pid, brand: '海尔', model: 'BCD-200', unit: '台', qty: 5, costPrice: 100000, amount: 500000 }],
+    total: 500000, paid: 100000, debt: 400000, note: ''
+  };
+  const ph = printDoc.buildDocHtml(ctx, oldPurchase, 'purchase');
+  assert.ok(ph.includes('<td>冰箱</td>'), '历史进货单按 productId 回查到类型「冰箱」，类型列不再空白');
+
+  // 模拟历史销售单：同样无 category
+  const oldSale = {
+    no: 'XS20260904001', date: '2026-09-04', type: 'sale', partnerName: '红星电器行',
+    items: [{ productId: pid, brand: '海尔', model: 'BCD-200', unit: '台', qty: 1, price: 139900, priceType: 'retail', type: 'sale' }],
+    payable: 139900, received: 139900, debt: 0, discount: 0, note: ''
+  };
+  const sh = printDoc.buildDocHtml(ctx, oldSale, 'sale');
+  assert.ok(sh.includes('<td>冰箱</td>'), '历史销售单同样回查到类型');
+
+  // 明细自带 category 时优先使用明细值（不被商品档案当前值覆盖）
+  const withCat = {
+    no: 'JH20260904002', date: '2026-09-04', partnerName: '美的总代理',
+    items: [{ productId: pid, brand: '海尔', model: 'BCD-200', category: '展示机', unit: '台', qty: 1, costPrice: 100000, amount: 100000 }],
+    total: 100000, paid: 100000, debt: 0, note: ''
+  };
+  const wh = printDoc.buildDocHtml(ctx, withCat, 'purchase');
+  assert.ok(wh.includes('<td>展示机</td>'), '明细自带 category 时优先用明细值');
+
+  // 既无 category 又无 productId（极旧/脏数据）→ 留空且不报错
+  const noRef = {
+    no: 'JH20260904003', date: '2026-09-04', partnerName: '散客',
+    items: [{ brand: '杂牌', model: 'X-1', unit: '个', qty: 1, costPrice: 0, amount: 0 }],
+    total: 0, paid: 0, debt: 0, note: ''
+  };
+  const nh = printDoc.buildDocHtml(ctx, noRef, 'purchase');
+  assert.ok(!nh.includes('<td>undefined</td>'), '脏数据不输出 undefined');
 });
 
 test('V3.15-问题2：engine 单据明细携带商品类型 category（供打印模板类型列）', () => {
@@ -229,6 +285,51 @@ test('V3.15-问题2：engine 单据明细携带商品类型 category（供打印
   });
   assert.ok(sale.ok, '销售单保存成功');
   assert.strictEqual(ctx.data.sales[0].items[0].category, '冰箱', '销售单明细携带 category');
+});
+
+test('V3.16-问题1：退货单与换货单明细同样携带 category（打印类型列不空白）', () => {
+  const engine = require('../js/core/engine.js');
+  const product = require('../js/core/product.js');
+  const ctx = newCtx({ shopName: '幸福家电批发' });
+  product.save(ctx, {
+    brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
+    cost: '1000', priceWholesale: '1200', priceRetail: '1399'
+  });
+  product.save(ctx, {
+    brand: '格力', model: 'KFR-35', category: '空调', unit: '台',
+    cost: '1800', priceWholesale: '2200', priceRetail: '2599'
+  });
+  const [pOld, pNew] = ctx.data.products;
+
+  engine.savePurchase(ctx, {
+    date: '2026-09-05', partnerName: '测试供应商',
+    items: [
+      { productId: pOld.id, qty: 10, costPrice: '1000' },
+      { productId: pNew.id, qty: 10, costPrice: '1800' }
+    ], paid: '99999'
+  });
+  const s = engine.saveSale(ctx, {
+    date: '2026-09-05',
+    items: [{ productId: pOld.id, qty: 2, price: '1399', priceType: 'retail' }],
+    payments: [{ method: 'wechat', amount: '2798' }]
+  });
+  assert.ok(s.ok, '销售单保存成功');
+
+  // 退货单：从原销售单明细复制，应沿用原明细的 category
+  const ref = engine.refundSale(ctx, { originalNo: s.doc.no, items: [{ productId: pOld.id, qty: 1 }] });
+  assert.ok(ref.ok, '退货单保存成功');
+  assert.strictEqual(ref.doc.items[0].category, '冰箱', '退货单明细携带 category');
+
+  // 换货单：退货部分沿用原明细 category，换新部分取商品档案 category
+  const ex = engine.exchange(ctx, {
+    originalNo: s.doc.no,
+    returns: [{ productId: pOld.id, qty: 1 }],
+    replacements: [{ productId: pNew.id, qty: 1, price: '2599', priceType: 'retail' }],
+    payments: [{ method: 'wechat', amount: '1200' }]
+  });
+  assert.ok(ex.ok, '换货单保存成功');
+  assert.strictEqual(ex.refund.items[0].category, '冰箱', '换货-退货明细携带 category');
+  assert.strictEqual(ex.sale.items[0].category, '空调', '换货-换新明细携带 category');
 });
 
 test('问题4-进货单打印：成本列、无价格列、型号放宽', () => {
