@@ -312,6 +312,12 @@ button, input, select, textarea {
    base 的 .select { width:100% } 会让 flex-basis 取 100% 把下拉撑满、挤窄搜索框，
    此处 width:auto 覆盖，使下拉按内容宽度展示（min-width 保底 130px），搜索框 flex:1 占满剩余 */
 .search-bar .select { flex: 0 0 auto; width: auto; min-width: 130px; }
+/* V3.17：筛选区容器（分类下拉 + 重置按钮）——保证两者始终同一行；
+   桌面端作为整体占满搜索框右侧剩余空间，重置按钮靠右 */
+.search-bar-filters { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.search-bar-filters .select { flex: 0 0 auto; width: auto; min-width: 130px; }
+.search-bar-filters .spacer { flex: 1; }
+.search-bar-filters .btn { flex: 0 0 auto; white-space: nowrap; }
 
 /* ---------- 表单 ---------- */
 

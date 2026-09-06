@@ -231,3 +231,42 @@ test('V3.15-问题1：库存管理标签上下留空隙、按钮高度不拥挤'
   assert.ok(btnBlock.includes('min-height: 44px'), '标签按钮高度加高至 44px');
   assert.ok(btnBlock.includes('padding: 9px 18px'), '标签按钮上下内边距 9px');
 });
+
+test('V3.17-问题1：手机端搜索模块——分类下拉与重置按钮同一行', () => {
+  const ctx = seed(newCtx());
+  const st = fresh(ctx);
+  const html = page.render(ctx, st);
+
+  // 分类下拉与重置按钮必须包进同一个 .search-bar-filters 容器
+  assert.ok(html.includes('<div class="search-bar-filters">'), '筛选区使用 search-bar-filters 容器');
+  const fStart = html.indexOf('<div class="search-bar-filters">');
+  // 容器结束位置：从起点起第一个 </div>（内部 spacer 也含 </div>，故按 select / spacer / btn 顺序定位）
+  const fEnd = html.indexOf('重置</button>', fStart);
+  const filters = html.slice(fStart, fEnd);
+  assert.ok(filters.includes('<select class="select"'), '分类下拉在容器内');
+  assert.ok(filters.includes('data-act="reset-filter"'), '重置按钮在容器内');
+  assert.ok(filters.includes('data-name="cat"'), '下拉为分类筛选（cat）');
+
+  // 渲染结构：重置按钮紧随 spacer，二者同属一个 flex 行容器
+  assert.ok(filters.indexOf('<select') < filters.indexOf('data-act="reset-filter"'),
+    '容器内顺序：分类下拉在前、重置按钮在后（同行排列）');
+
+  // 桌面端样式：容器为 flex 行，下拉不被强制撑满
+  const base = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
+  const fb = base.slice(base.indexOf('.search-bar-filters {'));
+  const fbBlock = fb.slice(0, fb.indexOf('}'));
+  assert.ok(fbBlock.includes('display: flex'), '桌面端筛选区为 flex 行布局');
+  assert.ok(fbBlock.includes('gap: 8px'), '筛选区内元素间距 8px');
+
+  // 手机端样式：容器整行换行（100%），下拉自适应剩余宽度（不再独占整行）
+  const mobile = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
+  const mb = mobile.slice(mobile.indexOf('.search-bar-filters {'));
+  const mbBlock = mb.slice(0, mb.indexOf('}'));
+  assert.ok(mbBlock.includes('flex: 1 1 100%'), '手机端筛选区整行换行到第二行');
+
+  // 关键回归：手机端下拉不再 flex:1 1 100% 独占一行
+  const selBlock = mobile.slice(mobile.indexOf('.search-bar .select,'));
+  const selRule = selBlock.slice(0, selBlock.indexOf('}'));
+  assert.ok(selRule.includes('flex: 1 1 auto'), '手机端下拉自适应剩余宽度（与重置按钮同行）');
+  assert.ok(!selRule.includes('flex: 1 1 100%'), '手机端下拉不再独占整行');
+});

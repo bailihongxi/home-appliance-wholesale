@@ -49,9 +49,13 @@
   .stat-grid-compact .stat-card .label { font-size: 10px; line-height: 1.1; flex: 0 0 auto; height: auto; min-height: 0; padding: 0; }
   .stat-grid-compact .stat-card .value { font-size: 15px; margin-left: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 0 auto; height: auto; }
 
-  /* 搜索模块：手机端改回多行（搜索框+扫码一行；筛选下拉换行到第二行），便于手机操作 */
+  /* 搜索模块：手机端改回多行（搜索框+扫码一行；筛选区换行到第二行），便于手机操作。
+     V3.17：筛选区（.search-bar-filters）整行换行，内部「分类下拉 + 重置按钮」并排同一行——
+     下拉 flex:1 吃掉剩余宽度，重置按钮保持内容宽度靠右（此前 select 独占一行、重置被挤到第三行） */
   .search-bar { flex-wrap: wrap; }
-  .search-bar .select { flex: 1 1 100%; margin-top: 4px; }
+  .search-bar-filters { flex: 1 1 100%; margin-top: 4px; }
+  .search-bar .select,
+  .search-bar-filters .select { flex: 1 1 auto; width: auto; min-width: 0; margin-top: 0; }
 
   /* 记账中心头部：窄屏允许换行，统计横排紧凑 */
   .account-head { flex-wrap: wrap; row-gap: 6px; }

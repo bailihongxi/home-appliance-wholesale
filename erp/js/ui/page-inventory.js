@@ -229,10 +229,14 @@
     var opts = [{ value: '', text: '全部分类' }].concat(cats.map(function (c) {
       return { value: c, text: c };
     }));
+    // V3.17：分类下拉与重置按钮包进 .search-bar-filters——
+    // 手机端该容器整行换行，内部 select 与重置按钮并排同一行（此前 select 独占一行、重置被挤到第三行）
     return (
+      '<div class="search-bar-filters">' +
       ui.select({ name: 'cat', value: st.cat, on: 'filter', options: opts }) +
       '<div class="spacer"></div>' +
-      '<button class="btn" data-act="reset-filter">重置</button>'
+      '<button class="btn" data-act="reset-filter">重置</button>' +
+      '</div>'
     );
   }
 
