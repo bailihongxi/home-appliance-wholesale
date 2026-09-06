@@ -153,7 +153,7 @@
     if (state.delId) {
       var delAcct = accounts.getById(list, state.delId);
       h += '<div class="notice notice-warn mt8">确定删除账号「' + esc(delAcct ? delAcct.shopName : '') + '」？其全部数据（商品 / 单据 / 账本）将一并删除，且不可恢复。</div>' +
-        '<div class="row mt8"><button class="btn" data-act="admin-del-cancel">取消</button>' +
+        '<div class="row mt8"><button class="btn btn-danger" data-act="admin-del-cancel">取消</button>' +
         '<div class="spacer"></div>' +
         '<button class="btn btn-danger" data-act="admin-confirm-del" data-id="' + esc(state.delId) + '">确认删除</button></div>';
     }
@@ -192,7 +192,7 @@
       '<div class="field"><label>确认密码</label>' +
       '<input class="input" type="password" data-input="admin-new.password2" data-live="1" value="' + esc(f.password2) + '"></div>' +
       '<div class="small muted">创建后默认经营范围＝全部分类，可在下方该账号卡片中按需勾选。</div>' +
-      '<div class="row mt8"><button class="btn" data-act="admin-new-cancel">取消</button>' +
+      '<div class="row mt8"><button class="btn btn-danger" data-act="admin-new-cancel">取消</button>' +
       '<div class="spacer"></div>' +
       '<button class="btn btn-primary" data-act="admin-create-account">创建账号</button></div></div>';
   }
@@ -220,7 +220,7 @@
       '<input class="input" type="password" data-input="admin-edit.password" data-live="1" placeholder="留空不修改" value="' + esc(f.password) + '"></div>' +
       '<div class="field"><label>确认新密码</label>' +
       '<input class="input" type="password" data-input="admin-edit.password2" data-live="1" value="' + esc(f.password2) + '"></div>' +
-      '<div class="row mt8"><button class="btn" data-act="admin-edit-cancel">取消</button>' +
+      '<div class="row mt8"><button class="btn btn-danger" data-act="admin-edit-cancel">取消</button>' +
       '<div class="spacer"></div>' +
       '<button class="btn btn-primary" data-act="admin-save-edit" data-id="' + esc(acct.id) + '">保存修改</button></div></div>';
   }

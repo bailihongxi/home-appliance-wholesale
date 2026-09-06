@@ -284,7 +284,7 @@
       '<div class="field"><label>备注</label>' +
       '<input class="input" data-input="manual-field" data-name="note" placeholder="选填" value="' + esc(m.note) + '"></div>' +
       '<div class="row">' +
-      '<button class="btn" data-act="close-manual">取消</button>' +
+      '<button class="btn btn-danger" data-act="close-manual">取消</button>' +
       '<div class="spacer"></div>' +
       '<button class="btn btn-primary" data-act="save-manual">保存记账</button>' +
       '</div></div>';
@@ -387,7 +387,7 @@
       (s.error ? '<div class="small" style="color:#dc2626">' + esc(s.error) + '</div>' : '') +
       '</div>' +
       '<div class="modal-actions">' +
-      '<button class="btn" data-act="close-settle">取消</button>' +
+      '<button class="btn btn-danger" data-act="close-settle">取消</button>' +
       '<button class="btn btn-primary" data-act="do-settle">' + (isSup ? '确认付款' : '确认收款') + '</button>' +
       '</div></div></div>';
   }

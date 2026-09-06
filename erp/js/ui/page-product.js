@@ -444,7 +444,7 @@
     h += '</div>';
 
     h += '<div class="row">' +
-      '<button class="btn" data-act="cancel-form">取消</button>' +
+      '<button class="btn btn-danger" data-act="cancel-form">取消</button>' +
       '<div class="spacer"></div>' +
       '<button class="btn btn-primary" data-act="save-product">保存</button>' +
       '</div>';

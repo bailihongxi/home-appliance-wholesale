@@ -528,7 +528,7 @@
       '</div>' +
       '<div class="row mt8" style="gap:8px">' +
       '<button class="btn btn-primary" data-act="do-pay">确认付款</button>' +
-      '<button class="btn" data-act="close-pay">取消</button>' +
+      '<button class="btn btn-danger" data-act="close-pay">取消</button>' +
       '</div></div>';
   }
 
@@ -642,7 +642,7 @@
       '</div>';
 
     h += '<div class="row">' +
-      '<button class="btn" data-act="cancel-form">取消</button>' +
+      '<button class="btn btn-danger" data-act="cancel-form">取消</button>' +
       '<div class="spacer"></div>' +
       (form.editNo
         ? '<button class="btn btn-primary" data-act="update-purchase">保存修改</button>'

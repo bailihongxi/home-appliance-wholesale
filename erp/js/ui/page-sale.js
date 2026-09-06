@@ -516,7 +516,7 @@
     h += '</div>';
 
     h += '<div class="pay-actions">' +
-      '<button class="btn" data-act="cancel-form">取消</button>' +
+      '<button class="btn btn-danger" data-act="cancel-form">取消</button>' +
       '<button class="btn btn-primary btn-lg" data-act="save-sale">保存并出单</button>' +
       '</div>';
 
@@ -751,7 +751,7 @@
       '</div>' +
       '<div class="row mt8" style="gap:8px">' +
       '<button class="btn btn-primary" data-act="do-pay">确认回款</button>' +
-      '<button class="btn" data-act="close-pay">取消</button>' +
+      '<button class="btn btn-danger" data-act="close-pay">取消</button>' +
       '</div></div>';
   }
 
@@ -778,7 +778,7 @@
         '<td class="num"><input class="input" style="width:60px;text-align:right" data-change="refund-qty" data-id="' + esc(it.productId) + '" inputmode="numeric" value="' + def + '"></td></tr>';
     });
     h += '</tbody></table></div>' +
-      '<div class="row"><button class="btn" data-act="close-refund">取消</button>' +
+      '<div class="row"><button class="btn btn-danger" data-act="close-refund">取消</button>' +
       '<div class="spacer"></div>' +
       '<button class="btn btn-primary" data-act="do-refund">确认退货</button></div></div>';
     return h;
