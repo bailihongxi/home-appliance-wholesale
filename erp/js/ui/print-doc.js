@@ -95,31 +95,35 @@
       '<span>' + partnerLabel + '：' + esc(doc.partnerName || '散客') + '</span>' +
       '<span>共 ' + qty + ' 件</span></div>';
 
-    // 表头（所有文字居左，型号列放宽，单价/数量/金额列缩窄，取消价格列）
-    // v3.16：在上版基础上再调一轮列宽——品牌列收缩 10%（12.6%→11.34%）、
-    //        类型列增加 20%（4%→4.8%）、单位列增加 10%（4%→4.4%）、
-    //        成本/单价列收缩 10%（14%→12.6%）
-    h += '<table><colgroup>' +
-      '<col style="width:6%">' +      // #
-      '<col style="width:11.34%">' +  // 品牌（12.6% 收缩 10%）
-      '<col style="width:32%">' +     // 型号（放宽一倍）
-      '<col style="width:4.8%">' +    // 类型（4% 增加 20%）
-      '<col style="width:4.4%">' +    // 单位（4% 增加 10%）
-      (withPrice ? (isSale
-        ? '<col style="width:12.6%"><col style="width:10%"><col style="width:16%">'  // 单价/数量/金额（缩窄）
-        : '<col style="width:12.6%"><col style="width:10%"><col style="width:16%">') // 成本/数量/金额
-        : '<col style="width:10%">') + // 数量（不带价格版）
-      '</colgroup><thead><tr><th>#</th><th>品牌</th><th>型号</th><th>类型</th><th>单位</th>';
+    // V3.17 问题2：列宽按汉字个数分配（每个汉字 3% 宽），型号列占剩余空间。
+    // 列顺序：#(2汉字) 品牌(4) 型号(剩余) 类型(5) 单位(2) [单价/成本(4) 数量(2) 金额(5)]
+    // 不带价格版（版本1）去掉单价/成本与金额，仅保留 数量(2)，型号列吃掉更多剩余宽度。
+    var UNIT_PCT = 3.0;
+    var cols = [
+      { head: '#', chars: 2 },
+      { head: '品牌', chars: 4 },
+      { head: '型号', rest: true },
+      { head: '类型', chars: 5 },
+      { head: '单位', chars: 2 }
+    ];
     if (withPrice) {
-      if (isSale) {
-        h += '<th>单价</th><th>数量</th><th>金额</th>';
-      } else {
-        h += '<th>成本</th><th>数量</th><th>金额</th>';
-      }
+      cols.push({ head: isSale ? '单价' : '成本', chars: 4 });
+      cols.push({ head: '数量', chars: 2 });
+      cols.push({ head: '金额', chars: 5 });
     } else {
-      h += '<th>数量</th>';
+      cols.push({ head: '数量', chars: 2 });
     }
-    h += '</tr></thead><tbody>';
+    var fixedPct = 0;
+    cols.forEach(function (c) { if (!c.rest) fixedPct += c.chars * UNIT_PCT; });
+    var restPct = Math.round((100 - fixedPct) * 10) / 10;
+    var colgroup = '';
+    var thRow = '';
+    cols.forEach(function (c) {
+      var w = c.rest ? restPct : (Math.round(c.chars * UNIT_PCT * 10) / 10);
+      colgroup += '<col style="width:' + w + '%">';
+      thRow += '<th>' + c.head + '</th>';
+    });
+    h += '<table><colgroup>' + colgroup + '</colgroup><thead><tr>' + thRow + '</tr></thead><tbody>';
 
     doc.items.forEach(function (it, i) {
       var isGift = isSale && it.type === schema.DOC.GIFT;

@@ -45,13 +45,18 @@ test('侧栏 HTML：折叠按钮挂载于侧栏内（data-act="toggle-side"）',
   assert.ok(html.includes('<nav class="nav-list"></nav>'), '导航列表容器存在');
 });
 
-test('手机端搜索模块：搜索框一行、筛选下拉换行第二行（改回多行样式）', () => {
+test('V3.17-手机端搜索模块：搜索框一行、筛选区换行第二行、分类下拉与重置按钮同一行', () => {
   const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
   assert.ok(css.includes('.search-bar { flex-wrap: wrap; }'), '搜索栏手机端允许换行');
-  assert.ok(css.includes('.search-bar .select { flex: 1 1 100%; margin-top: 4px; }'),
-    '筛选下拉在手机端换行到第二行（整行显示）');
+  // V3.17：分类下拉与重置按钮包进 .search-bar-filters；手机端筛选区整行换行，
+  // 下拉与重置按钮在容器内并排（下拉自适应剩余宽度）
+  assert.ok(css.includes('.search-bar-filters { flex: 1 1 100%; margin-top: 4px; }'),
+    '筛选区容器在手机端独占第二行');
+  assert.ok(css.includes('.search-bar .select,\n  .search-bar-filters .select { flex: 1 1 auto; width: auto; min-width: 0; margin-top: 0; }'),
+    '容器内下拉 flex:auto 与重置按钮并排同一行');
   const base = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
   assert.ok(base.includes('.search-bar { display: flex;'), 'search-bar 基础样式存在');
+  assert.ok(base.includes('.search-bar-filters { display: flex;'), '筛选区容器为 flex 行布局');
 });
 
 test('问题1-账户权限管理菜单仅管理总控可见（app.isAdmin）', () => {
