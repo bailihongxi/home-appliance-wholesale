@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
 const page = require('../js/ui/page-purchase.js');
 const { newCtx } = require('./helpers/ctx.js');
 const product = require('../js/core/product.js');
@@ -160,4 +162,63 @@ test('进货列表搜索模块：第1行搜索+供应商、第2行日期', () =>
   assert.ok(html.includes('全部供应商'), '供应商下拉含全部供应商');
   const from = html.indexOf('data-name="from"');
   assert.ok(from > sup, '日期选择在第二行');
+});
+
+/** 找到 html 中 openIdx 处 <div...> 的匹配闭合 </div> 位置 */
+function closeTagIndex(html, openIdx) {
+  var depth = 1;
+  var i = openIdx + 1;
+  while (i < html.length && depth > 0) {
+    var openAt = html.indexOf('<div', i);
+    var closeAt = html.indexOf('</div>', i);
+    if (closeAt === -1) return -1;
+    if (openAt !== -1 && openAt < closeAt) {
+      depth++;
+      i = openAt + 4;
+    } else {
+      depth--;
+      if (depth === 0) return closeAt;
+      i = closeAt + 6;
+    }
+  }
+  return -1;
+}
+
+test('V3.17-问题3：新建进货单表单「品」字布局——供应商在上，选品加行与进货明细并排两列，已付款在下', () => {
+  const ctx = newCtx();
+  const { p1 } = seed(ctx);
+  const st = fresh(ctx);
+  st.tab = 'form';
+  page.actions['add-item'](ctx, st, { getAttribute: () => p1.id });
+  const html = page.render(ctx, st);
+
+  // 存在专用两列容器
+  const gridStart = html.indexOf('<div class="purchase-form-grid">');
+  assert.ok(gridStart >= 0, '选品加行与进货明细包在 purchase-form-grid 容器内');
+  const gridEnd = closeTagIndex(html, gridStart);
+  assert.ok(gridEnd > gridStart, 'purchase-form-grid 容器有匹配闭合标签');
+  const gridBlock = html.slice(gridStart, gridEnd + 6);
+
+  // 容器内包含两个 card：选品加行、进货明细
+  assert.ok(gridBlock.includes('按商品加行'), '选品加行模块在容器内');
+  assert.ok(gridBlock.includes('进货明细'), '进货明细模块在容器内');
+
+  // 供应商选择模块在容器之前（最上部）
+  const supplierStart = html.indexOf('data-name="partnerId"');
+  assert.ok(supplierStart > 0 && supplierStart < gridStart, '供应商选择模块在 purchase-form-grid 上方');
+
+  // 已付款模块在容器之后
+  const paidStart = html.indexOf('data-name="paid"');
+  assert.ok(paidStart > gridEnd, '已付款模块在 purchase-form-grid 下方');
+
+  // 桌面端：两列布局
+  const base = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
+  const baseBlock = base.slice(base.indexOf('.purchase-form-grid {'));
+  assert.ok(baseBlock.includes('display: grid'), 'purchase-form-grid 使用 grid 布局');
+  assert.ok(baseBlock.includes('grid-template-columns: 1fr 1fr'), '桌面端为两列布局');
+
+  // 手机端：单列堆叠
+  const mobile = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
+  const mbBlock = mobile.slice(mobile.indexOf('.purchase-form-grid {'));
+  assert.ok(mbBlock.includes('grid-template-columns: 1fr'), '手机端 purchase-form-grid 单列堆叠');
 });

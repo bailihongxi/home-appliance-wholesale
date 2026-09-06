@@ -244,6 +244,10 @@ button, input, select, textarea {
 .grid-2 { grid-template-columns: 1fr 1fr; }
 .grid-3 { grid-template-columns: repeat(3, 1fr); }
 .grid-4 { grid-template-columns: repeat(4, 1fr); }
+/* V3.17 问题3：新建进货单「品」字布局——供应商模块在上，选品加行与进货明细并排两列，已付款在下 */
+.purchase-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch; }
+.purchase-form-grid > .card { display: flex; flex-direction: column; }
+.purchase-form-grid > .card .table-wrap { flex: 1; min-height: 0; }
 
 .row { display: flex; gap: 8px; align-items: center; }
 .row.wrap { flex-wrap: wrap; }

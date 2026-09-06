@@ -42,6 +42,8 @@
   .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
   .grid-4 { grid-template-columns: repeat(4, 1fr); }
   .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  /* V3.17 问题3：进货单新建页「选品加行 + 进货明细」桌面端两列，手机端单列堆叠 */
+  .purchase-form-grid { grid-template-columns: 1fr; }
   /* 库存紧凑统计卡：移动端 2 列自适应屏幕宽度（minmax(0,1fr) 防止内容撑破溢出），
      卡片改竖排（标签上、数字下）保证长金额完整显示 */
   .stat-grid-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }

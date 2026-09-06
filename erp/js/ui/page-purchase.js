@@ -559,6 +559,9 @@
       '<input class="input" data-input="field" data-name="newPartner" placeholder="输入新供应商名称" value="' + esc(form.newPartner) + '"></div>';
     h += '</div>';
 
+    /* V3.17 问题3：选品加行 + 进货明细并排放置（桌面端两列），与上方供应商模块形成「品」字形 */
+    h += '<div class="purchase-form-grid">';
+
     /* 选品加行 */
     h += '<div class="card"><div class="card-title">按商品加行' +
       '<span class="more">点「加入」数量 +1</span></div>' +
@@ -625,6 +628,7 @@
       h += '<div class="row between mt8"><span class="strong">合计 ' + ui.money(t) + '</span>' +
         '<button class="btn btn-sm" data-act="quick-paid">已付 = 合计</button></div>';
     }
+    h += '</div>';
     h += '</div>';
 
     var paid = util.parseMoney(form.paid);
