@@ -278,13 +278,36 @@
   };
 
   /**
+   * 合并多个工作表的行（V3.22 多表导入用）：
+   * 第一个工作表整表保留（含表头）；后续工作表若首行能识别为表头（≥2 个已知列名）则剥离后追加。
+   * @param sheets [{name, rows}]（excel.parseAll 输出）
+   * @returns 合并后的二维数组（首行为表头）
+   */
+  api.mergeSheetRows = function mergeSheetRows(sheets) {
+    var out = [];
+    (sheets || []).forEach(function (sh) {
+      var rows = (sh && sh.rows) || [];
+      if (!rows.length) return;
+      if (out.length === 0) {
+        out = rows.slice();
+        return;
+      }
+      var isHeader = Object.keys(api.mapHeaders(rows[0])).length >= 2;
+      out = out.concat(isHeader ? rows.slice(1) : rows);
+    });
+    return out;
+  };
+
+  /**
    * CSV 行导入（电器版）：表头 + 数据行 → 商品
    * @param rows 二维数组（第一行为表头），与 util.parseCSV 输出同构
-   * @returns {created, updated, errors:[{row,msg}]}
+   * @returns {created, updated, total, skipped, errors:[{row,msg}]}
+   *          total=数据行总数（不含表头）；skipped=被跳过的空行数
    */
   api.importFromRows = function importFromRows(rows, ctx) {
-    var result = { created: 0, updated: 0, errors: [] };
+    var result = { created: 0, updated: 0, total: 0, skipped: 0, errors: [] };
     if (!rows || !rows.length) return result;
+    result.total = rows.length - 1; // 数据行总数（不含表头）
     var map = api.mapHeaders(rows[0]);
     var hasKey = Object.keys(map).length > 0;
     if (!hasKey) {
@@ -302,7 +325,10 @@
 
     for (var i = 1; i < rows.length; i++) {
       var row = rows[i];
-      if (!row || row.every(function (v) { return v === '' || v === null || v === undefined; })) continue;
+      if (!row || row.every(function (v) { return v === '' || v === null || v === undefined; })) {
+        result.skipped += 1; // 空行：明确计数，不再静默消失
+        continue;
+      }
       var brand = cell(row, 'brand');
       var model = cell(row, 'model');
       if (!brand || !model) {

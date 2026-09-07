@@ -182,7 +182,9 @@
         var parsed = util.parseCSV(state.csvText);
         var res = product.importFromRows(parsed.rows, ctx);
         state.csvResult = res;
-        repo.log(ctx, 'CSV 导入', '新增 ' + res.created + ' 款 / 更新 ' + res.updated + ' 款');
+        repo.log(ctx, 'CSV 导入', '读取 ' + res.total + ' 行：新增 ' + res.created + ' 款 / 更新 ' + res.updated + ' 款' +
+          (res.skipped ? ' / 跳过空行 ' + res.skipped + ' 行' : '') +
+          (res.errors.length ? ' / 未导入 ' + res.errors.length + ' 行' : ''));
         if (res.errors.length === 0) state.csvText = '';
       },
 
@@ -199,17 +201,20 @@
           if (window.ERP && ERP.app && ERP.app.render) ERP.app.render();
           ui.toast('已读取「' + file.name + '」，请确认后点「开始导入」', 'ok');
         };
-        reader.onload = function () {
-          try {
-            if (isCsv) {
-              finish(String(reader.result || ''));
-            } else {
-              finish(excel.rowsToCsv(excel.parse(reader.result)));
-            }
-          } catch (e) {
-            ui.toast('解析文件失败：' + (e && e.message ? e.message : e), 'err');
+      reader.onload = function () {
+        try {
+          if (isCsv) {
+            finish(String(reader.result || ''));
+          } else {
+            // V3.22：读取全部工作表并合并（后续表的重复表头自动剥离）
+            var sheets = excel.parseAll(reader.result);
+            var merged = product.mergeSheetRows(sheets);
+            finish(excel.rowsToCsv(merged));
           }
-        };
+        } catch (e) {
+          ui.toast('解析文件失败：' + (e && e.message ? e.message : e), 'err');
+        }
+      };
         reader.onerror = function () {
           ui.toast('读取文件失败，请重试', 'err');
         };
@@ -460,7 +465,7 @@
     h += '<div class="card">' +
       '<div class="field"><label>① 直接选择文件导入（支持 CSV / Excel .xlsx .xls）</label>' +
       '<input class="input" type="file" accept=".csv,.xlsx,.xls,text/csv" data-change="pick-import-file">' +
-      '<div class="small muted mt4">选择本地 CSV 或 Excel 文件，内容将自动填入下方粘贴框，可修改后点「开始导入」。</div></div>' +
+      '<div class="small muted mt4">选择本地 CSV 或 Excel 文件，内容将自动填入下方粘贴框，可修改后点「开始导入」。<b>Excel 会读取所有工作表的数据（各表首行表头自动识别）。</b></div></div>' +
       '<div class="field"><label>② 或粘贴 CSV 内容（Excel 另存为 CSV 后全选复制）</label>' +
       '<textarea class="input" data-input="csv-text" style="min-height:160px" placeholder="品牌,型号,类型,单位,成本">' +
       esc(state.csvText) + '</textarea>' +
@@ -475,7 +480,9 @@
     if (state.csvResult) {
       var r = state.csvResult;
       h += '<div class="card"><div class="card-title">导入结果</div>' +
-        '<p class="mb8">新增 ' + r.created + ' 款，更新 ' + r.updated + ' 款。</p>';
+        '<p class="mb8">共读取 <b>' + (r.total || 0) + '</b> 行数据：新增 ' + r.created + ' 款，更新 ' + r.updated + ' 款' +
+        (r.skipped ? '，跳过空行 ' + r.skipped + ' 行' : '') +
+        (r.errors.length ? '，未导入 ' + r.errors.length + ' 行' : '') + '。</p>';
       if (r.errors.length) {
         h += '<div class="notice notice-warn">有 ' + r.errors.length + ' 行未导入：</div>';
         h += '<div class="table-wrap"><table class="tbl"><thead><tr><th>行号</th><th>原因</th></tr></thead><tbody>';
