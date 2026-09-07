@@ -198,6 +198,7 @@
           (res.deduplicated ? ' / 去重 ' + res.deduplicated + ' 行' : '') +
           (res.merged ? ' / 合并停售 ' + res.merged + ' 个' : '') +
           (res.skipped ? ' / 跳过空行 ' + res.skipped + ' 行' : '') +
+          (res.uncovered && res.uncovered.length ? ' / 未覆盖 ' + res.uncovered.length + ' 个' : '') +
           (res.errors.length ? ' / 未导入 ' + res.errors.length + ' 行' : ''));
         if (res.errors.length === 0) state.csvText = '';
       },
@@ -475,7 +476,7 @@
 
   function renderCsv(ctx, state) {
     var h = '<div class="page-head"><h2>批量导入商品</h2>' +
-      '<span class="desc">必填：品牌、型号、类型；成本可选——<b>批发价/零售价无需填写，导入后按整体利润率自动生成（取整到元）</b>；还支持：单位、备注、原厂条码、期初库存。<b>导入规则（V3.24）：仅按「型号」匹配（忽略空格与大小写）；文件内同型号重复行去重、保留最后一行；系统已有该型号则以导入信息为准更新品牌/类型/单位/成本/备注（备注与条码留空时保留原值，不改动现有库存）；系统无该型号则新建；同一型号在系统中存在多个商品时合并保留——保留一个全量更新，其余仅置为停售，不删除任何商品与历史单据。</b></span></div>';
+      '<span class="desc">必填：品牌、型号、类型；成本可选——<b>批发价/零售价无需填写，导入后按整体利润率自动生成（取整到元）</b>；还支持：单位、备注、原厂条码、期初库存。<b>导入规则（V3.25）：仅按「型号」匹配（忽略空格与大小写）；文件内同型号重复行去重、保留最后一行；系统已有该型号则以导入信息为准更新品牌/类型/单位/成本/备注（备注与条码留空时保留原值，不改动现有库存）；系统无该型号则新建；同一型号在系统中存在多个商品时合并保留——保留一个全量更新，其余仅置为停售并把库存转入保留商品（不删除任何商品与历史单据）。<b>V3.25 新增：导入前先点「预演体检」，可看到将新增/将更新（含新旧值对比）/将合并/覆盖不到的商品清单，确认无误再执行导入。</b></span></div>';
     h += '<div class="card">' +
       '<div class="field"><label>① 直接选择文件导入（支持 CSV / Excel .xlsx .xls）</label>' +
       '<input class="input" type="file" accept=".csv,.xlsx,.xls,text/csv" data-change="pick-import-file">' +
@@ -568,6 +569,14 @@
         (r.errors.length ? '，未导入 ' + r.errors.length + ' 行' : '') + '。</p>';
       if (r.merged) {
         h += '<div class="notice notice-info">有 ' + r.merged + ' 个同型号的重复商品已置为「停售」保留（未删除，历史单据与库存流水完整保留）。</div>';
+      }
+      if (r.uncovered && r.uncovered.length) {
+        h += '<div class="notice notice-warn">以下 <b>' + r.uncovered.length + '</b> 个商品本次导入未覆盖到（型号对不上或已淘汰），它们仍在售，请手动核对：</div>' +
+          '<div class="table-wrap"><table class="tbl"><thead><tr><th>品牌</th><th>型号</th><th>类型</th><th>库存</th></tr></thead><tbody>';
+        r.uncovered.forEach(function (u) {
+          h += '<tr><td>' + esc(u.brand) + '</td><td>' + esc(u.model) + '</td><td>' + esc(u.category) + '</td><td>' + u.stock + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
       }
       if (r.errors.length) {
         h += '<div class="notice notice-warn">有 ' + r.errors.length + ' 行未导入：</div>';

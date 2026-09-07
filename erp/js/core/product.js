@@ -336,18 +336,21 @@
     var pre = prepareRows(rows);
     var result = {
       created: 0, updated: 0, total: pre.base.total, skipped: pre.base.skipped,
-      deduplicated: pre.base.deduplicated, merged: 0, errors: pre.base.errors
+      deduplicated: pre.base.deduplicated, merged: 0, errors: pre.base.errors,
+      uncovered: []
     };
     if (!pre.map || !pre.cell) return result;
     var cell = pre.cell;
     var order = pre.order;
     var picked = pre.picked;
+    var importKeys = {};
 
     // —— 规则2/3/4：按去重后的行逐条导入（纯型号匹配） ——
     order.forEach(function (key) {
       var entry = picked[key];
       var row = entry.row;
       var rowNo = entry.rowNo;
+      importKeys[key] = true;
       var brand = cell(row, 'brand');
       var model = cell(row, 'model');
 
@@ -396,6 +399,16 @@
         if (String(p.id) === String(keep.id)) return;
         if (p.status !== schema.STATUS.OFF) api.setStatus(ctx, p.id, schema.STATUS.OFF);
         result.merged += 1;
+      });
+    });
+
+    // V3.25：系统中未被本次导入覆盖的商品（型号对不上或已淘汰）——
+    // 它们不会被任何规则处理，导入后仍在售，列出供用户手动核对。
+    (ctx.data.products || []).forEach(function (p) {
+      if (importKeys[api.normModelKey(p.model)]) return;
+      result.uncovered.push({
+        id: p.id, brand: p.brand, model: p.model,
+        category: p.category || '', stock: p.stock || 0, status: p.status
       });
     });
 
