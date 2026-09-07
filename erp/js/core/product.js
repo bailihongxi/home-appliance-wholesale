@@ -338,7 +338,11 @@
       // V3.21：批量导入按「型号」匹配系统已有商品——型号相同则视为同一产品，
       // 以新导入的品牌/价格等字段为准更新商品档案；型号未匹配到才新建。
       // 备注/条码仅当导入单元格非空时更新，避免空单元格误清空已有信息。
-      var existing = api.findByModel(ctx, model);
+      // V3.23：匹配优先级修正——先精确匹配「品牌+型号」，找不到再按型号匹配。
+      // 此前仅按型号匹配会取档案中第一个同型号商品；当系统里同一型号存在
+      // 多个品牌（如 创维 86Q8E 与其他品牌 86Q8E）且其他品牌排在前面时，
+      // 保存会撞上品牌+型号查重报「该品牌型号已存在」，导致该行永远无法导入。
+      var existing = api.findDuplicate(ctx, brand, model) || api.findByModel(ctx, model);
       var input = {
         brand: brand,
         model: model,

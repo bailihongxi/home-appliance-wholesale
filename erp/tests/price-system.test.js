@@ -330,3 +330,41 @@ test('V3.21-批量导入：备注/条码单元格为空时保留已有值（不�
   assert.strictEqual(p.note, '原备注', '空备注不覆盖已有备注');
   assert.deepStrictEqual(p.barcodes, ['6901234567890'], '空条码不覆盖已有条码');
 });
+
+test('V3.23-批量导入：同型号多品牌时优先精确匹配品牌+型号，不再报「该品牌型号已存在」', () => {
+  const ctx = newCtx();
+  // 系统已有两个共用型号的商品，其他品牌（酷开）排在档案前面
+  const other = product.save(ctx, { brand: '酷开', model: '86Q8E', category: '电视', unit: '台', cost: '5000' });
+  const exact = product.save(ctx, { brand: '创维', model: '86Q8E', category: '电视', unit: '台', cost: '7000' });
+  assert.ok(other.ok && exact.ok);
+
+  const rows = [
+    ['品牌', '型号', '类型', '单位', '成本'],
+    ['创维', '86Q8E', '电视', '台', '8190'],
+    ['创维', '86Q8E', '电视', '台', '8190'] // 文件内重复行也应正常
+  ];
+  const res = product.importFromRows(rows, ctx);
+  assert.strictEqual(res.errors.length, 0, '不再报该品牌型号已存在');
+  assert.strictEqual(res.created, 0, '不新建');
+  assert.strictEqual(res.updated, 2, '两行都按更新处理');
+
+  const p = ctx.data.products.find(p => String(p.id) === String(exact.product.id));
+  assert.strictEqual(p.cost, 819000, '精确匹配的创维 86Q8E 被更新');
+  const k = ctx.data.products.find(p => String(p.id) === String(other.product.id));
+  assert.strictEqual(k.cost, 500000, '酷开 86Q8E 不受波及');
+  assert.strictEqual(k.brand, '酷开', '酷开品牌不变');
+});
+
+test('V3.23-批量导入：无精确匹配时仍按型号匹配更新（V3.21 规则保持）', () => {
+  const ctx = newCtx();
+  product.save(ctx, { brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台', cost: '1000' });
+  const rows = [
+    ['品牌', '型号', '类型', '单位', '成本'],
+    ['美的', 'BCD-200', '冰箱', '台', '1100']
+  ];
+  const res = product.importFromRows(rows, ctx);
+  assert.strictEqual(res.created, 0, '型号匹配到已有商品，不新建');
+  assert.strictEqual(res.updated, 1, '更新1款');
+  const p = ctx.data.products.find(p => p.model === 'BCD-200');
+  assert.strictEqual(p.brand, '美的', '品牌以新导入为准');
+});
