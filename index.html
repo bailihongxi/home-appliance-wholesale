@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2563eb">
+<title>我的电器店 · 进销存记账</title>
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="电器批发进销存">
+<meta property="og:title" content="我的电器店 · 进销存记账">
+<meta property="og:description" content="零部署、可离线的电器批发进销存：进货/销售/库存/批发零售双价/扫码">
+<meta property="og:image" content="assets/favicon-512.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="assets/favicon-512.png">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/favicon.png">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/mobile.css">
+<link rel="stylesheet" href="css/desktop.css">
+<link rel="stylesheet" href="css/print.css">
+<link rel="manifest" href="manifest.webmanifest">
+</head>
+<body>
+
+<div id="app">
+  <aside class="app-sidebar">
+    <div class="brand">⚡ <span>我的电器店</span></div>
+    <button class="side-toggle" data-act="toggle-side" title="收起 / 展开导航">◀</button>
+    <nav class="nav-list"></nav>
+  </aside>
+
+  <div class="app-column">
+    <header class="app-header">
+      <span class="brand">我的电器店</span>
+      <span class="sub">进销存记账</span>
+    </header>
+    <!-- 电脑端顶栏（v2）：店名 + 全局搜索，右上角图标已取消（铃铛/头像） -->
+    <div class="top-bar">
+      <span class="shop-name" id="top-shop-name">我的电器店</span>
+      <div class="global-search">
+        <span class="ico">🔍</span>
+        <input id="global-search-input" type="search" placeholder="全局搜索商品 / 订单 / 客户" autocomplete="off">
+      </div>
+      <div class="spacer"></div>
+    </div>
+    <main class="app-main">
+      <div id="view"></div>
+    </main>
+  </div>
+
+  <nav class="app-tabbar"></nav>
+</div>
+
+<div id="toast-wrap"></div>
+
+<!-- ============ 核心基础层（无依赖） ============ -->
+<script src="js/core/util.js"></script>
+<script src="js/core/branding.js"></script>
+<script src="js/core/schema.js"></script>
+<script src="js/core/accounts.js"></script>
+<script src="js/core/legacy-migrate.js"></script>
+
+<!-- ============ 核心逻辑层（依赖 schema） ============ -->
+<script src="js/core/docNo.js"></script>
+<script src="js/core/inventory.js"></script>
+<script src="js/core/product.js"></script>
+<script src="js/core/ledger.js"></script>
+<script src="js/core/debt.js"></script>
+<script src="js/core/profit.js"></script>
+<script src="js/core/backup.js"></script>
+<script src="js/core/sync.js"></script>
+<script src="js/core/cart.js"></script>
+
+<!-- ============ 存储层（依赖 core/schema） ============ -->
+<script src="js/store/db.js"></script>
+<script src="js/store/repo.js"></script>
+
+<!-- ============ 业务引擎（依赖 core/* + store/*，用 writeLog 兜底延迟读 ERP.repo） ============ -->
+<script src="js/core/engine.js"></script>
+
+<!-- ============ 扫码识别（界面层依赖 scan，须先加载） ============ -->
+<script src="vendor/zxing.min.js" defer></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="js/core/excel.js"></script>
+
+<!-- ============ 界面层 ============ -->
+<script src="js/ui/router.js"></script>
+<script src="js/ui/print-doc.js"></script>
+<script src="js/ui/components.js"></script>
+<script src="js/ui/page-home.js"></script>
+<script src="js/ui/page-product.js"></script>
+<script src="js/ui/page-purchase.js"></script>
+<script src="js/ui/page-sale.js"></script>
+<script src="js/ui/page-exchange.js"></script>
+<script src="js/ui/page-inventory.js"></script>
+<script src="js/ui/page-account.js"></script>
+<script src="js/ui/page-supplier.js"></script>
+<script src="js/ui/page-customer.js"></script>
+<script src="js/ui/page-report.js"></script>
+<script src="js/ui/page-setting.js"></script>
+<script src="js/ui/page-mine.js"></script>
+<script src="js/ui/page-admin.js"></script>
+<script src="js/ui/page-login.js"></script>
+
+<!-- ============ 条码扫描（依赖界面层 components） ============ -->
+<script src="js/barcode/scan.js"></script>
+
+<!-- ============ 启动 ============ -->
+<script src="js/app.js"></script>
+<script>
+  // Service Worker 策略：本地开发（localhost/127.0.0.1）不启用 SW，并注销历史注册，
+  // 避免旧 SW 缓存导致本地看不到最新代码；线上（https 托管）正常注册 SW 支持离线与缓存更新。
+  if ('serviceWorker' in navigator) {
+    var host = location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      navigator.serviceWorker.getRegistrations().then(function (rs) {
+        rs.forEach(function (r) { r.unregister(); });
+      });
+    } else if (location.protocol.indexOf('http') === 0) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function () {});
+      });
+    }
+  }
+</script>
+</body>
+</html>
