@@ -26,18 +26,34 @@
   };
 
   /**
+   * 解析 Excel 二进制（ArrayBuffer），返回全部工作表：[{name, rows}]
+   * 每个工作表的 rows 与 util.parseCSV 的 rows 同构（第一行为表头，空单元格为 ''）。
+   * V3.22：批量导入改为读取所有工作表（此前仅第一个 sheet，多表数据被静默丢弃）。
+   * @param {ArrayBuffer|Uint8Array} buf
+   * @returns {Array<{name:string, rows:Array<Array<string>>}>}
+   */
+  api.parseAll = function parseAll(buf) {
+    if (!XLSX) throw new Error('未加载 Excel 解析库（xlsx.full.min.js）');
+    var bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf || []);
+    var wb = XLSX.read(bytes, { type: 'array' });
+    return (wb.SheetNames || []).map(function (name) {
+      return {
+        name: name,
+        rows: XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: false, defval: '' })
+      };
+    });
+  };
+
+  /**
    * 解析 Excel 二进制（ArrayBuffer）为二维数组 rows（第一行为表头，与 util.parseCSV 的 rows 同构）。
+   * 兼容旧调用：仅取第一个工作表。需要全部工作表请用 parseAll。
    * @param {ArrayBuffer|Uint8Array} buf
    * @returns {Array<Array<string>>} 二维字符串数组（空单元格为 ''）
    */
   api.parse = function parse(buf) {
-    if (!XLSX) throw new Error('未加载 Excel 解析库（xlsx.full.min.js）');
-    var bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf || []);
-    var wb = XLSX.read(bytes, { type: 'array' });
-    var name = (wb.SheetNames || [])[0];
-    if (!name) throw new Error('Excel 文件没有工作表');
-    var ws = wb.Sheets[name];
-    return XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+    var sheets = api.parseAll(buf);
+    if (!sheets.length) throw new Error('Excel 文件没有工作表');
+    return sheets[0].rows;
   };
 
   /**

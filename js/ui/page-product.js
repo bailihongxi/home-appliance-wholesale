@@ -178,12 +178,47 @@
         state.csvText = el.value;
       },
 
+      /** V3.25：预演体检——只计算不写库，生成体检报告供用户核对后再执行 */
+      'do-preview': function (ctx, state) {
+        var parsed = util.parseCSV(state.csvText);
+        state.csvPlan = product.previewImport(parsed.rows, ctx);
+        state.csvResult = null;
+      },
+
+      'cancel-preview': function (ctx, state) {
+        state.csvPlan = null;
+      },
+
       'do-import': function (ctx, state) {
         var parsed = util.parseCSV(state.csvText);
         var res = product.importFromRows(parsed.rows, ctx);
+        state.csvPlan = null;
         state.csvResult = res;
-        repo.log(ctx, 'CSV 导入', '新增 ' + res.created + ' 款 / 更新 ' + res.updated + ' 款');
+        repo.log(ctx, 'CSV 导入', '读取 ' + res.total + ' 行：新增 ' + res.created + ' 款 / 更新 ' + res.updated + ' 款' +
+          (res.deduplicated ? ' / 去重 ' + res.deduplicated + ' 行' : '') +
+          (res.merged ? ' / 合并停售 ' + res.merged + ' 个' : '') +
+          (res.transferred ? ' / 转入库存 ' + res.transferred + ' 件' : '') +
+          (res.skipped ? ' / 跳过空行 ' + res.skipped + ' 行' : '') +
+          (res.uncovered && res.uncovered.length ? ' / 未覆盖 ' + res.uncovered.length + ' 个' : '') +
+          (res.errors.length ? ' / 未导入 ' + res.errors.length + ' 行' : ''));
         if (res.errors.length === 0) state.csvText = '';
+      },
+
+      /**
+       * 导入后处理：将「未覆盖清单」中的旧商品（型号标错/已淘汰）批量停售。
+       * 仅置停售，不删除商品、不动库存、不碰单据，可随时恢复。
+       */
+      'retire-uncovered': function (ctx, state) {
+        var list = (state.csvResult && state.csvResult.uncovered) || [];
+        if (!list.length) return;
+        var res = product.retireProducts(ctx, list.map(function (u) { return u.id; }));
+        state.csvResult.retired = (state.csvResult.retired || 0) + res.retired;
+        state.csvResult.uncovered = [];
+        repo.log(ctx, '导入后停售', '未覆盖清单停售 ' + res.retired + ' 个' +
+          (res.withStock ? '（其中 ' + res.withStock + ' 个有库存）' : '') +
+          (res.missing ? '，' + res.missing + ' 个商品不存在' : ''));
+        ui.toast('已将 ' + res.retired + ' 个商品置为停售（未删除，可恢复）' +
+          (res.withStock ? '，其中 ' + res.withStock + ' 个有库存' : ''), 'ok');
       },
 
       /** 选择文件直接导入：CSV 读取文本，Excel(xlsx/xls) 解析首个工作表并转为 CSV 填入粘贴框 */
@@ -199,17 +234,20 @@
           if (window.ERP && ERP.app && ERP.app.render) ERP.app.render();
           ui.toast('已读取「' + file.name + '」，请确认后点「开始导入」', 'ok');
         };
-        reader.onload = function () {
-          try {
-            if (isCsv) {
-              finish(String(reader.result || ''));
-            } else {
-              finish(excel.rowsToCsv(excel.parse(reader.result)));
-            }
-          } catch (e) {
-            ui.toast('解析文件失败：' + (e && e.message ? e.message : e), 'err');
+      reader.onload = function () {
+        try {
+          if (isCsv) {
+            finish(String(reader.result || ''));
+          } else {
+            // V3.22：读取全部工作表并合并（后续表的重复表头自动剥离）
+            var sheets = excel.parseAll(reader.result);
+            var merged = product.mergeSheetRows(sheets);
+            finish(excel.rowsToCsv(merged));
           }
-        };
+        } catch (e) {
+          ui.toast('解析文件失败：' + (e && e.message ? e.message : e), 'err');
+        }
+      };
         reader.onerror = function () {
           ui.toast('读取文件失败，请重试', 'err');
         };
@@ -456,11 +494,11 @@
 
   function renderCsv(ctx, state) {
     var h = '<div class="page-head"><h2>批量导入商品</h2>' +
-      '<span class="desc">必填：品牌、型号、类型；成本可选——<b>批发价/零售价无需填写，导入后按整体利润率自动生成（取整到元）</b>；还支持：单位、备注、原厂条码、期初库存。<b>更新规则（V3.21）：与系统已有商品按「型号」比对，型号相同则以新导入的品牌/成本/价格等为准更新该商品档案；备注/条码留空时保留原值。</b></span></div>';
+      '<span class="desc">必填：品牌、型号、类型；成本可选——<b>批发价/零售价无需填写，导入后按整体利润率自动生成（取整到元）</b>；还支持：单位、备注、原厂条码、期初库存。<b>导入规则（V3.25）：仅按「型号」匹配（忽略空格与大小写）；文件内同型号重复行去重、保留最后一行；系统已有该型号则以导入信息为准更新品牌/类型/单位/成本/备注（备注与条码留空时保留原值，不改动现有库存）；系统无该型号则新建；同一型号在系统中存在多个商品时合并保留——保留一个全量更新，其余仅置为停售并把库存转入保留商品（不删除任何商品与历史单据）。<b>V3.25 新增：导入前先点「预演体检」，可看到将新增/将更新（含新旧值对比）/将合并/覆盖不到的商品清单，确认无误再执行导入。</b></span></div>';
     h += '<div class="card">' +
       '<div class="field"><label>① 直接选择文件导入（支持 CSV / Excel .xlsx .xls）</label>' +
       '<input class="input" type="file" accept=".csv,.xlsx,.xls,text/csv" data-change="pick-import-file">' +
-      '<div class="small muted mt4">选择本地 CSV 或 Excel 文件，内容将自动填入下方粘贴框，可修改后点「开始导入」。</div></div>' +
+      '<div class="small muted mt4">选择本地 CSV 或 Excel 文件，内容将自动填入下方粘贴框，可修改后点「开始导入」。<b>Excel 会读取所有工作表的数据（各表首行表头自动识别）。</b></div></div>' +
       '<div class="field"><label>② 或粘贴 CSV 内容（Excel 另存为 CSV 后全选复制）</label>' +
       '<textarea class="input" data-input="csv-text" style="min-height:160px" placeholder="品牌,型号,类型,单位,成本">' +
       esc(state.csvText) + '</textarea>' +
@@ -469,13 +507,106 @@
       '<button class="btn" data-act="download-template">下载模板</button>' +
       '<div class="spacer"></div>' +
       '<button class="btn btn-danger" data-act="cancel-form">返回</button>' +
-      '<button class="btn btn-primary" data-act="do-import">开始导入</button>' +
+      '<button class="btn btn-primary" data-act="do-preview">预演体检（不写入）</button>' +
       '</div></div>';
+
+    if (state.csvPlan) {
+      var p = state.csvPlan;
+      h += '<div class="card"><div class="card-title">导入前体检报告（尚未写入系统）</div>' +
+        '<p class="mb8">共读取 <b>' + (p.total || 0) + '</b> 行数据：将新增 <b>' + p.creates.length + '</b> 款，将更新 <b>' + p.updates.length + '</b> 款' +
+        (p.deduplicated ? '，文件内去重 ' + p.deduplicated + ' 行' : '') +
+        (p.merges.length ? '，将合并停售 ' + p.merges.length + ' 个' : '') +
+        (p.skipped ? '，跳过空行 ' + p.skipped + ' 行' : '') +
+        (p.errors.length ? '，无法导入 ' + p.errors.length + ' 行' : '') + '。</p>';
+
+      if (p.creates.length) {
+        h += '<div class="small muted mt4">将新增（系统中无此型号）：</div>' +
+          '<div class="table-wrap"><table class="tbl"><thead><tr><th>行号</th><th>品牌</th><th>型号</th><th>类型</th><th>成本</th><th>批发价</th><th>零售价</th></tr></thead><tbody>';
+        p.creates.forEach(function (c) {
+          h += '<tr><td>' + c.rowNo + '</td><td>' + esc(c.brand) + '</td><td>' + esc(c.model) + '</td><td>' + esc(c.category) + '</td><td>' +
+            util.fenToYuan(c.cost) + '</td><td>' + util.fenToYuan(c.priceWholesale) + '</td><td>' + util.fenToYuan(c.priceRetail) + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+
+      if (p.updates.length) {
+        h += '<div class="small muted mt4">将更新（系统已有此型号，以导入信息为准）：</div>' +
+          '<div class="table-wrap"><table class="tbl"><thead><tr><th>行号</th><th>型号</th><th>变更明细</th></tr></thead><tbody>';
+        p.updates.forEach(function (u) {
+          var detail = u.changes.length
+            ? u.changes.map(function (c) {
+              return esc(c.label) + '：' + (c.from ? esc(c.from) : '空') + ' → ' + (c.to ? esc(c.to) : '空');
+            }).join('；')
+            : '<span class="muted">无变化</span>';
+          h += '<tr><td>' + u.rowNo + '</td><td>' + esc(u.model) + '</td><td>' + detail + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+
+      if (p.merges.length) {
+        var willTransfer = p.merges.reduce(function (t, m) { return t + (Number(m.stock) || 0); }, 0);
+        h += '<div class="notice notice-info">以下 ' + p.merges.length + ' 个同型号商品将被合并（保留一个，其余置为「停售」，不删除、不丢历史）' +
+          (willTransfer ? '，其名下共 <b>' + willTransfer + '</b> 件库存将转入保留商品并生成盘点调整单。' : '。') + '</div>' +
+          '<div class="table-wrap"><table class="tbl"><thead><tr><th>品牌</th><th>型号</th><th>现有库存</th></tr></thead><tbody>';
+        p.merges.forEach(function (m) {
+          h += '<tr><td>' + esc(m.brand) + '</td><td>' + esc(m.model) + '</td><td>' + m.stock + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+
+      if (p.uncovered.length) {
+        h += '<div class="notice notice-warn">系统中还有 <b>' + p.uncovered.length + '</b> 个商品本次导入覆盖不到（型号对不上或已淘汰），导入后它们仍在售，请手动核对：</div>' +
+          '<div class="table-wrap"><table class="tbl"><thead><tr><th>品牌</th><th>型号</th><th>类型</th><th>库存</th></tr></thead><tbody>';
+        p.uncovered.forEach(function (u) {
+          h += '<tr><td>' + esc(u.brand) + '</td><td>' + esc(u.model) + '</td><td>' + esc(u.category) + '</td><td>' + u.stock + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+
+      if (p.errors.length) {
+        h += '<div class="notice notice-warn">有 ' + p.errors.length + ' 行无法导入：</div>' +
+          '<div class="table-wrap"><table class="tbl"><thead><tr><th>行号</th><th>原因</th></tr></thead><tbody>';
+        p.errors.forEach(function (e) {
+          h += '<tr><td>' + e.row + '</td><td>' + esc(e.msg) + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+
+      h += '<div class="row mt8">' +
+        '<button class="btn btn-danger" data-act="cancel-preview">取消</button>' +
+        '<div class="spacer"></div>' +
+        '<button class="btn btn-primary" data-act="do-import">确认执行导入</button>' +
+        '</div></div>';
+    }
 
     if (state.csvResult) {
       var r = state.csvResult;
       h += '<div class="card"><div class="card-title">导入结果</div>' +
-        '<p class="mb8">新增 ' + r.created + ' 款，更新 ' + r.updated + ' 款。</p>';
+        '<p class="mb8">共读取 <b>' + (r.total || 0) + '</b> 行数据：新增 ' + r.created + ' 款，更新 ' + r.updated + ' 款' +
+        (r.deduplicated ? '，文件内去重 ' + r.deduplicated + ' 行' : '') +
+        (r.merged ? '，合并停售同型号 ' + r.merged + ' 个' : '') +
+        (r.skipped ? '，跳过空行 ' + r.skipped + ' 行' : '') +
+        (r.errors.length ? '，未导入 ' + r.errors.length + ' 行' : '') + '。</p>';
+      if (r.merged) {
+        h += '<div class="notice notice-info">有 ' + r.merged + ' 个同型号的重复商品已置为「停售」保留（未删除，历史单据与库存流水完整保留）' +
+          (r.transferred ? '，其中 <b>' + r.transferred + '</b> 件库存已转入保留商品，并生成盘点调整单（可在库存变动中查看）。' : '。') + '</div>';
+      }
+      if (r.uncovered && r.uncovered.length) {
+        var withStock = r.uncovered.filter(function (u) { return (Number(u.stock) || 0) > 0; }).length;
+        h += '<div class="notice notice-warn">以下 <b>' + r.uncovered.length + '</b> 个商品本次导入未覆盖到（型号对不上或已淘汰），它们仍在售，请手动核对：</div>' +
+          '<div class="table-wrap"><table class="tbl"><thead><tr><th>品牌</th><th>型号</th><th>类型</th><th>库存</th></tr></thead><tbody>';
+        r.uncovered.forEach(function (u) {
+          h += '<tr><td>' + esc(u.brand) + '</td><td>' + esc(u.model) + '</td><td>' + esc(u.category) + '</td><td>' + u.stock + '</td></tr>';
+        });
+        h += '</tbody></table></div>' +
+          '<div class="mt8"><button class="btn" data-act="retire-uncovered">确认无误：以上 ' + r.uncovered.length + ' 个全部停售</button>' +
+          '<div class="small muted mt4">仅置为停售，<b>不删除商品、不动库存、不碰任何单据</b>，可随时恢复。' +
+          (withStock ? '其中 <b>' + withStock + '</b> 个仍有库存，停售后库存继续挂在这些商品名下，需你另行盘点处理。' : '') +
+          '</div></div>';
+      }
+      if (r.retired) {
+        h += '<div class="notice notice-info">已将 <b>' + r.retired + '</b> 个未覆盖商品置为停售（未删除，可在商品档案中恢复）。</div>';
+      }
       if (r.errors.length) {
         h += '<div class="notice notice-warn">有 ' + r.errors.length + ' 行未导入：</div>';
         h += '<div class="table-wrap"><table class="tbl"><thead><tr><th>行号</th><th>原因</th></tr></thead><tbody>';
