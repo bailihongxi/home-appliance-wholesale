@@ -344,6 +344,7 @@
       '</div></div>';
 
     h += '<div class="card">' + ui.searchBar({
+      cls: 'search-bar-product',
       value: state.keyword, placeholder: '搜索 品牌 / 型号 / 类型 / 条码',
       filters: ui.select({
         name: 'filterStatus',

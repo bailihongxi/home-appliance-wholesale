@@ -326,6 +326,9 @@ button, input, select, textarea {
 .search-bar-filters .select { flex: 0 0 auto; width: auto; min-width: 130px; }
 .search-bar-filters .spacer { flex: 1; }
 .search-bar-filters .btn { flex: 0 0 auto; white-space: nowrap; }
+/* 商品档案搜索模块（V3.20）：下拉菜单宽度收缩40%（130px→78px），
+   搜索框 flex:1 自动获得更多剩余宽度扩宽；搜索框+扫描按钮+下拉菜单保持同一行 */
+.search-bar-product .select { flex: 0 0 auto; width: auto; min-width: 78px; }
 
 /* ---------- 表单 ---------- */
 

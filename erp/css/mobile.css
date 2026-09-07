@@ -58,6 +58,10 @@
   .search-bar-filters { flex: 1 1 100%; margin-top: 4px; }
   .search-bar .select,
   .search-bar-filters .select { flex: 1 1 auto; width: auto; min-width: 0; margin-top: 0; }
+  /* 商品档案搜索模块（V3.20）手机端两行：搜索框独占一行，下拉菜单+扫描按钮同一行 */
+  .search-bar-product .input { flex: 1 1 100%; }
+  .search-bar-product .btn { flex: 0 0 auto; }
+  .search-bar-product .select { flex: 0 0 auto; width: auto; min-width: 78px; }
 
   /* 记账中心头部：窄屏允许换行，统计横排紧凑 */
   .account-head { flex-wrap: wrap; row-gap: 6px; }
