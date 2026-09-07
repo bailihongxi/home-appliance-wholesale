@@ -33,3 +33,24 @@ test('V3.17-手机端筛选区整行换行、下拉与重置按钮同一行', ()
     '容器内下拉 flex:auto 与重置按钮并排同一行');
   assert.ok(block.includes('.search-bar { flex-wrap: wrap; }'), '手机端搜索栏允许换行保持不变');
 });
+
+test('V3.22-所有扫描按钮带蓝色边框：searchBar 生成 btn-scan，CSS 定义蓝色边框', () => {
+  const components = read('js/ui/components.js');
+  // searchBar 生成的扫描按钮带 btn-scan class
+  assert.ok(components.includes('class="btn btn-scan" data-act="scan"'),
+    'searchBar 扫描按钮统一带 btn-scan class');
+  // 页面上没有遗漏的旧样式扫描按钮（无 btn-scan 的 scan 按钮）
+  const pages = ['js/ui/page-sale.js', 'js/ui/page-inventory.js', 'js/ui/page-product.js',
+    'js/ui/page-purchase.js', 'js/ui/page-supplier.js', 'js/ui/page-customer.js', 'js/ui/page-exchange.js'];
+  pages.forEach(function (p) {
+    const src = read(p);
+    if (src.includes('data-act="scan"')) {
+      assert.ok(src.includes('btn-scan') || src.includes('C.searchBar'),
+        p + ' 中的扫描按钮应通过 searchBar 生成（带 btn-scan）');
+    }
+  });
+  // CSS 定义蓝色边框
+  const base = read('css/base.css');
+  assert.ok(base.includes('.btn-scan { border: 2px solid var(--c-primary); }'),
+    'btn-scan 使用 2px 蓝色主色边框');
+});
