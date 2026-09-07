@@ -178,9 +178,21 @@
         state.csvText = el.value;
       },
 
+      /** V3.25：预演体检——只计算不写库，生成体检报告供用户核对后再执行 */
+      'do-preview': function (ctx, state) {
+        var parsed = util.parseCSV(state.csvText);
+        state.csvPlan = product.previewImport(parsed.rows, ctx);
+        state.csvResult = null;
+      },
+
+      'cancel-preview': function (ctx, state) {
+        state.csvPlan = null;
+      },
+
       'do-import': function (ctx, state) {
         var parsed = util.parseCSV(state.csvText);
         var res = product.importFromRows(parsed.rows, ctx);
+        state.csvPlan = null;
         state.csvResult = res;
         repo.log(ctx, 'CSV 导入', '读取 ' + res.total + ' 行：新增 ' + res.created + ' 款 / 更新 ' + res.updated + ' 款' +
           (res.deduplicated ? ' / 去重 ' + res.deduplicated + ' 行' : '') +
@@ -476,8 +488,75 @@
       '<button class="btn" data-act="download-template">下载模板</button>' +
       '<div class="spacer"></div>' +
       '<button class="btn btn-danger" data-act="cancel-form">返回</button>' +
-      '<button class="btn btn-primary" data-act="do-import">开始导入</button>' +
+      '<button class="btn btn-primary" data-act="do-preview">预演体检（不写入）</button>' +
       '</div></div>';
+
+    if (state.csvPlan) {
+      var p = state.csvPlan;
+      h += '<div class="card"><div class="card-title">导入前体检报告（尚未写入系统）</div>' +
+        '<p class="mb8">共读取 <b>' + (p.total || 0) + '</b> 行数据：将新增 <b>' + p.creates.length + '</b> 款，将更新 <b>' + p.updates.length + '</b> 款' +
+        (p.deduplicated ? '，文件内去重 ' + p.deduplicated + ' 行' : '') +
+        (p.merges.length ? '，将合并停售 ' + p.merges.length + ' 个' : '') +
+        (p.skipped ? '，跳过空行 ' + p.skipped + ' 行' : '') +
+        (p.errors.length ? '，无法导入 ' + p.errors.length + ' 行' : '') + '。</p>';
+
+      if (p.creates.length) {
+        h += '<div class="small muted mt4">将新增（系统中无此型号）：</div>' +
+          '<div class="table-wrap"><table class="tbl"><thead><tr><th>行号</th><th>品牌</th><th>型号</th><th>类型</th><th>成本</th><th>批发价</th><th>零售价</th></tr></thead><tbody>';
+        p.creates.forEach(function (c) {
+          h += '<tr><td>' + c.rowNo + '</td><td>' + esc(c.brand) + '</td><td>' + esc(c.model) + '</td><td>' + esc(c.category) + '</td><td>' +
+            util.fenToYuan(c.cost) + '</td><td>' + util.fenToYuan(c.priceWholesale) + '</td><td>' + util.fenToYuan(c.priceRetail) + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+
+      if (p.updates.length) {
+        h += '<div class="small muted mt4">将更新（系统已有此型号，以导入信息为准）：</div>' +
+          '<div class="table-wrap"><table class="tbl"><thead><tr><th>行号</th><th>型号</th><th>变更明细</th></tr></thead><tbody>';
+        p.updates.forEach(function (u) {
+          var detail = u.changes.length
+            ? u.changes.map(function (c) {
+              return esc(c.label) + '：' + (c.from ? esc(c.from) : '空') + ' → ' + (c.to ? esc(c.to) : '空');
+            }).join('；')
+            : '<span class="muted">无变化</span>';
+          h += '<tr><td>' + u.rowNo + '</td><td>' + esc(u.model) + '</td><td>' + detail + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+
+      if (p.merges.length) {
+        h += '<div class="notice notice-info">以下 ' + p.merges.length + ' 个同型号商品将被合并（保留一个，其余置为「停售」，不删除、不丢历史）：</div>' +
+          '<div class="table-wrap"><table class="tbl"><thead><tr><th>品牌</th><th>型号</th><th>现有库存</th></tr></thead><tbody>';
+        p.merges.forEach(function (m) {
+          h += '<tr><td>' + esc(m.brand) + '</td><td>' + esc(m.model) + '</td><td>' + m.stock + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+
+      if (p.uncovered.length) {
+        h += '<div class="notice notice-warn">系统中还有 <b>' + p.uncovered.length + '</b> 个商品本次导入覆盖不到（型号对不上或已淘汰），导入后它们仍在售，请手动核对：</div>' +
+          '<div class="table-wrap"><table class="tbl"><thead><tr><th>品牌</th><th>型号</th><th>类型</th><th>库存</th></tr></thead><tbody>';
+        p.uncovered.forEach(function (u) {
+          h += '<tr><td>' + esc(u.brand) + '</td><td>' + esc(u.model) + '</td><td>' + esc(u.category) + '</td><td>' + u.stock + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+
+      if (p.errors.length) {
+        h += '<div class="notice notice-warn">有 ' + p.errors.length + ' 行无法导入：</div>' +
+          '<div class="table-wrap"><table class="tbl"><thead><tr><th>行号</th><th>原因</th></tr></thead><tbody>';
+        p.errors.forEach(function (e) {
+          h += '<tr><td>' + e.row + '</td><td>' + esc(e.msg) + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+
+      h += '<div class="row mt8">' +
+        '<button class="btn btn-danger" data-act="cancel-preview">取消</button>' +
+        '<div class="spacer"></div>' +
+        '<button class="btn btn-primary" data-act="do-import">确认执行导入</button>' +
+        '</div></div>';
+    }
 
     if (state.csvResult) {
       var r = state.csvResult;

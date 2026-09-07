@@ -333,47 +333,15 @@
    *          deduplicated=文件内去重行数；merged=被合并停售的同型号商品数
    */
   api.importFromRows = function importFromRows(rows, ctx) {
+    var pre = prepareRows(rows);
     var result = {
-      created: 0, updated: 0, total: 0, skipped: 0,
-      deduplicated: 0, merged: 0, errors: []
+      created: 0, updated: 0, total: pre.base.total, skipped: pre.base.skipped,
+      deduplicated: pre.base.deduplicated, merged: 0, errors: pre.base.errors
     };
-    if (!rows || !rows.length) return result;
-    result.total = rows.length - 1; // 数据行总数（不含表头）
-    var map = api.mapHeaders(rows[0]);
-    var hasKey = Object.keys(map).length > 0;
-    if (!hasKey) {
-      result.errors.push({ row: 1, msg: '表头需包含 品牌、型号、类型 等列' });
-      return result;
-    }
-    function cell(row, field) {
-      var idx = null;
-      Object.keys(map).forEach(function (i) {
-        if (map[i] === field) idx = parseInt(i, 10);
-      });
-      if (idx === null) return '';
-      return row[idx] === null || row[idx] === undefined ? '' : String(row[idx]).trim();
-    }
-
-    // —— 规则1：文件内按型号去重，同一型号保留最后一行 ——
-    var order = [];
-    var picked = {};
-    for (var i = 1; i < rows.length; i++) {
-      var row = rows[i];
-      if (!row || row.every(function (v) { return v === '' || v === null || v === undefined; })) {
-        result.skipped += 1; // 空行：明确计数，不再静默消失
-        continue;
-      }
-      var b = cell(row, 'brand');
-      var m = cell(row, 'model');
-      if (!b || !m) {
-        result.errors.push({ row: i + 1, msg: '品牌和型号必填' });
-        continue;
-      }
-      var key = api.normModelKey(m);
-      if (picked[key]) result.deduplicated += 1; // 文件内重复行（后一行覆盖前一行）
-      else order.push(key);
-      picked[key] = { row: row, rowNo: i + 1 };
-    }
+    if (!pre.map || !pre.cell) return result;
+    var cell = pre.cell;
+    var order = pre.order;
+    var picked = pre.picked;
 
     // —— 规则2/3/4：按去重后的行逐条导入（纯型号匹配） ——
     order.forEach(function (key) {
@@ -412,14 +380,7 @@
       // 规则2/4：系统已有此型号 → 合并保留
       // 保留策略：优先保留「品牌+型号」与导入完全一致的商品，否则保留最早建档的那个。
       // 这样既以导入信息为准，又不会与其余同型号商品撞上品牌+型号查重而报错。
-      var keep = null;
-      for (var k = 0; k < same.length; k++) {
-        if (String(same[k].brand || '').trim().toUpperCase() === String(brand || '').trim().toUpperCase()) {
-          keep = same[k];
-          break;
-        }
-      }
-      if (!keep) keep = same[0];
+      var keep = pickKeep(same, brand);
 
       input.id = keep.id;
       input.status = schema.STATUS.ON; // 导入即视为有效商品，恢复在售
@@ -439,6 +400,181 @@
     });
 
     return result;
+  };
+
+  /* ---------------- 批量导入：共用预解析 / 预演（V3.25） ---------------- */
+
+  /**
+   * 导入预解析：表头映射 + 文件内去重，供 importFromRows 与 previewImport 共用。
+   * @returns {base:{total,skipped,deduplicated,errors}, map, cell, picked, order}
+   *          map/cell 为 null 时表示表头不可用，调用方直接返回 base 结果。
+   */
+  function prepareRows(rows) {
+    var base = { total: 0, skipped: 0, deduplicated: 0, errors: [] };
+    var out = { base: base, map: null, cell: null, picked: {}, order: [] };
+    if (!rows || !rows.length) return out;
+    base.total = rows.length - 1; // 数据行总数（不含表头）
+    var map = api.mapHeaders(rows[0]);
+    if (Object.keys(map).length === 0) {
+      base.errors.push({ row: 1, msg: '表头需包含 品牌、型号、类型 等列' });
+      return out;
+    }
+    out.map = map;
+    out.cell = function cell(row, field) {
+      var idx = null;
+      Object.keys(map).forEach(function (i) {
+        if (map[i] === field) idx = parseInt(i, 10);
+      });
+      if (idx === null) return '';
+      return row[idx] === null || row[idx] === undefined ? '' : String(row[idx]).trim();
+    };
+
+    // 规则1：文件内按型号去重，同一型号保留最后一行
+    for (var i = 1; i < rows.length; i++) {
+      var row = rows[i];
+      if (!row || row.every(function (v) { return v === '' || v === null || v === undefined; })) {
+        base.skipped += 1; // 空行：明确计数，不再静默消失
+        continue;
+      }
+      var b = out.cell(row, 'brand');
+      var m = out.cell(row, 'model');
+      if (!b || !m) {
+        base.errors.push({ row: i + 1, msg: '品牌和型号必填' });
+        continue;
+      }
+      var key = api.normModelKey(m);
+      if (out.picked[key]) base.deduplicated += 1; // 文件内重复行（后一行覆盖前一行）
+      else out.order.push(key);
+      out.picked[key] = { row: row, rowNo: i + 1 };
+    }
+    return out;
+  }
+
+  /**
+   * 同型号多个商品时选择保留哪一个：
+   * 优先保留「品牌+型号」与导入完全一致的商品，否则保留最早建档的那个。
+   */
+  function pickKeep(same, brand) {
+    var target = String(brand || '').trim().toUpperCase();
+    for (var k = 0; k < same.length; k++) {
+      if (String(same[k].brand || '').trim().toUpperCase() === target) return same[k];
+    }
+    return same[0];
+  }
+
+  /**
+   * 计算导入行的最终金额（与 save 内部逻辑一致）：
+   * 成本 parseMoney；批发/零售价留空时按系统利润率自动生成（取整到元）。
+   * @returns {cost, priceWholesale, priceRetail} 单位「分」
+   */
+  api.resolveImportPrices = function resolveImportPrices(ctx, costStr, wStr, rStr) {
+    var cost = util.parseMoney(costStr);
+    var hasW = !(wStr === undefined || wStr === null || String(wStr).trim() === '');
+    var hasR = !(rStr === undefined || rStr === null || String(rStr).trim() === '');
+    var w = hasW ? util.parseMoney(wStr) : 0;
+    var r = hasR ? util.parseMoney(rStr) : 0;
+    if (!hasW || !hasR) {
+      var auto = api.autoPrices(ctx, cost);
+      if (!hasW) w = auto.priceWholesale;
+      if (!hasR) r = auto.priceRetail;
+    }
+    return { cost: cost, priceWholesale: w, priceRetail: r };
+  };
+
+  /**
+   * 导入预演（V3.25）：**不写库**，仅计算本次导入会产生什么变化，供用户在执行前核对。
+   * @param rows 二维数组（第一行为表头）
+   * @returns {total, skipped, deduplicated, creates:[], updates:[], merges:[], uncovered:[], errors:[]}
+   *          creates  {rowNo, brand, model, category, unit, cost, priceWholesale, priceRetail, openingStock}
+   *          updates  {rowNo, productId, brand, model, changes:[{label, from, to}]}
+   *          merges   {productId, brand, model, stock, status} 将被置为停售的同型号商品
+   *          uncovered{id, brand, model, category, stock, status} 系统中未被本次导入覆盖的商品
+   */
+  api.previewImport = function previewImport(rows, ctx) {
+    var plan = {
+      total: 0, skipped: 0, deduplicated: 0,
+      creates: [], updates: [], merges: [], uncovered: [], errors: []
+    };
+    var pre = prepareRows(rows);
+    plan.total = pre.base.total;
+    plan.skipped = pre.base.skipped;
+    plan.deduplicated = pre.base.deduplicated;
+    plan.errors = pre.base.errors.slice();
+    if (!pre.map || !pre.cell) return plan;
+    var cell = pre.cell;
+    var importKeys = {};
+
+    pre.order.forEach(function (key) {
+      var entry = pre.picked[key];
+      var row = entry.row;
+      var rowNo = entry.rowNo;
+      var brand = cell(row, 'brand');
+      var model = cell(row, 'model');
+      importKeys[key] = true;
+      var category = cell(row, 'category') || '其他';
+      var unit = cell(row, 'unit') || '台';
+      var prices = api.resolveImportPrices(
+        ctx, cell(row, 'cost'), cell(row, 'priceWholesale'), cell(row, 'priceRetail')
+      );
+
+      var same = api.findAllByModel(ctx, model);
+
+      // 规则3：系统中无此型号 → 新建
+      if (same.length === 0) {
+        plan.creates.push({
+          rowNo: rowNo, brand: brand, model: model, category: category, unit: unit,
+          cost: prices.cost, priceWholesale: prices.priceWholesale, priceRetail: prices.priceRetail,
+          openingStock: parseInt(cell(row, 'openingStock'), 10) || 0
+        });
+        return;
+      }
+
+      // 规则2/4：系统已有此型号 → 计算变更明细 + 其余合并停售
+      var keep = pickKeep(same, brand);
+      var changes = [];
+      function chg(label, from, to) {
+        var a = String(from === null || from === undefined ? '' : from);
+        var b = String(to === null || to === undefined ? '' : to);
+        if (a !== b) changes.push({ label: label, from: a, to: b });
+      }
+      chg('品牌', keep.brand, brand);
+      chg('类型', keep.category, category);
+      chg('单位', keep.unit, unit);
+      chg('成本', util.fenToYuan(keep.cost || 0), util.fenToYuan(prices.cost));
+      chg('批发价', util.fenToYuan(keep.priceWholesale || 0), util.fenToYuan(prices.priceWholesale));
+      chg('零售价', util.fenToYuan(keep.priceRetail || 0), util.fenToYuan(prices.priceRetail));
+      var note = cell(row, 'note');
+      if (note) chg('备注', keep.note || '', note);
+      var bc = cell(row, 'barcodes');
+      if (bc) {
+        chg('原厂条码', (keep.barcodes || []).join(','),
+          api.normBarcodes(typeof bc === 'string' ? [bc] : (bc || [])).join(','));
+      }
+
+      plan.updates.push({
+        rowNo: rowNo, productId: keep.id, brand: brand, model: model,
+        keepBrand: keep.brand, changes: changes
+      });
+
+      same.forEach(function (p) {
+        if (String(p.id) === String(keep.id)) return;
+        plan.merges.push({
+          productId: p.id, brand: p.brand, model: p.model,
+          stock: p.stock || 0, status: p.status
+        });
+      });
+    });
+
+    // 系统中未被本次导入覆盖的商品（型号对不上或已淘汰），由用户手动核对
+    (ctx.data.products || []).forEach(function (p) {
+      if (importKeys[api.normModelKey(p.model)]) return;
+      plan.uncovered.push({
+        id: p.id, brand: p.brand, model: p.model,
+        category: p.category || '', stock: p.stock || 0, status: p.status
+      });
+    });
+
+    return plan;
   };
 
   return api;

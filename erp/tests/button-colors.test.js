@@ -58,8 +58,8 @@ test('系统中所有取消按钮都使用红色 btn-danger class', () => {
       if (btn.includes('btn-danger')) redCancel++;
     });
   });
-  assert.strictEqual(totalCancel, 13, '系统中共有13个取消按钮');
-  assert.strictEqual(redCancel, 13, '所有13个取消按钮都使用 btn-danger 红色样式');
+  assert.strictEqual(totalCancel, 14, '系统中共有14个取消按钮（V3.25 新增导入预演取消按钮）');
+  assert.strictEqual(redCancel, 14, '所有14个取消按钮都使用 btn-danger 红色样式');
 });
 
 test('取消按钮红色样式 btn-danger 已定义（白底红字）', () => {
