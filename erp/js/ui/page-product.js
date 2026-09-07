@@ -456,7 +456,7 @@
 
   function renderCsv(ctx, state) {
     var h = '<div class="page-head"><h2>批量导入商品</h2>' +
-      '<span class="desc">必填：品牌、型号、类型；成本可选——<b>批发价/零售价无需填写，导入后按整体利润率自动生成（取整到元）</b>；还支持：单位、备注、原厂条码、期初库存</span></div>';
+      '<span class="desc">必填：品牌、型号、类型；成本可选——<b>批发价/零售价无需填写，导入后按整体利润率自动生成（取整到元）</b>；还支持：单位、备注、原厂条码、期初库存。<b>更新规则（V3.21）：与系统已有商品按「型号」比对，型号相同则以新导入的品牌/成本/价格等为准更新该商品档案；备注/条码留空时保留原值。</b></span></div>';
     h += '<div class="card">' +
       '<div class="field"><label>① 直接选择文件导入（支持 CSV / Excel .xlsx .xls）</label>' +
       '<input class="input" type="file" accept=".csv,.xlsx,.xls,text/csv" data-change="pick-import-file">' +

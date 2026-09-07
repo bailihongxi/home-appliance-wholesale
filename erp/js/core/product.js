@@ -65,6 +65,15 @@
     }) || null;
   };
 
+  /** 按型号查商品（仅型号匹配，不分品牌；批量导入更新用），返回第一个或 null */
+  api.findByModel = function findByModel(ctx, model) {
+    var m = String(model || '').trim().toUpperCase();
+    if (!m) return null;
+    return (ctx.data.products || []).find(function (p) {
+      return String(p.model || '').trim().toUpperCase() === m;
+    }) || null;
+  };
+
   /** 按商品 id 取商品 */
   api.getById = function getById(ctx, id) {
     return (ctx.data.products || []).find(function (p) {
@@ -161,7 +170,7 @@
       rec.cost = cost;
       rec.priceWholesale = priceWholesale;
       rec.priceRetail = priceRetail;
-      rec.note = util.cleanText(input.note || '');
+      if (input.note !== undefined) rec.note = util.cleanText(input.note || '');
       if (input.barcodes !== undefined && input.barcodes !== null) {
         rec.barcodes = api.normBarcodes(
           typeof input.barcodes === 'string' ? [input.barcodes] : (input.barcodes || [])
@@ -300,7 +309,11 @@
         result.errors.push({ row: i + 1, msg: '品牌和型号必填' });
         continue;
       }
-      var r = api.save(ctx, {
+      // V3.21：批量导入按「型号」匹配系统已有商品——型号相同则视为同一产品，
+      // 以新导入的品牌/价格等字段为准更新商品档案；型号未匹配到才新建。
+      // 备注/条码仅当导入单元格非空时更新，避免空单元格误清空已有信息。
+      var existing = api.findByModel(ctx, model);
+      var input = {
         brand: brand,
         model: model,
         category: cell(row, 'category') || '其他',
@@ -308,10 +321,14 @@
         cost: cell(row, 'cost'),
         priceWholesale: cell(row, 'priceWholesale'),
         priceRetail: cell(row, 'priceRetail'),
-        note: cell(row, 'note'),
-        barcodes: cell(row, 'barcodes'),
         openingStock: cell(row, 'openingStock')
-      });
+      };
+      var note = cell(row, 'note');
+      if (note) input.note = note;
+      var bc = cell(row, 'barcodes');
+      if (bc) input.barcodes = bc;
+      if (existing) input.id = existing.id;
+      var r = api.save(ctx, input);
       if (r.ok) {
         if (r.isNew) result.created += 1;
         else result.updated += 1;

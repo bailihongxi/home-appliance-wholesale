@@ -234,3 +234,99 @@ test('问题2-导入仅含成本的 CSV：批发/零售自动按利润率生成�
   assert.strictEqual(p2.priceWholesale, 216000, '批发自动 2160 元');
   assert.strictEqual(p2.priceRetail, 243000, '零售自动 2430 元');
 });
+
+test('V3.21-批量导入：型号相同（品牌/价格有差异）以新导入数据更新商品档案', () => {
+  const ctx = newCtx();
+  // 先建立系统已有商品：海尔 BCD-200，成本1000元 → 批发1200/零售1350
+  const first = product.save(ctx, { brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台', cost: '1000' });
+  assert.ok(first.ok, '系统已有海尔 BCD-200');
+  const id = first.product.id;
+  const before = ctx.data.products.length;
+
+  // 导入：美的 BCD-200（型号相同、品牌不同、成本不同→价格自动重算）
+  const rows = [
+    ['品牌', '型号', '类型', '单位', '成本'],
+    ['美的', 'BCD-200', '冰箱', '台', '1100']
+  ];
+  const res = product.importFromRows(rows, ctx);
+  assert.strictEqual(res.created, 0, '型号相同不新建');
+  assert.strictEqual(res.updated, 1, '型号相同更新1款');
+  assert.strictEqual(res.errors.length, 0, '无错误');
+  assert.strictEqual(ctx.data.products.length, before, '商品总数不变');
+
+  const p = ctx.data.products.find(p => String(p.id) === String(id));
+  assert.strictEqual(p.brand, '美的', '品牌以新导入为准更新');
+  assert.strictEqual(p.model, 'BCD-200', '型号不变');
+  assert.strictEqual(p.cost, 110000, '成本更新为1100元');
+  assert.strictEqual(p.priceWholesale, 132000, '批发按新成本自动 1100×1.2=1320 元');
+  assert.strictEqual(p.priceRetail, 148500, '零售按新成本自动 1100×1.35=1485 元');
+});
+
+test('V3.21-批量导入：导入自定义价格时更新为导入的价格', () => {
+  const ctx = newCtx();
+  product.save(ctx, { brand: '海尔', model: 'KFR-35', category: '空调', unit: '台', cost: '1800' });
+  // 导入相同型号，带自定义批发/零售价
+  const rows = [
+    ['品牌', '型号', '类型', '单位', '成本', '批发价', '零售价'],
+    ['格力', 'KFR-35', '空调', '台', '1900', '2300', '2800']
+  ];
+  const res = product.importFromRows(rows, ctx);
+  assert.strictEqual(res.created, 0, '不新建');
+  assert.strictEqual(res.updated, 1, '更新1款');
+  const p = ctx.data.products.find(p => p.model === 'KFR-35');
+  assert.strictEqual(p.brand, '格力', '品牌更新');
+  assert.strictEqual(p.cost, 190000, '成本更新');
+  assert.strictEqual(p.priceWholesale, 230000, '批发价用导入值2300元');
+  assert.strictEqual(p.priceRetail, 280000, '零售价用导入值2800元');
+});
+
+test('V3.21-批量导入：型号未匹配到则正常新建', () => {
+  const ctx = newCtx();
+  product.save(ctx, { brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台', cost: '1000' });
+  const rows = [
+    ['品牌', '型号', '类型', '单位', '成本'],
+    ['格力', 'KFR-35', '空调', '台', '1800']
+  ];
+  const res = product.importFromRows(rows, ctx);
+  assert.strictEqual(res.created, 1, '型号不存在的商品正常新建');
+  assert.strictEqual(res.updated, 0, '无更新');
+  assert.strictEqual(ctx.data.products.length, 2, '商品总数+1');
+});
+
+test('V3.21-批量导入：更新已有商品时不重复累加期初库存', () => {
+  const ctx = newCtx();
+  const first = product.save(ctx, { brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台', cost: '1000', openingStock: '5' });
+  assert.ok(first.ok);
+  const id = first.product.id;
+  const stockBefore = (ctx.data.products.find(p => String(p.id) === String(id))).stock;
+
+  // 导入相同型号带期初库存，不应再次累加
+  const rows = [
+    ['品牌', '型号', '类型', '单位', '成本', '期初库存'],
+    ['美的', 'BCD-200', '冰箱', '台', '1100', '10']
+  ];
+  const res = product.importFromRows(rows, ctx);
+  assert.strictEqual(res.created, 0, '不新建');
+  assert.strictEqual(res.updated, 1, '更新1款');
+  const p = ctx.data.products.find(p => String(p.id) === String(id));
+  assert.strictEqual(p.stock, stockBefore, '更新时不重复累加期初库存');
+});
+
+test('V3.21-批量导入：备注/条码单元格为空时保留已有值（不误清空）', () => {
+  const ctx = newCtx();
+  const first = product.save(ctx, { brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台', cost: '1000', note: '原备注', barcodes: '6901234567890' });
+  assert.ok(first.ok);
+  const id = first.product.id;
+
+  // 导入相同型号：备注/条码列留空，仅改价格
+  const rows = [
+    ['品牌', '型号', '类型', '单位', '成本', '备注', '原厂条码'],
+    ['海尔', 'BCD-200', '冰箱', '台', '1200', '', '']
+  ];
+  const res = product.importFromRows(rows, ctx);
+  assert.strictEqual(res.updated, 1, '更新1款');
+  const p = ctx.data.products.find(p => String(p.id) === String(id));
+  assert.strictEqual(p.cost, 120000, '成本已更新');
+  assert.strictEqual(p.note, '原备注', '空备注不覆盖已有备注');
+  assert.deepStrictEqual(p.barcodes, ['6901234567890'], '空条码不覆盖已有条码');
+});
