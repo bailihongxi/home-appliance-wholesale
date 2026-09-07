@@ -197,10 +197,28 @@
         repo.log(ctx, 'CSV 导入', '读取 ' + res.total + ' 行：新增 ' + res.created + ' 款 / 更新 ' + res.updated + ' 款' +
           (res.deduplicated ? ' / 去重 ' + res.deduplicated + ' 行' : '') +
           (res.merged ? ' / 合并停售 ' + res.merged + ' 个' : '') +
+          (res.transferred ? ' / 转入库存 ' + res.transferred + ' 件' : '') +
           (res.skipped ? ' / 跳过空行 ' + res.skipped + ' 行' : '') +
           (res.uncovered && res.uncovered.length ? ' / 未覆盖 ' + res.uncovered.length + ' 个' : '') +
           (res.errors.length ? ' / 未导入 ' + res.errors.length + ' 行' : ''));
         if (res.errors.length === 0) state.csvText = '';
+      },
+
+      /**
+       * 导入后处理：将「未覆盖清单」中的旧商品（型号标错/已淘汰）批量停售。
+       * 仅置停售，不删除商品、不动库存、不碰单据，可随时恢复。
+       */
+      'retire-uncovered': function (ctx, state) {
+        var list = (state.csvResult && state.csvResult.uncovered) || [];
+        if (!list.length) return;
+        var res = product.retireProducts(ctx, list.map(function (u) { return u.id; }));
+        state.csvResult.retired = (state.csvResult.retired || 0) + res.retired;
+        state.csvResult.uncovered = [];
+        repo.log(ctx, '导入后停售', '未覆盖清单停售 ' + res.retired + ' 个' +
+          (res.withStock ? '（其中 ' + res.withStock + ' 个有库存）' : '') +
+          (res.missing ? '，' + res.missing + ' 个商品不存在' : ''));
+        ui.toast('已将 ' + res.retired + ' 个商品置为停售（未删除，可恢复）' +
+          (res.withStock ? '，其中 ' + res.withStock + ' 个有库存' : ''), 'ok');
       },
 
       /** 选择文件直接导入：CSV 读取文本，Excel(xlsx/xls) 解析首个工作表并转为 CSV 填入粘贴框 */
@@ -526,7 +544,9 @@
       }
 
       if (p.merges.length) {
-        h += '<div class="notice notice-info">以下 ' + p.merges.length + ' 个同型号商品将被合并（保留一个，其余置为「停售」，不删除、不丢历史）：</div>' +
+        var willTransfer = p.merges.reduce(function (t, m) { return t + (Number(m.stock) || 0); }, 0);
+        h += '<div class="notice notice-info">以下 ' + p.merges.length + ' 个同型号商品将被合并（保留一个，其余置为「停售」，不删除、不丢历史）' +
+          (willTransfer ? '，其名下共 <b>' + willTransfer + '</b> 件库存将转入保留商品并生成盘点调整单。' : '。') + '</div>' +
           '<div class="table-wrap"><table class="tbl"><thead><tr><th>品牌</th><th>型号</th><th>现有库存</th></tr></thead><tbody>';
         p.merges.forEach(function (m) {
           h += '<tr><td>' + esc(m.brand) + '</td><td>' + esc(m.model) + '</td><td>' + m.stock + '</td></tr>';
@@ -568,15 +588,24 @@
         (r.skipped ? '，跳过空行 ' + r.skipped + ' 行' : '') +
         (r.errors.length ? '，未导入 ' + r.errors.length + ' 行' : '') + '。</p>';
       if (r.merged) {
-        h += '<div class="notice notice-info">有 ' + r.merged + ' 个同型号的重复商品已置为「停售」保留（未删除，历史单据与库存流水完整保留）。</div>';
+        h += '<div class="notice notice-info">有 ' + r.merged + ' 个同型号的重复商品已置为「停售」保留（未删除，历史单据与库存流水完整保留）' +
+          (r.transferred ? '，其中 <b>' + r.transferred + '</b> 件库存已转入保留商品，并生成盘点调整单（可在库存变动中查看）。' : '。') + '</div>';
       }
       if (r.uncovered && r.uncovered.length) {
+        var withStock = r.uncovered.filter(function (u) { return (Number(u.stock) || 0) > 0; }).length;
         h += '<div class="notice notice-warn">以下 <b>' + r.uncovered.length + '</b> 个商品本次导入未覆盖到（型号对不上或已淘汰），它们仍在售，请手动核对：</div>' +
           '<div class="table-wrap"><table class="tbl"><thead><tr><th>品牌</th><th>型号</th><th>类型</th><th>库存</th></tr></thead><tbody>';
         r.uncovered.forEach(function (u) {
           h += '<tr><td>' + esc(u.brand) + '</td><td>' + esc(u.model) + '</td><td>' + esc(u.category) + '</td><td>' + u.stock + '</td></tr>';
         });
-        h += '</tbody></table></div>';
+        h += '</tbody></table></div>' +
+          '<div class="mt8"><button class="btn" data-act="retire-uncovered">确认无误：以上 ' + r.uncovered.length + ' 个全部停售</button>' +
+          '<div class="small muted mt4">仅置为停售，<b>不删除商品、不动库存、不碰任何单据</b>，可随时恢复。' +
+          (withStock ? '其中 <b>' + withStock + '</b> 个仍有库存，停售后库存继续挂在这些商品名下，需你另行盘点处理。' : '') +
+          '</div></div>';
+      }
+      if (r.retired) {
+        h += '<div class="notice notice-info">已将 <b>' + r.retired + '</b> 个未覆盖商品置为停售（未删除，可在商品档案中恢复）。</div>';
       }
       if (r.errors.length) {
         h += '<div class="notice notice-warn">有 ' + r.errors.length + ' 行未导入：</div>';

@@ -116,7 +116,7 @@ test('规则4-同型号多商品：合并保留，保留的一个全量更新，
   assert.strictEqual(kai.cost, 500000, '停售商品原有数据完整保留');
 });
 
-test('规则4-合并时其余商品的库存原样保留（不转移、不清零）', () => {
+test('规则4-合并时其余商品的库存转入保留商品（不丢失，走盘点留痕）', () => {
   const ctx = newCtx();
   const a = product.save(ctx, { brand: '酷开', model: '86Q8E', category: '电视', unit: '台', cost: '5000' });
   product.save(ctx, { brand: '创维', model: '86Q8E', category: '电视', unit: '台', cost: '7000' });
@@ -127,8 +127,12 @@ test('规则4-合并时其余商品的库存原样保留（不转移、不清零
     ['创维', '86Q8E', '电视', '台', '8190']
   ], ctx);
 
+  // V3.25 起：库存不再滞留在停售商品名下，而是通过盘点调整单转入保留商品，总数守恒
   const kai = ctx.data.products.find(p => p.id === a.product.id);
-  assert.strictEqual(kai.stock, 3, '被停售商品的库存仍为 3，未被清零或转移');
+  const cw = ctx.data.products.find(p => p.brand === '创维' && p.model === '86Q8E');
+  assert.strictEqual(kai.stock, 0, '被停售商品的库存已转出');
+  assert.strictEqual(cw.stock, 3, '库存转入保留商品，3 台未丢失');
+  assert.strictEqual(kai.status, schema.STATUS.OFF, '商品仍保留，仅停售未删除');
 });
 
 test('型号匹配忽略空格与大小写（避免同一产品重复建档）', () => {

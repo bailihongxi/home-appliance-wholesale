@@ -237,6 +237,31 @@
   }
 
   /** 停售 / 恢复在售（不删除数据） */
+  /**
+   * 批量停售（V3.25）：用于导入后处理「未覆盖清单」中型号标错/已淘汰的旧商品。
+   * 只置为停售，绝不删除商品、不动库存、不碰单据与库存流水。
+   * @param {Array<string|number>} ids 商品 id 列表
+   * @returns {ok, retired, withStock, missing} retired=本次新停售数；withStock=其中有库存的商品数
+   */
+  api.retireProducts = function retireProducts(ctx, ids) {
+    var retired = 0;
+    var withStock = 0;
+    var missing = 0;
+    (ids || []).forEach(function (id) {
+      var p = api.getById(ctx, id);
+      if (!p) {
+        missing += 1;
+        return;
+      }
+      if ((Number(p.stock) || 0) > 0) withStock += 1;
+      if (p.status !== schema.STATUS.OFF) {
+        api.setStatus(ctx, p.id, schema.STATUS.OFF);
+        retired += 1;
+      }
+    });
+    return { ok: true, retired: retired, withStock: withStock, missing: missing };
+  };
+
   api.setStatus = function setStatus(ctx, id, status) {
     var p = api.getById(ctx, id);
     if (!p) return err('商品不存在：' + id);
@@ -337,7 +362,7 @@
     var result = {
       created: 0, updated: 0, total: pre.base.total, skipped: pre.base.skipped,
       deduplicated: pre.base.deduplicated, merged: 0, errors: pre.base.errors,
-      uncovered: []
+      uncovered: [], transferred: 0
     };
     if (!pre.map || !pre.cell) return result;
     var cell = pre.cell;
@@ -394,12 +419,35 @@
       }
       result.updated += 1;
 
-      // 其余同型号商品：仅置为停售，绝不删除商品/单据/库存流水，也不改动库存
+      // 其余同型号商品：置为停售（绝不删除商品/单据/库存流水），
+      // V3.25：其名下库存通过盘点调整单转入保留商品，避免库存“消失”在停售商品上。
+      var transfer = 0;
+      var fromIds = [];
       same.forEach(function (p) {
         if (String(p.id) === String(keep.id)) return;
         if (p.status !== schema.STATUS.OFF) api.setStatus(ctx, p.id, schema.STATUS.OFF);
+        var qty = Number(p.stock) || 0;
+        if (qty > 0) {
+          transfer += qty;
+          fromIds.push(String(p.id));
+        }
         result.merged += 1;
       });
+      if (transfer > 0) {
+        var counts = {};
+        counts[String(keep.id)] = (Number(keep.stock) || 0) + transfer;
+        fromIds.forEach(function (id) { counts[id] = 0; });
+        var st = inv.applyStocktake(ctx, {
+          date: util.today(),
+          counts: counts,
+          note: '批量导入合并同型号商品，库存转入保留商品（' + brand + ' ' + model + '）'
+        }, undefined);
+        if (st && st.ok !== false) result.transferred += transfer;
+        else result.errors.push({
+          row: rowNo,
+          msg: '库存转入失败（商品已导入，库存未转移）：' + ((st && st.error) || '未知原因')
+        });
+      }
     });
 
     // V3.25：系统中未被本次导入覆盖的商品（型号对不上或已淘汰）——
