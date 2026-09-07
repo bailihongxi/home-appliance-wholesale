@@ -467,7 +467,7 @@
       '<div class="row">' +
       '<button class="btn" data-act="download-template">下载模板</button>' +
       '<div class="spacer"></div>' +
-      '<button class="btn" data-act="cancel-form">返回</button>' +
+      '<button class="btn btn-danger" data-act="cancel-form">返回</button>' +
       '<button class="btn btn-primary" data-act="do-import">开始导入</button>' +
       '</div></div>';
 

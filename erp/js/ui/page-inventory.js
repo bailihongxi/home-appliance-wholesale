@@ -279,7 +279,7 @@
       var logs = inv.logsOfProduct(ctx, st.logsProduct);
       var p = product.getById(ctx, st.logsProduct);
       h += '<div class="card"><div class="card-title">变动明细：' + esc(p ? product.displayName(p) : st.logsProduct) +
-        '<button class="btn btn-sm" data-act="close-logs">关闭</button></div>';
+        '<button class="btn btn-sm btn-danger" data-act="close-logs">关闭</button></div>';
       if (!logs.length) {
         h += ui.empty('暂无变动记录');
       } else {

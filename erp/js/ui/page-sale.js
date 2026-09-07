@@ -718,7 +718,7 @@
       '<button class="btn btn-sm btn-orange" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="1">打印带价</button>' +
       '<button class="btn btn-sm btn-yellow" data-act="print-doc" data-no="' + esc(doc.no) + '" data-price="0">打印无价</button>' +
       (!isRefund && remaining > 0 && !doc.voided ? '<button class="btn btn-sm btn-primary" data-act="open-pay" data-no="' + esc(doc.no) + '">回款</button>' : '') +
-      '<button class="btn btn-sm" data-act="close-view">关闭</button></div>';
+      '<button class="btn btn-sm btn-danger" data-act="close-view">关闭</button></div>';
 
     // 补回款记录（V3.17）
     if ((doc.payLog || []).length) {

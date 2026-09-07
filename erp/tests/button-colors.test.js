@@ -67,3 +67,37 @@ test('取消按钮红色样式 btn-danger 已定义（白底红字）', () => {
   assert.ok(css.includes('.btn-danger { background: #fff; border-color: var(--c-danger); color: var(--c-danger); }'),
     'btn-danger 样式已定义：白底红字');
 });
+
+test('系统中所有关闭按钮使用红色 btn-danger class', () => {
+  const files = ['page-sale.js', 'page-purchase.js', 'page-inventory.js', 'page-account.js'];
+  let totalClose = 0;
+  let redClose = 0;
+  files.forEach(function(f) {
+    const src = read('js/ui/' + f);
+    const matches = src.match(/<button[^>]*>关闭<\/button>/g) || [];
+    matches.forEach(function(btn) {
+      totalClose++;
+      if (btn.includes('btn-danger')) redClose++;
+    });
+  });
+  assert.ok(totalClose >= 4, '至少找到4个关闭按钮（实际 ' + totalClose + '）');
+  assert.strictEqual(redClose, totalClose, '所有关闭按钮都使用 btn-danger 红色样式');
+});
+
+test('商品档案返回按钮使用红色 btn-danger class', () => {
+  const product = read('js/ui/page-product.js');
+  assert.ok(product.includes('class="btn btn-danger" data-act="cancel-form">返回</button>'),
+    '商品档案返回按钮使用 btn-danger');
+});
+
+test('modal 组件默认关闭按钮使用红色 btn-danger', () => {
+  const components = read('js/ui/components.js');
+  assert.ok(components.includes("{ text: '关闭', cls: 'btn-danger', act: 'close-modal' }"),
+    'modal 默认关闭按钮 cls 为 btn-danger');
+});
+
+test('打印页面关闭按钮已是红色样式（#dc2626 白底红字）', () => {
+  const printDoc = read('js/ui/print-doc.js');
+  assert.ok(printDoc.includes('.print-toolbar .pb-close { background: #fff; color: #dc2626; border-color: #dc2626; }'),
+    '打印页面关闭按钮 pb-close 为白底红字');
+});

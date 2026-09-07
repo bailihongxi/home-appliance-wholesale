@@ -184,7 +184,7 @@
     document.body.appendChild(mask);
 
     var actions = mask.querySelector('.modal-actions');
-    (opts.actions || [{ text: '关闭', cls: 'btn', act: 'close-modal' }]).forEach(function (a) {
+    (opts.actions || [{ text: '关闭', cls: 'btn-danger', act: 'close-modal' }]).forEach(function (a) {
       var b = document.createElement('button');
       b.className = 'btn ' + (a.cls || 'btn');
       b.textContent = a.text;

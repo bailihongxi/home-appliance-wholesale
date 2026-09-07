@@ -400,7 +400,7 @@
     if (!rec) {
       // 也可能是直接查看某单据编号
       var doc = ctx.getDoc('sales', state.viewNo) || ctx.getDoc('purchases', state.viewNo);
-      if (!doc) return '<div class="modal-mask" data-act="close-view"><div class="modal"><h3>未找到</h3><div class="modal-actions"><button class="btn" data-act="close-view">关闭</button></div></div></div>';
+      if (!doc) return '<div class="modal-mask" data-act="close-view"><div class="modal"><h3>未找到</h3><div class="modal-actions"><button class="btn btn-danger" data-act="close-view">关闭</button></div></div></div>';
     }
     var rows = (ctx.data.ledgers || []).filter(function (r) {
       return r.refNo === state.viewNo && !r.voided;
@@ -415,7 +415,7 @@
     body += '</tbody></table></div>';
     return '<div class="modal-mask" data-act="close-view"><div class="modal"><h3>流水明细 · ' + esc(state.viewNo) + '</h3>' +
       '<div class="modal-body">' + (rows.length ? body : ui.empty('该单据暂无关联流水')) + '</div>' +
-      '<div class="modal-actions"><button class="btn" data-act="close-view">关闭</button></div></div></div>';
+      '<div class="modal-actions"><button class="btn btn-danger" data-act="close-view">关闭</button></div></div></div>';
   }
 
   /* ---------------- 工具 ---------------- */
