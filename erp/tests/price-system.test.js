@@ -346,12 +346,15 @@ test('V3.23-批量导入：同型号多品牌时优先精确匹配品牌+型号�
   const res = product.importFromRows(rows, ctx);
   assert.strictEqual(res.errors.length, 0, '不再报该品牌型号已存在');
   assert.strictEqual(res.created, 0, '不新建');
-  assert.strictEqual(res.updated, 2, '两行都按更新处理');
+  // V3.24 规则1：文件内同型号去重，第二行被去重，只更新一次
+  assert.strictEqual(res.deduplicated, 1, '文件内重复行去重 1 行');
+  assert.strictEqual(res.updated, 1, '去重后只更新 1 款');
 
   const p = ctx.data.products.find(p => String(p.id) === String(exact.product.id));
   assert.strictEqual(p.cost, 819000, '精确匹配的创维 86Q8E 被更新');
   const k = ctx.data.products.find(p => String(p.id) === String(other.product.id));
-  assert.strictEqual(k.cost, 500000, '酷开 86Q8E 不受波及');
+  assert.ok(k, '酷开 86Q8E 未被删除（V3.24 规则4：仅停售，不删任何数据）');
+  assert.strictEqual(k.cost, 500000, '酷开 86Q8E 成本不受波及');
   assert.strictEqual(k.brand, '酷开', '酷开品牌不变');
 });
 

@@ -74,6 +74,24 @@
     }) || null;
   };
 
+  /**
+   * 型号规范化键：去掉所有空白 + 转大写。
+   * 用于批量导入的匹配与去重——忽略空格与大小写差异
+   *（如 86Q8E / 86Q8 E / 86q8e 视为同一型号），避免同一产品重复建档。
+   */
+  api.normModelKey = function normModelKey(model) {
+    return String(model == null ? '' : model).replace(/\s+/g, '').toUpperCase();
+  };
+
+  /** 按型号查所有同型号商品（规范化匹配，不分品牌）；返回数组，无则 [] */
+  api.findAllByModel = function findAllByModel(ctx, model) {
+    var key = api.normModelKey(model);
+    if (!key) return [];
+    return (ctx.data.products || []).filter(function (p) {
+      return api.normModelKey(p.model) === key;
+    });
+  };
+
   /** 按商品 id 取商品 */
   api.getById = function getById(ctx, id) {
     return (ctx.data.products || []).find(function (p) {
@@ -300,12 +318,25 @@
 
   /**
    * CSV 行导入（电器版）：表头 + 数据行 → 商品
+   * 导入规则（V3.24 用户确认）：
+   *   匹配模式：仅按「型号」匹配（不使用 品牌+型号）；型号规范化后忽略空格与大小写差异。
+   *   规则1 去重：文件内同一型号出现多行时去重，保留最后一行（后出现的为准）。
+   *   规则2 更新：系统已存在该型号 → 以导入信息为准更新 品牌/类型/单位/成本/备注；
+   *              备注与原厂条码单元格为空时保留系统已有值（不误清空）；不改动现有库存。
+   *   规则3 新建：系统无该型号 → 正常导入本行全量信息（含期初库存）。
+   *   规则4 合并：同一型号在系统中存在多个商品（不同品牌/价格）→ 合并保留：
+   *              保留一个用导入信息全量更新（并恢复在售），其余仅置为「停售」；
+   *              绝不删除商品/单据/库存流水，也不改动任何库存数据。
    * @param rows 二维数组（第一行为表头），与 util.parseCSV 输出同构
-   * @returns {created, updated, total, skipped, errors:[{row,msg}]}
-   *          total=数据行总数（不含表头）；skipped=被跳过的空行数
+   * @returns {created, updated, total, skipped, deduplicated, merged, errors:[{row,msg}]}
+   *          total=数据行总数（不含表头）；skipped=空行数；
+   *          deduplicated=文件内去重行数；merged=被合并停售的同型号商品数
    */
   api.importFromRows = function importFromRows(rows, ctx) {
-    var result = { created: 0, updated: 0, total: 0, skipped: 0, errors: [] };
+    var result = {
+      created: 0, updated: 0, total: 0, skipped: 0,
+      deduplicated: 0, merged: 0, errors: []
+    };
     if (!rows || !rows.length) return result;
     result.total = rows.length - 1; // 数据行总数（不含表头）
     var map = api.mapHeaders(rows[0]);
@@ -323,26 +354,35 @@
       return row[idx] === null || row[idx] === undefined ? '' : String(row[idx]).trim();
     }
 
+    // —— 规则1：文件内按型号去重，同一型号保留最后一行 ——
+    var order = [];
+    var picked = {};
     for (var i = 1; i < rows.length; i++) {
       var row = rows[i];
       if (!row || row.every(function (v) { return v === '' || v === null || v === undefined; })) {
         result.skipped += 1; // 空行：明确计数，不再静默消失
         continue;
       }
-      var brand = cell(row, 'brand');
-      var model = cell(row, 'model');
-      if (!brand || !model) {
+      var b = cell(row, 'brand');
+      var m = cell(row, 'model');
+      if (!b || !m) {
         result.errors.push({ row: i + 1, msg: '品牌和型号必填' });
         continue;
       }
-      // V3.21：批量导入按「型号」匹配系统已有商品——型号相同则视为同一产品，
-      // 以新导入的品牌/价格等字段为准更新商品档案；型号未匹配到才新建。
-      // 备注/条码仅当导入单元格非空时更新，避免空单元格误清空已有信息。
-      // V3.23：匹配优先级修正——先精确匹配「品牌+型号」，找不到再按型号匹配。
-      // 此前仅按型号匹配会取档案中第一个同型号商品；当系统里同一型号存在
-      // 多个品牌（如 创维 86Q8E 与其他品牌 86Q8E）且其他品牌排在前面时，
-      // 保存会撞上品牌+型号查重报「该品牌型号已存在」，导致该行永远无法导入。
-      var existing = api.findDuplicate(ctx, brand, model) || api.findByModel(ctx, model);
+      var key = api.normModelKey(m);
+      if (picked[key]) result.deduplicated += 1; // 文件内重复行（后一行覆盖前一行）
+      else order.push(key);
+      picked[key] = { row: row, rowNo: i + 1 };
+    }
+
+    // —— 规则2/3/4：按去重后的行逐条导入（纯型号匹配） ——
+    order.forEach(function (key) {
+      var entry = picked[key];
+      var row = entry.row;
+      var rowNo = entry.rowNo;
+      var brand = cell(row, 'brand');
+      var model = cell(row, 'model');
+
       var input = {
         brand: brand,
         model: model,
@@ -353,19 +393,51 @@
         priceRetail: cell(row, 'priceRetail'),
         openingStock: cell(row, 'openingStock')
       };
+      // 备注/条码：单元格为空时保留系统已有值，避免误清空（影响扫码与已有备注）
       var note = cell(row, 'note');
       if (note) input.note = note;
       var bc = cell(row, 'barcodes');
       if (bc) input.barcodes = bc;
-      if (existing) input.id = existing.id;
-      var r = api.save(ctx, input);
-      if (r.ok) {
-        if (r.isNew) result.created += 1;
-        else result.updated += 1;
-      } else {
-        result.errors.push({ row: i + 1, msg: r.error });
+
+      var same = api.findAllByModel(ctx, model);
+
+      // 规则3：系统中无此型号 → 新建，导入本行全量信息（含期初库存）
+      if (same.length === 0) {
+        var r = api.save(ctx, input);
+        if (r.ok) result.created += 1;
+        else result.errors.push({ row: rowNo, msg: r.error });
+        return;
       }
-    }
+
+      // 规则2/4：系统已有此型号 → 合并保留
+      // 保留策略：优先保留「品牌+型号」与导入完全一致的商品，否则保留最早建档的那个。
+      // 这样既以导入信息为准，又不会与其余同型号商品撞上品牌+型号查重而报错。
+      var keep = null;
+      for (var k = 0; k < same.length; k++) {
+        if (String(same[k].brand || '').trim().toUpperCase() === String(brand || '').trim().toUpperCase()) {
+          keep = same[k];
+          break;
+        }
+      }
+      if (!keep) keep = same[0];
+
+      input.id = keep.id;
+      input.status = schema.STATUS.ON; // 导入即视为有效商品，恢复在售
+      var r2 = api.save(ctx, input);
+      if (!r2.ok) {
+        result.errors.push({ row: rowNo, msg: r2.error });
+        return;
+      }
+      result.updated += 1;
+
+      // 其余同型号商品：仅置为停售，绝不删除商品/单据/库存流水，也不改动库存
+      same.forEach(function (p) {
+        if (String(p.id) === String(keep.id)) return;
+        if (p.status !== schema.STATUS.OFF) api.setStatus(ctx, p.id, schema.STATUS.OFF);
+        result.merged += 1;
+      });
+    });
+
     return result;
   };
 

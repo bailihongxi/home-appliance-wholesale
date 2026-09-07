@@ -183,6 +183,8 @@
         var res = product.importFromRows(parsed.rows, ctx);
         state.csvResult = res;
         repo.log(ctx, 'CSV 导入', '读取 ' + res.total + ' 行：新增 ' + res.created + ' 款 / 更新 ' + res.updated + ' 款' +
+          (res.deduplicated ? ' / 去重 ' + res.deduplicated + ' 行' : '') +
+          (res.merged ? ' / 合并停售 ' + res.merged + ' 个' : '') +
           (res.skipped ? ' / 跳过空行 ' + res.skipped + ' 行' : '') +
           (res.errors.length ? ' / 未导入 ' + res.errors.length + ' 行' : ''));
         if (res.errors.length === 0) state.csvText = '';
@@ -461,7 +463,7 @@
 
   function renderCsv(ctx, state) {
     var h = '<div class="page-head"><h2>批量导入商品</h2>' +
-      '<span class="desc">必填：品牌、型号、类型；成本可选——<b>批发价/零售价无需填写，导入后按整体利润率自动生成（取整到元）</b>；还支持：单位、备注、原厂条码、期初库存。<b>更新规则（V3.21）：与系统已有商品按「型号」比对，型号相同则以新导入的品牌/成本/价格等为准更新该商品档案；备注/条码留空时保留原值。</b></span></div>';
+      '<span class="desc">必填：品牌、型号、类型；成本可选——<b>批发价/零售价无需填写，导入后按整体利润率自动生成（取整到元）</b>；还支持：单位、备注、原厂条码、期初库存。<b>导入规则（V3.24）：仅按「型号」匹配（忽略空格与大小写）；文件内同型号重复行去重、保留最后一行；系统已有该型号则以导入信息为准更新品牌/类型/单位/成本/备注（备注与条码留空时保留原值，不改动现有库存）；系统无该型号则新建；同一型号在系统中存在多个商品时合并保留——保留一个全量更新，其余仅置为停售，不删除任何商品与历史单据。</b></span></div>';
     h += '<div class="card">' +
       '<div class="field"><label>① 直接选择文件导入（支持 CSV / Excel .xlsx .xls）</label>' +
       '<input class="input" type="file" accept=".csv,.xlsx,.xls,text/csv" data-change="pick-import-file">' +
@@ -481,8 +483,13 @@
       var r = state.csvResult;
       h += '<div class="card"><div class="card-title">导入结果</div>' +
         '<p class="mb8">共读取 <b>' + (r.total || 0) + '</b> 行数据：新增 ' + r.created + ' 款，更新 ' + r.updated + ' 款' +
+        (r.deduplicated ? '，文件内去重 ' + r.deduplicated + ' 行' : '') +
+        (r.merged ? '，合并停售同型号 ' + r.merged + ' 个' : '') +
         (r.skipped ? '，跳过空行 ' + r.skipped + ' 行' : '') +
         (r.errors.length ? '，未导入 ' + r.errors.length + ' 行' : '') + '。</p>';
+      if (r.merged) {
+        h += '<div class="notice notice-info">有 ' + r.merged + ' 个同型号的重复商品已置为「停售」保留（未删除，历史单据与库存流水完整保留）。</div>';
+      }
       if (r.errors.length) {
         h += '<div class="notice notice-warn">有 ' + r.errors.length + ' 行未导入：</div>';
         h += '<div class="table-wrap"><table class="tbl"><thead><tr><th>行号</th><th>原因</th></tr></thead><tbody>';
