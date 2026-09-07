@@ -273,8 +273,6 @@ button, input, select, textarea {
 }
 .btn:active { background: #f9fafb; transform: scale(.98); }
 .btn[disabled] { opacity: .5; cursor: not-allowed; }
-/* V3.22：所有扫描按钮统一蓝色边框，便于识别 */
-.btn-scan { border: 2px solid var(--c-primary); }
 
 .btn-primary {
   background: var(--c-mint-500);

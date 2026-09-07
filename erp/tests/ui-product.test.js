@@ -280,7 +280,6 @@ test('搜索模块：搜索框 + 状态下拉同一行（searchBar filters）', 
   const sb = html.indexOf('data-input="keyword"');
   const status = html.indexOf('data-name="filterStatus"');
   assert.ok(sb >= 0, '搜索框存在');
-  // 阈值 230：V3.22 扫描按钮加 btn-scan class 后 HTML 字符增加，仍要求二者同处搜索栏模块内
-  assert.ok(status > sb && status - sb < 230, '状态下拉与搜索框同一行（filters 内）');
+  assert.ok(status > sb && status - sb < 200, '状态下拉与搜索框同一行（filters 内）');
   assert.ok(html.includes('全部状态'), '状态下拉含全部状态');
 });

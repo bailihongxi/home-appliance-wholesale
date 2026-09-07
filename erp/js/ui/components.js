@@ -36,7 +36,7 @@
     return (
       '<div class="row mb8 search-bar' + (opts.cls ? ' ' + esc(opts.cls) : '') + '">' +
       '<input class="input" data-input="keyword" data-live="1" data-debounce="1" placeholder="' + esc(ph) + '" value="' + esc(opts.value || '') + '">' +
-      (opts.scan === false ? '' : '<button class="btn btn-scan" data-act="scan" title="扫码">📷</button>') +
+      (opts.scan === false ? '' : '<button class="btn" data-act="scan" title="扫码">📷</button>') +
       (opts.filters || '') +
       '</div>'
     );
