@@ -430,6 +430,12 @@
       '<input class="input" type="date" data-change="filter" data-name="to" value="' + esc(state.to) + '">' +
       '</div></div>';
 
+    // V3.26：进货单明细移到列表上方——点「查看」后无需下滚即可看到，列表仍在下方
+    if (state.viewNo) {
+      var vdoc = ctx.getDoc('purchases', state.viewNo);
+      if (vdoc) h += docModal(ctx, vdoc);
+    }
+
     if (!pg.items.length) {
       h += '<div class="card">' + ui.empty('暂无进货单') + '</div>';
       return h;
@@ -466,10 +472,6 @@
     });
     h += '</tbody></table></div>' + ui.pager(pg.page, pg.pages, pg.total) + '</div>';
 
-    if (state.viewNo) {
-      var doc = ctx.getDoc('purchases', state.viewNo);
-      if (doc) h += docModal(ctx, doc);
-    }
     return h;
   }
 
