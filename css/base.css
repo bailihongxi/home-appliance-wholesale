@@ -254,6 +254,10 @@ button, input, select, textarea {
 .row.between { justify-content: space-between; }
 .spacer { flex: 1; }
 
+/* 批量导入操作条：预演体检/取消/确认执行导入 同排靠最右端；
+   窄屏放不下时自动换行，换行后仍对齐右端（体检报告很长，按钮不能藏在末尾） */
+.import-actions { flex-wrap: wrap; row-gap: 8px; justify-content: flex-end; }
+
 /* ---------- 按钮 ---------- */
 
 .btn {

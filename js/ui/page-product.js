@@ -503,11 +503,17 @@
       '<textarea class="input" data-input="csv-text" style="min-height:160px" placeholder="品牌,型号,类型,单位,成本">' +
       esc(state.csvText) + '</textarea>' +
       '<div class="small muted mt4">示例：海尔,BCD-200,冰箱,台,1000（批发/零售留空，导入后自动按利润率生成）</div></div>' +
-      '<div class="row">' +
+      // V3.27：体检报告很长，原「取消 / 确认执行导入」在报告末尾需下滚才能点到。
+      // 现在两个按钮与「预演体检（不写入）」同排、靠最右端，报告再长也能随手点。
+      '<div class="row import-actions">' +
       '<button class="btn" data-act="download-template">下载模板</button>' +
       '<div class="spacer"></div>' +
       '<button class="btn btn-danger" data-act="cancel-form">返回</button>' +
       '<button class="btn btn-primary" data-act="do-preview">预演体检（不写入）</button>' +
+      (state.csvPlan
+        ? '<button class="btn btn-danger" data-act="cancel-preview">取消</button>' +
+          '<button class="btn btn-primary" data-act="do-import">确认执行导入</button>'
+        : '') +
       '</div></div>';
 
     if (state.csvPlan) {
@@ -572,11 +578,9 @@
         h += '</tbody></table></div>';
       }
 
-      h += '<div class="row mt8">' +
-        '<button class="btn btn-danger" data-act="cancel-preview">取消</button>' +
-        '<div class="spacer"></div>' +
-        '<button class="btn btn-primary" data-act="do-import">确认执行导入</button>' +
-        '</div></div>';
+      // V3.27：按钮已上移到「预演体检（不写入）」同排最右端（见上方 import-actions），
+      // 此处不再重复渲染，避免报告过长时需要下滚才能确认导入。
+      h += '</div>';
     }
 
     if (state.csvResult) {
