@@ -638,6 +638,12 @@
       '<input class="input" type="date" data-change="filter" data-name="to" value="' + esc(state.to) + '">' +
       '</div></div>';
 
+    // V3.26：销售单明细移到列表上方——点「查看」后无需下滚即可看到，列表仍在下方
+    if (state.viewNo) {
+      var vdoc = ctx.getDoc('sales', state.viewNo);
+      if (vdoc) h += docModal(ctx, vdoc);
+    }
+
     if (!pg.items.length) {
       h += '<div class="card">' + ui.empty('还没有销售单，去开一单吧') + '</div>';
       return h;
@@ -676,10 +682,6 @@
     });
     h += '</tbody></table></div>' + ui.pager(pg.page, pg.pages, pg.total) + '</div>';
 
-    if (state.viewNo) {
-      var doc = ctx.getDoc('sales', state.viewNo);
-      if (doc) h += docModal(ctx, doc);
-    }
     if (state.refundNo) {
       var rd = ctx.getDoc('sales', state.refundNo);
       if (rd) h += refundModal(ctx, state, rd);
