@@ -29,6 +29,15 @@
   var esc = util.escapeHtml;
   var L = schema.LEDGER;
 
+  /** V3.26：列表备注最多显示 30 个汉字，超出以「...」截断，点击可查看完整记账信息 */
+  var NOTE_MAX = 30;
+
+  /** 截断备注：超过 NOTE_MAX 个字符则返回前 NOTE_MAX 个 + '...' */
+  function clipNote(note) {
+    var s = String(note == null ? '' : note);
+    return s.length > NOTE_MAX ? s.slice(0, NOTE_MAX) + '...' : s;
+  }
+
   function emptyState() {
     return {
       tab: 'flow', // flow | payable | receivable
@@ -38,6 +47,7 @@
       keyword: '',
       page: 1,
       viewNo: null,
+      viewNoteId: null, // V3.26：当前查看完整信息的流水 id
       settle: null, // {partnerId, isSupplier, name, amount, note, error}
       manualOpen: false,
       manual: { date: util.today(), category: schema.EXPENSE_CATEGORIES[0], direction: 'out', amount: '', note: '' }
@@ -59,6 +69,7 @@
       else if (state.tab === 'receivable') h += renderReceivable(ctx, state);
       else h += renderFlow(ctx, state);
       if (state.viewNo) h += viewModal(ctx, state);
+      if (state.viewNoteId) h += noteModal(ctx, state);
       if (state.settle) h += settleModal(ctx, state);
       return h;
     },
@@ -105,6 +116,15 @@
 
       'close-view': function (ctx, state) {
         state.viewNo = null;
+      },
+
+      /* V3.26：备注过长被截断时，点击查看完整记账信息 */
+      'view-note': function (ctx, state, el) {
+        state.viewNoteId = el.getAttribute('data-id');
+      },
+
+      'close-note': function (ctx, state) {
+        state.viewNoteId = null;
       },
 
       /* 收付款弹窗 */
@@ -234,13 +254,19 @@
         '</tr></thead><tbody>';
       list.forEach(function (r) {
         var inOut = r.direction === 'in';
+        var noteText = String(r.note || '');
+        var clipped = noteText.length > NOTE_MAX;
         h += '<tr>' +
           '<td>' + esc(r.date) + '</td>' +
           '<td>' + ui.badge(labelOf(r.type), inOut ? 'on' : 'off') + '</td>' +
           '<td class="num"><b style="color:' + (inOut ? '#16a34a' : '#dc2626') + '">' +
           (inOut ? '+' : '−') + ui.money(r.amount) + '</b></td>' +
           '<td>' + esc(partnerName(ctx, r.partnerId)) + '</td>' +
-          '<td class="weak">' + esc(r.note || '') + '</td>' +
+          '<td class="weak">' + (clipped
+            ? '<a href="javascript:;" data-act="view-note" data-id="' + esc(r.id) + '" ' +
+            'title="点击查看完整记账信息" style="color:#2563eb;text-decoration:underline;cursor:pointer">' +
+            esc(clipNote(noteText)) + '</a>'
+            : esc(noteText)) + '</td>' +
           '<td class="mono small">' + esc(r.refNo || '') + '</td>' +
           '<td class="act">' + (r.refNo ? '<button data-act="view-doc" data-no="' + esc(r.refNo) + '">查看</button>' : '') + '</td>' +
           '</tr>';
@@ -416,6 +442,34 @@
     return '<div class="modal-mask" data-act="close-view"><div class="modal"><h3>流水明细 · ' + esc(state.viewNo) + '</h3>' +
       '<div class="modal-body">' + (rows.length ? body : ui.empty('该单据暂无关联流水')) + '</div>' +
       '<div class="modal-actions"><button class="btn btn-danger" data-act="close-view">关闭</button></div></div></div>';
+  }
+
+  /**
+   * V3.26：备注被截断后的完整信息弹窗——展示该条流水的全部字段与完整备注。
+   * 列表里只显示前 30 个字符 + '...'，点击备注即弹出此处，避免长备注撑破表格。
+   */
+  function noteModal(ctx, state) {
+    var rec = (ctx.data.ledgers || []).find(function (r) {
+      return String(r.id) === String(state.viewNoteId);
+    });
+    if (!rec) {
+      return '<div class="modal-mask" data-act="close-note"><div class="modal"><h3>未找到该流水记录</h3>' +
+        '<div class="modal-actions"><button class="btn btn-danger" data-act="close-note">关闭</button></div></div></div>';
+    }
+    var inOut = rec.direction === 'in';
+    var body = '<div class="table-wrap"><table class="tbl"><tbody>' +
+      '<tr><th>日期</th><td>' + esc(rec.date) + '</td></tr>' +
+      '<tr><th>类型</th><td>' + ui.badge(labelOf(rec.type), inOut ? 'on' : 'off') + '</td></tr>' +
+      '<tr><th>金额</th><td><b style="color:' + (inOut ? '#16a34a' : '#dc2626') + '">' +
+      (inOut ? '+' : '−') + ui.money(rec.amount) + '</b></td></tr>' +
+      '<tr><th>往来单位</th><td>' + esc(partnerName(ctx, rec.partnerId) || '—') + '</td></tr>' +
+      '<tr><th>单据号</th><td class="mono">' + esc(rec.refNo || '—') + '</td></tr>' +
+      '</tbody></table></div>' +
+      '<div class="field mt8"><label>备注</label>' +
+      '<div style="white-space:pre-wrap;word-break:break-all">' + esc(rec.note || '—') + '</div></div>';
+    return '<div class="modal-mask" data-act="close-note"><div class="modal"><h3>记账明细</h3>' +
+      '<div class="modal-body">' + body + '</div>' +
+      '<div class="modal-actions"><button class="btn btn-danger" data-act="close-note">关闭</button></div></div></div>';
   }
 
   /* ---------------- 工具 ---------------- */
