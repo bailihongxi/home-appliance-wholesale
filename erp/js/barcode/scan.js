@@ -117,7 +117,7 @@
    * 实时识别是否需要降级到拍照/手输
    * @param stat { emptyFrames, errorFrames, firstEmptyAt }
    *   - 连续空转 emptyFrames >= 60（约1秒60帧 或时间兜底 12 秒）
-   *   - 连续异常 errorFrames >= 5（设备实时识别不可用）
+   *   - 连续异常 errorFrames >= 5（设备实时识别不可用；仅画面正常时计数）
    *   - 自首次空转起超 12 秒（时间兜底，防止帧率波动）
    */
   scan.needDowngrade = function needDowngrade(stat) {
@@ -126,6 +126,23 @@
     if (stat.emptyFrames >= 60) return true;
     if (stat.firstEmptyAt && (Date.now() - stat.firstEmptyAt) >= 12000) return true;
     return false;
+  };
+
+  /**
+   * 黑屏判定：摄像头已启动但长时间无实际画面帧（videoWidth=0）
+   * @returns {boolean} 距启动 >= 2500ms 且仍无帧 → 黑屏降级
+   */
+  scan.isBlackOut = function isBlackOut(videoWidth, startedAt, now) {
+    return !videoWidth && (now - startedAt) >= 2500;
+  };
+
+  /**
+   * detect 异常是否应计入降级计数：
+   * 仅当画面正常（videoWidth>0）时的异常才算「设备实时识别不可用」；
+   * 黑屏期间 detect 抛异常不计数，交给 isBlackOut 处理（避免异常降级抢跑黑屏检测）
+   */
+  scan.shouldCountError = function shouldCountError(videoWidth) {
+    return videoWidth > 0;
   };
 
   /** 统一释放摄像头流（幂等：无流/已停止均安全） */
@@ -180,19 +197,26 @@
       },
       onMount: function (body) {
         body.querySelector('#scan-video').appendChild(video);
-        navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-        }).then(function (s) {
-          if (stop) { scan.closeCamera(s); return; }
-          stream = s;
-          video.srcObject = s;
-          video.play();
-          tick();
-        }).catch(function () {
-          stop = true;
-          ui.closeModal();
-          manualCard(opts);
-        });
+        // 注意：不加 width/height 理想分辨率约束——部分鸿蒙/Android WebView
+        // 对带约束的流渲染黑屏（无帧），导致 detect 持续异常与取景黑屏
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+          .then(function (s) {
+            if (stop) { scan.closeCamera(s); return; }
+            stream = s;
+            video.srcObject = s;
+            var pp = video.play();
+            if (pp && typeof pp.then === 'function') {
+              pp.then(function () { if (!stop) tick(); })
+                .catch(function () { if (!stop) downgrade('摄像头启动失败，已切换为拍照/手输'); });
+            } else {
+              tick();
+            }
+          })
+          .catch(function () {
+            stop = true;
+            ui.closeModal();
+            manualCard(opts);
+          });
         /** 降级到拍照/手输（释放摄像头 + 关弹窗 + 提示） */
         function downgrade(msg) {
           stop = true;
@@ -203,8 +227,9 @@
         }
         function tick() {
           if (stop) return;
-          // 黑屏检测：摄像头已启动但 3 秒无实际画面帧 → 降级
-          if (!video.videoWidth && Date.now() - stat.startedAt >= 3000) {
+          // 黑屏检测（优先）：2.5 秒无实际画面帧 → 降级。
+          // 黑屏期间 detect(video) 常抛异常，异常不计数、不抢跑，统一交给这里
+          if (scan.isBlackOut(video.videoWidth, stat.startedAt, Date.now())) {
             downgrade('摄像头未输出画面，已切换为拍照/手输');
             return;
           }
@@ -227,10 +252,13 @@
             requestAnimationFrame(tick);
           }).catch(function () {
             if (stop) return;
-            stat.errorFrames++;
-            if (scan.needDowngrade(stat)) {
-              downgrade('当前设备无法实时识别，已切换为拍照/手输');
-              return;
+            // 仅画面正常时的异常才计数（黑屏异常不计数，交给黑屏检测）
+            if (scan.shouldCountError(video.videoWidth)) {
+              stat.errorFrames++;
+              if (scan.needDowngrade(stat)) {
+                downgrade('当前设备无法实时识别，已切换为拍照/手输');
+                return;
+              }
             }
             requestAnimationFrame(tick);
           });
@@ -291,7 +319,7 @@
     var i = 0;
     function next() {
       if (i >= order.length) {
-        if (opts.onError) opts.onError('未识别到条码/二维码，请重试或手输');
+        if (opts.onError) opts.onError('未识别到条码/二维码，请对准条码、避免反光、保持完整后重拍，或手输');
         return;
       }
       var kind = order[i++];
@@ -305,7 +333,7 @@
     next();
   }
 
-  /** 原生解码图片（Android/鸿蒙识别率高于 ZXing 纯 JS） */
+  /** 原生解码图片（Android/鸿蒙识别率高于 ZXing 纯 JS）；失败后画布放大 2 倍重试 */
   function nativeDecode(dataUrl, done) {
     try {
       var detector = new window.BarcodeDetector();
@@ -313,11 +341,31 @@
       img.onload = function () {
         detector.detect(img).then(function (list) {
           if (list && list.length) done(true, list[0].rawValue);
-          else done(false);
-        }).catch(function () { done(false); });
+          else retryScaled(img, detector, done);
+        }).catch(function () { retryScaled(img, detector, done); });
       };
       img.onerror = function () { done(false); };
       img.src = dataUrl;
+    } catch (e) { done(false); }
+  }
+
+  /** 画布放大重试：照片中条码占比小/模糊时，放大后识别率提升 */
+  function retryScaled(img, detector, done) {
+    try {
+      var c = document.createElement('canvas');
+      var scale = 2;
+      var w = img.naturalWidth || 640;
+      var h = img.naturalHeight || 480;
+      c.width = w * scale;
+      c.height = h * scale;
+      var ctx = c.getContext('2d');
+      if (!ctx) { done(false); return; }
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      detector.detect(c).then(function (list) {
+        if (list && list.length) done(true, list[0].rawValue);
+        else done(false);
+      }).catch(function () { done(false); });
     } catch (e) { done(false); }
   }
 

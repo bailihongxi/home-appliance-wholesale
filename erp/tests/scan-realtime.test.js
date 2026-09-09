@@ -74,3 +74,20 @@ test('scan.closeCamera：幂等（重复调用不报错）', () => {
   assert.strictEqual(scan.closeCamera(fakeStream), true);
   assert.strictEqual(scan.closeCamera(fakeStream), true);
 });
+
+test('scan.isBlackOut：无画面帧且超过 2.5 秒 → 黑屏降级', () => {
+  const now = Date.now();
+  assert.strictEqual(scan.isBlackOut(0, now - 2500, now), true, '无帧且满2.5秒应降级');
+  assert.strictEqual(scan.isBlackOut(0, now - 3000, now), true);
+  assert.strictEqual(scan.isBlackOut(0, now - 2499, now), false, '未到2.5秒不降级');
+  assert.strictEqual(scan.isBlackOut(640, now - 10000, now), false, '有帧永不黑屏');
+  assert.strictEqual(scan.isBlackOut(1280, now - 1000, now), false);
+});
+
+test('scan.shouldCountError：仅画面正常时计数异常（黑屏异常不计数）', () => {
+  assert.strictEqual(scan.shouldCountError(0), false, '黑屏期间异常不计数，交给黑屏检测');
+  assert.strictEqual(scan.shouldCountError(undefined), false);
+  assert.strictEqual(scan.shouldCountError(null), false);
+  assert.strictEqual(scan.shouldCountError(1), true);
+  assert.strictEqual(scan.shouldCountError(640), true);
+});
