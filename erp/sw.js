@@ -4,7 +4,7 @@
  * 更新策略：导航请求 network-first（在线一律拿最新页面，离线回退缓存，避免用户长期停留在旧版）；
  * 静态资源 cache-first（秒开），后台静默更新缓存。
  */
-var CACHE = 'appliance-erp-v60';
+var CACHE = 'appliance-erp-v61';
 var SHELL = [
   './',
   './index.html',
