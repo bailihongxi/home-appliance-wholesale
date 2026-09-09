@@ -139,8 +139,24 @@
       var store = stores[i];
       var list = dirty[store];
       if (!list.length) continue;
-      await db.bulkPut(store, list);
-      counts[store] = list.length;
+      var s = schemaRef();
+      var kp = s && s.KEY_PATH && s.KEY_PATH[store];
+      // V3.37：__deleted 标记 → db.del 物理删除；其余 bulkPut 落库
+      var puts = [];
+      for (var j = 0; j < list.length; j++) {
+        var rec = list[j];
+        if (!rec) continue;
+        if (rec.__deleted) {
+          if (kp) await db.del(store, rec[kp]);
+          else await db.del(store, String(rec.id != null ? rec.id : rec.no));
+          continue;
+        }
+        puts.push(rec);
+      }
+      if (puts.length) {
+        await db.bulkPut(store, puts);
+        counts[store] = puts.length;
+      }
     }
     return counts;
   }

@@ -421,6 +421,10 @@ table.tbl tbody tr:nth-child(even) td.cell-note { background: #f6f7f9; }
 table.tbl.tbl-striped tbody tr:nth-child(even) { background: #f6f7f9; }
 table.tbl.tbl-striped tbody tr:nth-child(even) td.cell-note { background: #f6f7f9; }
 table.tbl td.num, table.tbl th.num { text-align: right; font-variant-numeric: tabular-nums; }
+/* V3.37：多选删除——勾选列与选中行高亮（覆盖斑马纹，弱蓝底） */
+table.tbl th.sel, table.tbl td.sel { width: 34px; padding: 10px 6px; text-align: center; white-space: nowrap; }
+table.tbl tbody tr.sel-on td { background: #e8f1fb !important; }
+table.tbl input.row-check { width: 15px; height: 15px; accent-color: var(--c-primary, #2563eb); cursor: pointer; vertical-align: middle; }
 table.tbl .act a, table.tbl .act button {
   margin-right: 6px;
   font-size: 13px;

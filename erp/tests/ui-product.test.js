@@ -321,3 +321,59 @@ test('新建商品 scan-barcode 动作：已有内容时追加保留', () => {
   assert.ok(state.form.barcodes.includes('6901234567892'), '原有条码保留');
   assert.ok(state.form.barcodes.includes('6923456789012'), '新增条码追加');
 });
+
+/* ---------------- V3.37：多选删除未使用商品档案 ---------------- */
+
+test('列表渲染：含全选 checkbox、行 checkbox 与删除选中按钮（未选时禁用）', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('data-change="toggle-all-check"'), '表头全选 checkbox');
+  assert.ok(html.includes('class="row-check" data-change="row-check"'), '行 checkbox');
+  assert.ok(html.includes('data-act="del-selected"'), '删除选中按钮');
+  assert.ok(html.includes('disabled'), '未选中时按钮禁用');
+  assert.ok(!html.includes('删除选中（'), '未选中不显示计数');
+});
+
+test('row-check：勾选/取消更新选中集合，选中行渲染高亮', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const [p1] = ctx.data.products;
+  page.actions['row-check'](ctx, state, { getAttribute: () => p1.id });
+  assert.strictEqual(state.sel[p1.id], true);
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('删除选中（1）'), '按钮显示计数 1');
+  assert.ok(html.includes('class="sel-on"'), '选中行高亮');
+  page.actions['row-check'](ctx, state, { getAttribute: () => p1.id });
+  assert.strictEqual(state.sel[p1.id], undefined, '再点取消勾选');
+});
+
+test('toggle-all-check：全选当前页，再点取消全选', () => {
+  const { ctx, state } = fresh();
+  seed(ctx); // 2 款
+  page.actions['toggle-all-check'](ctx, state, {});
+  assert.strictEqual(Object.keys(state.sel).filter(k => state.sel[k]).length, 2, '全选本页全部');
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('删除选中（2）'));
+  page.actions['toggle-all-check'](ctx, state, {});
+  assert.strictEqual(Object.keys(state.sel).filter(k => state.sel[k]).length, 0, '再点取消全选');
+});
+
+test('del-selected：确认后删除未使用商品，清空选择', async () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const [p1, p2] = ctx.data.products;
+  // p2 被销售单引用 → 删除时自动跳过
+  ctx.data.sales.push({ no: 'XS1', date: '2026-09-09', items: [{ productId: p2.id, qty: 1, price: 100 }] });
+  state.sel[p1.id] = true;
+  state.sel[p2.id] = true;
+  const orig = globalThis.ERP;
+  globalThis.ERP = globalThis.ERP || {};
+  globalThis.ERP.app = { commit: () => Promise.resolve(), render: () => {} };
+  page.actions['del-selected'](ctx, state);
+  await new Promise(r => setTimeout(r, 20)); // 等 confirm 异步 resolve
+  globalThis.ERP = orig;
+  assert.strictEqual(ctx.data.products.length, 1, '未使用的 p1 被删除');
+  assert.strictEqual(ctx.data.products[0].id, p2.id, '被引用的 p2 保留');
+  assert.deepStrictEqual(state.sel, {}, '删除后清空选择');
+});

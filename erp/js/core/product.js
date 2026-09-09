@@ -270,6 +270,65 @@
     return { ok: true, product: p };
   };
 
+  /**
+   * 批量删除「未使用」的商品档案（V3.37）：仅删除未被任何单据/库存流水引用的商品；
+   * 被进货单/销售单/盘点单/库存流水引用过的商品不可删除（避免破坏历史单据与库存追溯）。
+   * @param ctx 上下文
+   * @param ids {Array<string|number>} 拟删除的商品 id
+   * @returns {{deleted: string[], blocked: Array<{id:string, model:string, refs:string[]}>}}
+   */
+  api.removeUnused = function removeUnused(ctx, ids) {
+    var idList = (ids || []).map(function (x) { return String(x); }).filter(Boolean);
+    if (!idList.length) return { deleted: [], blocked: [] };
+    var has = {};
+    idList.forEach(function (id) { has[id] = true; });
+
+    // 引用扫描：进货单 / 销售单 items[].productId、盘点单 counts 键、库存流水 productId
+    var refs = {};
+    function ref(id, store) {
+      id = String(id);
+      if (has[id]) {
+        if (!refs[id]) refs[id] = [];
+        if (refs[id].indexOf(store) < 0) refs[id].push(store);
+      }
+    }
+    ['purchases', 'sales'].forEach(function (store) {
+      (ctx.data[store] || []).forEach(function (doc) {
+        (doc.items || []).forEach(function (it) {
+          if (it && it.productId !== undefined && it.productId !== null) ref(it.productId, store);
+        });
+      });
+    });
+    (ctx.data.stocktakes || []).forEach(function (doc) {
+      var counts = doc.counts || {};
+      Object.keys(counts).forEach(function (pid) { ref(pid, 'stocktakes'); });
+    });
+    (ctx.data.stockLogs || []).forEach(function (log) {
+      if (log && log.productId !== undefined && log.productId !== null) ref(log.productId, 'stockLogs');
+    });
+
+    var list = ctx.data.products || [];
+    var deleted = [];
+    var blocked = [];
+    idList.forEach(function (id) {
+      var idx = -1;
+      for (var i = 0; i < list.length; i++) {
+        if (String(list[i].id) === id) { idx = i; break; }
+      }
+      if (idx < 0) return; // 不存在，忽略
+      if (refs[id] && refs[id].length) {
+        blocked.push({ id: id, model: list[idx].model || '', refs: refs[id] });
+        return;
+      }
+      var rec = list[idx];
+      list.splice(idx, 1);
+      rec.__deleted = true; // 持久层标记删除（flush 识别后走 db.del）
+      ctx.touch('products', rec);
+      deleted.push(id);
+    });
+    return { deleted: deleted, blocked: blocked };
+  };
+
   /** 商品对外展示名：品牌 + 型号 */
   api.displayName = function displayName(p) {
     if (!p) return '';
