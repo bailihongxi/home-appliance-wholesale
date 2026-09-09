@@ -32,17 +32,38 @@ test('页面元数据与初始状态', () => {
   assert.deepStrictEqual(state.form.items, []);
 });
 
-test('init：跨页预选 pendingSaleProduct', () => {
+test('render：消费 pendingSaleProduct（扫码去开单 → 定位 + 加入订单）', () => {
   const ctx = newCtx();
   const { p1 } = seed(ctx);
-  global.__sale = page;
-  const E = globalThis.ERP;
+  const state = page.init();
+  state.tab = 'new';
   const orig = globalThis.ERP;
   if (!globalThis.ERP) globalThis.ERP = {};
   globalThis.ERP.pendingSaleProduct = p1.id;
-  const state = page.init();
-  assert.strictEqual(state.form.productId, p1.id);
+  page.render(ctx, state);
   globalThis.ERP = orig;
+  assert.strictEqual(state.form.productId, p1.id, '选货区定位该商品');
+  assert.strictEqual(state.form.items.length, 1, '商品直接加入当前订单');
+  assert.strictEqual(state.form.items[0].productId, p1.id);
+  assert.strictEqual(globalThis.ERP.pendingSaleProduct, null, '消费后清除');
+});
+
+test('render：页内已存在 state 时扫码去开单同样生效（init 不重跑场景）', () => {
+  const ctx = newCtx();
+  const { p2 } = seed(ctx);
+  const state = page.init();
+  state.tab = 'new';
+  // 模拟已在开单页：先加入一个商品，再触发扫码去开单
+  page.actions['pick-product'](ctx, state, { getAttribute: () => p2.id });
+  assert.strictEqual(state.form.items.length, 1);
+  const orig = globalThis.ERP;
+  if (!globalThis.ERP) globalThis.ERP = {};
+  globalThis.ERP.pendingSaleProduct = p2.id;
+  page.render(ctx, state);
+  globalThis.ERP = orig;
+  // 同一商品再次加入 → 数量累加（1+1=2），不产生新行
+  assert.strictEqual(state.form.items.length, 1);
+  assert.strictEqual(state.form.items[0].qty, 2);
 });
 
 test('pick-product：加入商品，默认零售价', () => {
