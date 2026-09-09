@@ -127,14 +127,16 @@
 
   /**
    * 拍照解码优先级：原生 BarcodeDetector（Android/鸿蒙识别率高）→
-   * 自研 EAN-13（零依赖，替代打包损坏的 ZXing 作为主通道）→ ZXing 兜底
-   * @returns {string[]} ['native','ean13','zxing'] 子集
+   * 自研 EAN-13（零依赖，替代打包损坏的 ZXing 作为主通道）→
+   * 自研 Code39（V3.36：公司内部自定义条码最常见的码制，宽窄比自适应）→ ZXing 兜底
+   * @returns {string[]} ['native','ean13','code39','zxing'] 子集
    */
   scan.pickDecoders = function pickDecoders(env) {
     env = env || {};
     var order = [];
     if (env.native) order.push('native');
     if (env.ean13) order.push('ean13');
+    if (env.code39) order.push('code39');
     if (env.zxing) order.push('zxing');
     return order;
   };
@@ -195,19 +197,22 @@
 
   /**
    * 多通道解码（可注入实现，便于测试）：
-   * ① 原生 BarcodeDetector（带超时保护）→ ② 自研 EAN-13 → ③ ZXing 纯 JS（解码前压缩图片）
+   * ① 原生 BarcodeDetector（带超时保护）→ ② 自研 EAN-13 → ③ 自研 Code39 → ④ ZXing 纯 JS（解码前压缩图片）
    * source：Image 元素 / canvas；done(ok, text)
-   * impl：{ native: { available, detect(src, cb) }, ean13: { available, decode(src, cb) }, zxing: { available, decode(src, cb) } }
+   * impl：{ native: { available, detect(src, cb) }, ean13: { available, decode(src, cb) },
+   *        code39: { available, decode(src, cb) }, zxing: { available, decode(src, cb) } }
    */
   scan.decodeWith = function decodeWith(source, done, impl) {
     var env = impl || {
       native: { available: hasNative(), detect: nativeDetect },
       ean13: { available: hasEan13(), decode: ean13Decode },
+      code39: { available: hasCode39(), decode: code39Decode },
       zxing: { available: hasZxing(), decode: zxingDecode }
     };
     var order = scan.pickDecoders({
       native: env.native && env.native.available,
       ean13: env.ean13 && env.ean13.available,
+      code39: env.code39 && env.code39.available,
       zxing: env.zxing && env.zxing.available
     });
     if (!order.length) { done(false); return; }
@@ -247,6 +252,13 @@
             else next();
           });
         } catch (e) { next(); }
+      } else if (kind === 'code39') {
+        try {
+          env.code39.decode(source, function (ok, text) {
+            if (ok) finalize(true, text);
+            else next();
+          });
+        } catch (e) { next(); }
       } else {
         try {
           env.zxing.decode(source, function (ok, text) {
@@ -264,6 +276,9 @@
   }
   function hasEan13() {
     return !!(window.ERP && window.ERP.ean13 && typeof window.ERP.ean13.decode === 'function');
+  }
+  function hasCode39() {
+    return !!(window.ERP && window.ERP.generic39 && typeof window.ERP.generic39.decode === 'function');
   }
   function hasZxing() {
     return !!(window.ZXing && typeof window.ZXing.decodeCanvas === 'function');
@@ -337,6 +352,19 @@
         var tr = tg ? window.ERP.ean13.decode(tg, tc.width, tc.height) : null;
         if (tr && tr.text) { cb(true, tr.text); return; }
       }
+      cb(false);
+    } catch (e) { cb(false); }
+  }
+
+  /** 自研 Code39 通道（V3.36）：公司内部自定义条码最常见的码制——
+   *  无行业标准、位数不定、宽窄比 2:1~3:1 均可；供 native/EAN-13 失败后兜底 */
+  function code39Decode(source, cb) {
+    try {
+      var canvas = toCanvas(source);
+      if (!canvas) { cb(false); return; }
+      var gray = window.ERP.generic39.grayFromCanvas(canvas);
+      var r = gray ? window.ERP.generic39.decode(gray, canvas.width, canvas.height) : null;
+      if (r && r.text) { cb(true, r.text); return; }
       cb(false);
     } catch (e) { cb(false); }
   }

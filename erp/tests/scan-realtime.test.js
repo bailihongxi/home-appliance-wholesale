@@ -274,3 +274,37 @@ test('scan.decodeWith：ean13 不可用时跳过，native → zxing 正常', asy
   assert.strictEqual(r.text, 'native-ok');
   assert.strictEqual(zxingCalled, false);
 });
+
+/* ---------- V3.36：自研 Code39 通道（公司内部自定义条码） ---------- */
+
+test('scan.pickDecoders：显式启用 code39 通道时加入（native → ean13 → code39 → zxing）', () => {
+  assert.deepStrictEqual(scan.pickDecoders({ native: true, ean13: true, code39: true, zxing: true }), ['native', 'ean13', 'code39', 'zxing']);
+  assert.deepStrictEqual(scan.pickDecoders({ code39: true }), ['code39']);
+  assert.deepStrictEqual(scan.pickDecoders({ native: true, code39: true }), ['native', 'code39']);
+  assert.deepStrictEqual(scan.pickDecoders({ code39: false, zxing: true }), ['zxing']);
+});
+
+test('scan.decodeWith：code39 通道成功（内部自定义条码文本原样透出）', async () => {
+  const code39Decode = (src, cb) => cb(true, 'HD-1024'); // 模拟扫出 Code39 内部码
+  const r = await new Promise((res) => {
+    scan.decodeWith(null, (ok, text) => res({ ok, text }), {
+      code39: { available: true, decode: code39Decode }
+    });
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.text, 'HD-1024');
+});
+
+test('scan.decodeWith：code39 在 ean13 之后、zxing 之前调用', async () => {
+  const calls = [];
+  const r = await new Promise((res) => {
+    scan.decodeWith(null, (ok) => res({ ok }), {
+      native: { available: true, detect: (src, cb) => { calls.push('native'); cb(false); } },
+      ean13: { available: true, decode: (src, cb) => { calls.push('ean13'); cb(false); } },
+      code39: { available: true, decode: (src, cb) => { calls.push('code39'); cb(false); } },
+      zxing: { available: true, decode: (src, cb) => { calls.push('zxing'); cb(false); } }
+    });
+  });
+  assert.deepStrictEqual(calls, ['native', 'ean13', 'code39', 'zxing']);
+  assert.strictEqual(r.ok, false);
+});
