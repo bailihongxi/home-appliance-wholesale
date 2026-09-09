@@ -293,8 +293,9 @@ button, input, select, textarea {
 .btn-lg { min-height: 50px; font-size: 17px; font-weight: 600; width: 100%; }
 .btn-block { width: 100%; }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--c-primary); }
-.btn-orange { background: #f97316; border-color: #f97316; color: #fff; }
-.btn-orange:active { background: #ea580c; }
+.btn-orange { background: #f97316; border-color: #f97316; color: #fff; box-shadow: 0 4px 12px rgba(249, 115, 22, .25); }
+.btn-orange:hover { background: #ea580c; border-color: #ea580c; }
+.btn-orange:active { background: #c2410c; }
 .btn-yellow { background: #eab308; border-color: #eab308; color: #fff; }
 .btn-yellow:active { background: #ca8a04; }
 
@@ -425,7 +426,7 @@ table.tbl td.num, table.tbl th.num { text-align: right; font-variant-numeric: ta
 table.tbl th.sel, table.tbl td.sel { width: 34px; padding: 10px 6px; text-align: center; white-space: nowrap; }
 table.tbl tbody tr.sel-on td { background: #e8f1fb !important; }
 table.tbl input.row-check { width: 15px; height: 15px; accent-color: var(--c-primary, #2563eb); cursor: pointer; vertical-align: middle; }
-table.tbl .act a, table.tbl .act button {
+table.tbl .act a, table.tbl .act button:not(.btn) {
   margin-right: 6px;
   font-size: 13px;
   color: var(--c-primary);

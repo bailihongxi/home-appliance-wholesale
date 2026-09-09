@@ -311,7 +311,7 @@
         '<td>' + esc(d.partnerName || '散客') + '</td>' +
         '<td class="num">' + qty + '</td>' +
         '<td class="num">' + ui.money(d.payable) + '</td>' +
-        '<td class="act"><button class="btn btn-sm btn-primary" data-act="select-original" data-no="' + esc(d.no) + '">选为原单</button></td></tr>';
+        '<td class="act"><button class="btn btn-sm btn-orange" data-act="select-original" data-no="' + esc(d.no) + '">选为原单</button></td></tr>';
     });
     h += '</tbody></table></div></div>';
     return h;
@@ -422,7 +422,7 @@
           '<td class="num">' + ui.money(p.priceWholesale) + '</td>' +
           '<td class="num">' + ui.money(p.priceRetail) + '</td>' +
           '<td class="num">' + (p.stock || 0) + '</td>' +
-          '<td class="act"><button class="btn btn-sm btn-primary" data-act="repl-add" data-id="' + esc(p.id) + '">加入</button></td>' +
+          '<td class="act"><button class="btn btn-sm btn-orange" data-act="repl-add" data-id="' + esc(p.id) + '">加入</button></td>' +
           '</tr>';
       });
       h += '</tbody></table></div>';
