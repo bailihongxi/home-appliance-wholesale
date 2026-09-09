@@ -238,7 +238,7 @@
     return !!(window.ERP && window.ERP.ean13 && typeof window.ERP.ean13.decode === 'function');
   }
   function hasZxing() {
-    return !!(window.ZXing && window.ZXing.BrowserCodeReader);
+    return !!(window.ZXing && typeof window.ZXing.decodeCanvas === 'function');
   }
 
   /** 统一转为「适合解码的 canvas」（长边 ≤ ZXING_MAX_EDGE，只缩小不放大） */
@@ -284,17 +284,44 @@
     } catch (e) { return null; }
   }
 
-  /** 自研 EAN-13 通道：原图 canvas → 灰度 → 多行投票解码（零依赖，替代损坏的 ZXing 主通道） */
+  /** 自研 EAN-13 通道：原图 canvas → 灰度 → 多行投票解码；0° 失败时 ±4° 旋转重试（手持拍摄角度兜底） */
   function ean13Decode(source, cb) {
     try {
       var canvas = toCanvas(source);
       if (!canvas) { cb(false); return; }
       var gray = window.ERP.ean13.grayFromCanvas(canvas);
-      if (!gray) { cb(false); return; }
-      var r = window.ERP.ean13.decode(gray, canvas.width, canvas.height);
-      if (r && r.text) cb(true, r.text);
-      else cb(false);
+      var r = gray ? window.ERP.ean13.decode(gray, canvas.width, canvas.height) : null;
+      if (r && r.text) { cb(true, r.text); return; }
+      // 旋转重试（拍摄角度较大时水平扫描线失效）
+      for (var i = 0; i < 2; i++) {
+        var rc = rotateCanvas(canvas, i === 0 ? -4 : 4);
+        if (!rc) continue;
+        var rg = window.ERP.ean13.grayFromCanvas(rc);
+        var rr = rg ? window.ERP.ean13.decode(rg, rc.width, rc.height) : null;
+        if (rr && rr.text) { cb(true, rr.text); return; }
+      }
+      cb(false);
     } catch (e) { cb(false); }
+  }
+
+  /** canvas 旋转（白底补齐边缘），±4° 兜底手持倾斜 */
+  function rotateCanvas(canvas, deg) {
+    try {
+      var w = canvas.width, h = canvas.height;
+      if (!w || !h) return null;
+      var diag = Math.ceil(Math.sqrt(w * w + h * h));
+      var c = document.createElement('canvas');
+      c.width = diag;
+      c.height = diag;
+      var ctx = c.getContext('2d');
+      if (!ctx) return null;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, diag, diag);
+      ctx.translate(diag / 2, diag / 2);
+      ctx.rotate(deg * Math.PI / 180);
+      ctx.drawImage(canvas, -w / 2, -h / 2);
+      return c;
+    } catch (e) { return null; }
   }
 
   /** 原生通道（吃压缩后小图，快且稳） */
@@ -310,17 +337,14 @@
     } catch (e) { cb(false); }
   }
 
-  /** ZXing 纯 JS 通道（解码前压缩到长边 ≤1280，避免大图逐行扫描 5-10 秒） */
+  /** ZXing 纯 JS 通道（干净打包版：canvas → Hybrid/Global 双二值化，覆盖二维码/Code128 等码制） */
   function zxingDecode(source, cb) {
     try {
       var canvas = toDecodeCanvas(source);
       if (!canvas) { cb(false); return; }
-      var reader = new window.ZXing.BrowserCodeReader();
-      var url = canvas.toDataURL('image/jpeg', 0.85);
-      reader.decodeFromImageUrl(url).then(function (r) {
-        if (r && r.text) cb(true, r.text);
-        else cb(false);
-      }).catch(function () { cb(false); });
+      var r = window.ZXing.decodeCanvas(canvas);
+      if (r) cb(true, r);
+      else cb(false);
     } catch (e) { cb(false); }
   }
 

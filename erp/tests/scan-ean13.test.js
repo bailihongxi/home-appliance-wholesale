@@ -154,3 +154,16 @@ test('ean13 码表：L/G/R/PARITY 结构与 EAN-13 标准一致', () => {
   assert.strictEqual(ean13.PARITY[0], 'OOOOOO');
   assert.strictEqual(ean13.PARITY[5], 'OEOEOE');
 });
+
+test('ean13.decode：不均匀光照（左右明暗渐变，模拟真实相机场景）仍稳定解码', () => {
+  const img = renderBits(ean13Bits('5012345678900'), 10, 60, 20, 20);
+  const gray2 = new Uint8Array(img.gray.length);
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      const factor = 1.0 - 0.35 * (x / img.width); // 左侧亮、右侧暗
+      gray2[y * img.width + x] = Math.min(255, Math.round(img.gray[y * img.width + x] * factor));
+    }
+  }
+  const r = ean13.decode(gray2, img.width, img.height);
+  assert.strictEqual(r && r.text, '5012345678900', '光照渐变下应稳定解码');
+});
