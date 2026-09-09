@@ -174,6 +174,7 @@
   C.modal = function modal(opts) {
     if (!hasDom()) return null;
     closeModal();
+    currentModalOpts = opts;
     var mask = document.createElement('div');
     mask.className = 'modal-mask';
     mask.id = 'modal-mask';
@@ -204,11 +205,21 @@
     return mask;
   };
 
+  /** 当前打开模态框的配置（用于 closeModal 时触发对应 onClose） */
+  var currentModalOpts = null;
+
   /** 关闭当前模态框（闭包内顶层声明，让 modal() 内部 addEventListener/handler 可直接引用） */
   function closeModal() {
     if (!hasDom()) return;
     var mask = document.getElementById('modal-mask');
     if (mask && mask.parentNode) mask.parentNode.removeChild(mask);
+    // onClose 钩子：任何关闭路径（取消按钮/遮罩/外部 closeModal）都会触发，
+    // 用于释放摄像头等资源（如扫码实时取景）；只触发被关闭的那个 modal
+    var o = currentModalOpts;
+    currentModalOpts = null;
+    if (o && typeof o.onClose === 'function') {
+      try { o.onClose(); } catch (e) { /* 钩子异常不影响关闭 */ }
+    }
   }
   C.closeModal = closeModal;
 
