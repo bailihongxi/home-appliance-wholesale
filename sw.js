@@ -4,7 +4,7 @@
  * 更新策略（V3.34 起）：导航与静态资源全部 network-first——在线一律拿最新
  * 页面与资源（新功能一次打开即生效，杜绝「旧缓存卡版本」），离线回退缓存外壳。
  */
-var CACHE = 'appliance-erp-v63';
+var CACHE = 'appliance-erp-v64';
 var SHELL = [
   './',
   './index.html',
@@ -46,6 +46,7 @@ var SHELL = [
   './js/ui/page-customer.js',
   './js/ui/page-login.js',
   './js/barcode/ean13.js',
+  './js/barcode/generic39.js',
   './js/barcode/scan.js',
   './js/app.js'
 ];
