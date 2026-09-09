@@ -56,6 +56,7 @@
         keyword: '',
         filterStatus: 'all',
         page: 1,
+        sel: {}, // V3.37：勾选删除的商品 id 集合
         form: emptyForm(),
         editing: null,
         csvText: '',
@@ -152,6 +153,81 @@
         product.setStatus(ctx, id, next);
         repo.log(ctx, next === schema.STATUS.ON ? '商品上架' : '商品停售', product.displayName(p));
         if (ERP.app && ERP.app.render) ERP.app.render();
+      },
+
+      /* ---- V3.37：多选删除未使用商品档案 ---- */
+
+      /** 表头全选/取消全选（当前页全部商品） */
+      'toggle-all-check': function (ctx, state, el) {
+        var list = (ctx.data.products || []);
+        var kw = String(state.keyword || '').trim().toUpperCase();
+        var filtered = list.filter(function (p) {
+          if (kw) {
+            var bc = (Array.isArray(p.barcodes) ? p.barcodes : []).some(function (b) {
+              return String(b || '').toUpperCase().indexOf(kw) >= 0;
+            });
+            if (String(p.brand || '').toUpperCase().indexOf(kw) < 0 &&
+              String(p.model || '').toUpperCase().indexOf(kw) < 0 &&
+              String(p.category || '').toUpperCase().indexOf(kw) < 0 &&
+              String(p.note || '').toUpperCase().indexOf(kw) < 0 && !bc) return false;
+          }
+          if (state.filterStatus !== 'all' && (p.status || schema.STATUS.ON) !== state.filterStatus) return false;
+          return true;
+        });
+        var pg = util.paginate(filtered, state.page, 200);
+        var curIds = pg.items.map(function (p) { return String(p.id); });
+        var allOn = curIds.every(function (id) { return state.sel[id]; });
+        state.sel = state.sel || {};
+        var next = !allOn;
+        curIds.forEach(function (id) {
+          if (next) state.sel[id] = true;
+          else delete state.sel[id];
+        });
+        if (ERP.app && ERP.app.render) ERP.app.render();
+      },
+
+      /** 单行勾选/取消 */
+      'row-check': function (ctx, state, el) {
+        var id = String(el.getAttribute('data-id') || '');
+        if (!id) return;
+        state.sel = state.sel || {};
+        if (state.sel[id]) delete state.sel[id];
+        else state.sel[id] = true;
+        if (ERP.app && ERP.app.render) ERP.app.render();
+      },
+
+      /** 删除选中（仅删未使用的商品档案；被单据/库存引用自动跳过） */
+      'del-selected': function (ctx, state) {
+        var ids = Object.keys(state.sel || {}).filter(function (k) { return state.sel[k]; });
+        if (!ids.length) return false;
+        var doDelete = function () {
+          var res = product.removeUnused(ctx, ids);
+          if (res.deleted.length) {
+            repo.log(ctx, '批量删除商品', '删除 ' + res.deleted.length + ' 款' +
+              (res.blocked.length ? '，跳过被引用 ' + res.blocked.length + ' 款' : ''));
+            ui.toast('已删除 ' + res.deleted.length + ' 款商品' +
+              (res.blocked.length ? '；' + res.blocked.length + ' 款被单据/库存引用，已跳过' : ''), res.blocked.length ? 'warn' : 'ok');
+          } else if (res.blocked.length) {
+            ui.toast('所选 ' + res.blocked.length + ' 款商品均被单据/库存引用，不可删除', 'err');
+          } else {
+            ui.toast('没有可删除的商品（可能已被删除）', 'warn');
+          }
+          state.sel = {};
+          if (ERP.app) {
+            if (ERP.app.commit) ERP.app.commit().then(function () { ERP.app.render(); }).catch(function () { ERP.app.render(); });
+            else if (ERP.app.render) ERP.app.render();
+          }
+        };
+        if (ui.confirm) {
+          ui.confirm('删除选中商品',
+            '将删除选中的 <b>' + ids.length + '</b> 个商品档案。<br>' +
+            '仅删除<b>未被任何单据/库存流水引用</b>的商品；被进货单/销售单/盘点/库存引用过的会自动跳过，不受影响。<br>' +
+            '删除不可恢复，确定继续？', '确认删除').then(function (yes) {
+            if (yes) doDelete();
+          });
+          return false;
+        }
+        doDelete();
       },
 
       filter: function (ctx, state, el) {
@@ -396,10 +472,12 @@
     state.page = pg.page;
 
     var h = '';
+    var selCount = Object.keys(state.sel || {}).filter(function (k) { return state.sel[k]; }).length;
     h += '<div class="page-head"><h2>商品档案</h2>' +
       '<span class="desc">共 ' + ctx.data.products.length + ' 款商品</span>' +
       '<div class="actions">' +
       '<button class="btn" data-act="open-csv">📥 批量导入</button>' +
+      '<button class="btn btn-danger" data-act="del-selected"' + (selCount ? '' : ' disabled') + '>🗑 删除选中' + (selCount ? '（' + selCount + '）' : '') + '</button>' +
       '<button class="btn btn-primary" data-act="open-new">＋ 新建商品</button>' +
       '</div></div>';
 
@@ -423,16 +501,23 @@
       return h;
     }
 
+    // V3.37：全选 = 当前页全部商品均已勾选
+    var allChecked = pg.items.length > 0 && pg.items.every(function (p) {
+      return !!(state.sel || {})[String(p.id)];
+    });
     h += '<div class="card"><div class="table-wrap"><table class="tbl tbl-striped"><thead><tr>' +
+      '<th class="sel" style="width:34px"><input type="checkbox" class="row-check" data-change="toggle-all-check"' + (allChecked ? ' checked' : '') + ' title="全选本页"></th>' +
       '<th>品牌</th><th>型号</th><th>类型</th><th>单位</th>' +
       '<th class="num">成本</th><th class="num">批发价</th><th class="num">零售价</th>' +
       '<th class="num">库存</th><th>备注</th><th>状态</th><th>操作</th>' +
       '</tr></thead><tbody>';
     pg.items.forEach(function (p) {
+      var checked = !!(state.sel || {})[String(p.id)];
       var stock = p.stock || 0;
       var threshold = ctx.settings.defaultThreshold == null ? 3 : ctx.settings.defaultThreshold;
       var stockCls = stock <= 0 ? ' num zero' : (stock < threshold ? ' num low' : ' num');
-      h += '<tr>' +
+      h += '<tr' + (checked ? ' class="sel-on"' : '') + '>' +
+        '<td class="sel"><input type="checkbox" class="row-check" data-change="row-check" data-id="' + esc(p.id) + '"' + (checked ? ' checked' : '') + '></td>' +
         '<td>' + esc(p.brand) + '</td>' +
         '<td>' + esc(p.model) + '</td>' +
         '<td>' + esc(p.category) + '</td>' +
