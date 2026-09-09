@@ -52,15 +52,11 @@
     icon: '🛒',
 
     init: function () {
-      var form = emptyForm();
-      // 来自「商品卡 / 扫码」的跨页预选商品
-      if (ERP && ERP.pendingSaleProduct) {
-        form.productId = ERP.pendingSaleProduct;
-        ERP.pendingSaleProduct = null;
-      }
+      // 注意：跨页/扫码「去开单」的 pendingSaleProduct 统一在 render 开头消费
+      // （init 只在页面首次进入时执行，页内扫码时 state 已存在、init 不会重跑）
       return {
         tab: 'list',
-        form: form,
+        form: emptyForm(),
         from: '',
         to: '',
         typeFilter: 'all',
@@ -74,6 +70,15 @@
     },
 
     render: function (ctx, state) {
+      // 扫码「去开单」/ 跨页预选商品：定位到选货区 + 直接加入当前订单（页内扫码同样生效）
+      if (ERP && ERP.pendingSaleProduct) {
+        var _pid = ERP.pendingSaleProduct;
+        ERP.pendingSaleProduct = null;
+        if (_pid) {
+          state.form.productId = _pid;
+          addItem(ctx, state, _pid);
+        }
+      }
       // 支持 #/sale?tab=new|list 直达视图（首页/常用入口/扫码「开单」跳转用），应用后清除 query 避免与页内操作冲突
       var m = typeof location !== 'undefined' ? /^#\/sale\?tab=(new|list)/.exec(location.hash) : null;
       if (m) {
