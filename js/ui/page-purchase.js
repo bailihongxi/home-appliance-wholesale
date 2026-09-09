@@ -634,7 +634,7 @@
           '<td>' + esc(p.brand) + ' <b>' + esc(p.model) + '</b><br><span class="weak small">' + esc(p.category) + ' / ' + esc(p.unit) + '</span></td>' +
           '<td class="num">' + ui.money(p.cost) + '</td>' +
           '<td class="num">' + (p.stock || 0) + '</td>' +
-          '<td class="act"><button class="btn btn-sm btn-primary" data-act="add-item" data-id="' + esc(p.id) + '">' +
+          '<td class="act"><button class="btn btn-sm btn-orange" data-act="add-item" data-id="' + esc(p.id) + '">' +
           (has ? '＋ 再加' : '加入') + '</button></td>' +
           '</tr>';
       });

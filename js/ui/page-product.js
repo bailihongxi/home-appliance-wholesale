@@ -234,15 +234,18 @@
         var key = el.getAttribute('data-name');
         state[key] = el.value;
         state.page = 1;
+        state.sel = {}; // V3.40：筛选变化后清空勾选，删除计数与可见勾选保持一致
       },
 
       keyword: function (ctx, state, el) {
         state.keyword = el.value;
         state.page = 1;
+        state.sel = {}; // V3.40：搜索词变化后清空勾选
       },
 
       page: function (ctx, state, el) {
         state.page = parseInt(el.getAttribute('data-page'), 10) || 1;
+        state.sel = {}; // V3.40：翻页后清空勾选，避免跨页计数错乱
       },
 
       'open-csv': function (ctx, state) {
@@ -350,6 +353,7 @@
         if (!code) return;
         state.keyword = code;
         state.page = 1;
+        state.sel = {}; // V3.40：扫码搜索同样清空勾选
       },
 
       /** 新建/编辑商品：扫码填写原厂条码/二维码（去重追加，多条换行分隔） */
@@ -384,6 +388,7 @@
           onResult: function (code) {
             state.keyword = code;
             state.page = 1;
+            state.sel = {}; // V3.40：扫码搜索同样清空勾选
             if (ERP.app) ERP.app.render();
             ui.toast('已识别：' + code, 'ok');
           },

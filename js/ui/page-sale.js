@@ -438,7 +438,7 @@
           '<td class="num">' + ui.money(p.priceWholesale) + '</td>' +
           '<td class="num">' + ui.money(p.priceRetail) + '</td>' +
           '<td class="num' + (low ? ' low' : '') + '">' + (p.stock || 0) + '</td>' +
-          '<td class="act"><button class="btn btn-sm btn-primary" data-act="pick-product" data-id="' + esc(p.id) + '">加入</button></td>' +
+          '<td class="act"><button class="btn btn-sm btn-orange" data-act="pick-product" data-id="' + esc(p.id) + '">加入</button></td>' +
           '</tr>';
       });
       h += '</tbody></table></div>' + ui.pager(pick.page, pick.pages, pick.total, 'pick-page');
