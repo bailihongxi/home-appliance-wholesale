@@ -145,6 +145,20 @@
     return videoWidth > 0;
   };
 
+  /**
+   * 是否切换到「抓帧识别」模式：
+   * 实时模式（video-detect）下 detect(video) 连续异常 3 次 → 切抓帧（画面保留、静态帧多通道解码），
+   * 兼容 BarcodeDetector 半实现（API 存在但 detect(video) 不可用）的国产浏览器/鸿蒙 WebView
+   */
+  scan.shouldSwitchFrame = function shouldSwitchFrame(mode, errorFrames) {
+    return mode === 'video' && errorFrames >= 3;
+  };
+
+  /** 抓帧节流：距上次抓帧 >= interval(默认500ms) 才抓新帧 */
+  scan.frameDue = function frameDue(lastFrameAt, now, interval) {
+    return (now - lastFrameAt) >= (interval == null ? 500 : interval);
+  };
+
   /** 统一释放摄像头流（幂等：无流/已停止均安全） */
   scan.closeCamera = function closeCamera(stream) {
     if (stream && typeof stream.getTracks === 'function') {
@@ -179,7 +193,10 @@
     video.style.cssText = 'width:100%;max-height:50vh;background:#000;border-radius:8px';
     var stop = false;
     var stream = null;
-    var stat = { emptyFrames: 0, errorFrames: 0, firstEmptyAt: 0, startedAt: Date.now() };
+    var stat = {
+      emptyFrames: 0, errorFrames: 0, firstEmptyAt: 0, startedAt: Date.now(),
+      mode: 'video', lastFrameAt: 0
+    };
     var mask = ui.modal({
       title: '扫码',
       body: '<div id="scan-video"></div>' +
@@ -225,23 +242,25 @@
           if (opts.onError) opts.onError(msg);
           manualCard(opts);
         }
+        /** 识别成功 */
+        function success(raw) {
+          stop = true;
+          scan.closeCamera(stream);
+          ui.closeModal();
+          if (opts.onResult) opts.onResult(raw);
+        }
         function tick() {
           if (stop) return;
           // 黑屏检测（优先）：2.5 秒无实际画面帧 → 降级。
-          // 黑屏期间 detect(video) 常抛异常，异常不计数、不抢跑，统一交给这里
           if (scan.isBlackOut(video.videoWidth, stat.startedAt, Date.now())) {
             downgrade('摄像头未输出画面，已切换为拍照/手输');
             return;
           }
+          // 抓帧模式：detect(video) 不可用时的兜底，画面保留、静态帧多通道解码
+          if (stat.mode === 'frame') { frameTick(); return; }
           detector.detect(video).then(function (list) {
             if (stop) return;
-            if (list && list.length) {
-              stop = true;
-              scan.closeCamera(stream);
-              ui.closeModal();
-              if (opts.onResult) opts.onResult(list[0].rawValue);
-              return;
-            }
+            if (list && list.length) { success(list[0].rawValue); return; }
             stat.emptyFrames++;
             stat.errorFrames = 0;
             if (!stat.firstEmptyAt) stat.firstEmptyAt = Date.now();
@@ -252,15 +271,38 @@
             requestAnimationFrame(tick);
           }).catch(function () {
             if (stop) return;
-            // 仅画面正常时的异常才计数（黑屏异常不计数，交给黑屏检测）
+            // 仅画面正常时的异常计数；连续 3 次 → 切抓帧模式（不关闭画面）
             if (scan.shouldCountError(video.videoWidth)) {
               stat.errorFrames++;
-              if (scan.needDowngrade(stat)) {
-                downgrade('当前设备无法实时识别，已切换为拍照/手输');
+              if (scan.shouldSwitchFrame(stat.mode, stat.errorFrames)) {
+                stat.mode = 'frame';
+                stat.lastFrameAt = 0;
+                requestAnimationFrame(tick);
                 return;
               }
             }
             requestAnimationFrame(tick);
+          });
+        }
+        function frameTick() {
+          if (stop) return;
+          if (scan.isBlackOut(video.videoWidth, stat.startedAt, Date.now())) {
+            downgrade('摄像头未输出画面，已切换为拍照/手输');
+            return;
+          }
+          var now = Date.now();
+          if (!scan.frameDue(stat.lastFrameAt, now, 500)) { requestAnimationFrame(frameTick); return; }
+          stat.lastFrameAt = now;
+          var canvas = captureFrame(video);
+          if (!canvas) { requestAnimationFrame(frameTick); return; }
+          decodeWith(canvas, function (ok, text) {
+            if (stop) return;
+            if (ok) { success(text); return; }
+            if (Date.now() - stat.startedAt >= 15000) {
+              downgrade('实时识别超时（已尝试多种识别方式），请拍照或手输');
+              return;
+            }
+            requestAnimationFrame(frameTick);
           });
         }
       }
@@ -285,6 +327,87 @@
     });
   }
 
+  /** 从 video 抓取当前帧到 canvas（videoWidth=0 时返回 null） */
+  function captureFrame(video) {
+    try {
+      var w = video.videoWidth || 0;
+      var h = video.videoHeight || 0;
+      if (!w || !h) return null;
+      var c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      var ctx = c.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(video, 0, 0, w, h);
+      return c;
+    } catch (e) { return null; }
+  }
+
+  /**
+   * 多通道解码（图片源 Image 或 canvas）：
+   * ① 原生 BarcodeDetector.detect(source) → ② ZXing（Image 元素 / canvas dataURL）
+   * 兼容 BarcodeDetector 半实现与 ZXing 纯 JS 各自的成功路径
+   */
+  function decodeWith(source, done) {
+    var env = {
+      native: typeof window !== 'undefined' && !!window.BarcodeDetector,
+      zxing: !!(window.ZXing && window.ZXing.BrowserCodeReader)
+    };
+    var order = scan.pickDecoders(env);
+    if (!order.length) { done(false); return; }
+    var i = 0;
+    function next() {
+      if (i >= order.length) { done(false); return; }
+      var kind = order[i++];
+      if (kind === 'native') nativeDetect(source, next);
+      else zxingDetect(source, next);
+    }
+    function nativeDetect(src, fail) {
+      try {
+        var d = new window.BarcodeDetector();
+        d.detect(src).then(function (list) {
+          if (list && list.length) done(true, list[0].rawValue);
+          else fail();
+        }).catch(function () { fail(); });
+      } catch (e) { fail(); }
+    }
+    function zxingDetect(src, fail) {
+      try {
+        var reader = new window.ZXing.BrowserCodeReader();
+        if (src && src.tagName === 'IMG') {
+          reader.decodeFromImageElement(src).then(function (r) {
+            if (r && r.text) done(true, r.text);
+            else fail();
+          }).catch(function () { fail(); });
+        } else if (src && typeof src.toDataURL === 'function') {
+          var url = src.toDataURL('image/jpeg', 0.85);
+          reader.decodeFromImageUrl(url).then(function (r) {
+            if (r && r.text) done(true, r.text);
+            else fail();
+          }).catch(function () { fail(); });
+        } else { fail(); }
+      } catch (e) { fail(); }
+    }
+    next();
+  }
+
+  /** 画布放大：照片中条码占比小/模糊时，放大后识别率提升 */
+  function scaleCanvas(img, scale) {
+    try {
+      var w = img.naturalWidth || img.videoWidth || 640;
+      var h = img.naturalHeight || img.videoHeight || 480;
+      if (!w || !h) return null;
+      var c = document.createElement('canvas');
+      c.width = w * scale;
+      c.height = h * scale;
+      var ctx = c.getContext('2d');
+      if (!ctx) return null;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      return c;
+    } catch (e) { return null; }
+  }
+
   /** ② 拍照识别：懒加载 vendor/zxing 解码 */
   function photoInput(opts) {
     var input = document.createElement('input');
@@ -307,77 +430,26 @@
   }
 
   function decodeImage(dataUrl, opts) {
-    var env = {
-      native: typeof window !== 'undefined' && !!window.BarcodeDetector,
-      zxing: !!(window.ZXing && window.ZXing.BrowserCodeReader)
+    var img = new Image();
+    img.onload = function () {
+      decodeWith(img, function (ok, text) {
+        if (ok) { if (opts.onResult) opts.onResult(text); return; }
+        // 放大 2 倍重试：照片中条码占比小/模糊时提升识别率
+        var big = scaleCanvas(img, 2);
+        if (big) {
+          decodeWith(big, function (ok2, text2) {
+            if (ok2) { if (opts.onResult) opts.onResult(text2); return; }
+            if (opts.onError) opts.onError('未识别到条码/二维码，请对准条码、避免反光、保持完整后重拍，或手输');
+          });
+        } else if (opts.onError) {
+          opts.onError('未识别到条码/二维码，请对准条码、避免反光、保持完整后重拍，或手输');
+        }
+      });
     };
-    var order = scan.pickDecoders(env);
-    if (!order.length) {
-      if (opts.onError) opts.onError('当前环境无法拍照识别，请手输条码');
-      return;
-    }
-    var i = 0;
-    function next() {
-      if (i >= order.length) {
-        if (opts.onError) opts.onError('未识别到条码/二维码，请对准条码、避免反光、保持完整后重拍，或手输');
-        return;
-      }
-      var kind = order[i++];
-      var done = function (ok, text) {
-        if (ok) { if (opts.onResult) opts.onResult(text); }
-        else next();
-      };
-      if (kind === 'native') nativeDecode(dataUrl, done);
-      else zxingDecode(dataUrl, done);
-    }
-    next();
-  }
-
-  /** 原生解码图片（Android/鸿蒙识别率高于 ZXing 纯 JS）；失败后画布放大 2 倍重试 */
-  function nativeDecode(dataUrl, done) {
-    try {
-      var detector = new window.BarcodeDetector();
-      var img = new Image();
-      img.onload = function () {
-        detector.detect(img).then(function (list) {
-          if (list && list.length) done(true, list[0].rawValue);
-          else retryScaled(img, detector, done);
-        }).catch(function () { retryScaled(img, detector, done); });
-      };
-      img.onerror = function () { done(false); };
-      img.src = dataUrl;
-    } catch (e) { done(false); }
-  }
-
-  /** 画布放大重试：照片中条码占比小/模糊时，放大后识别率提升 */
-  function retryScaled(img, detector, done) {
-    try {
-      var c = document.createElement('canvas');
-      var scale = 2;
-      var w = img.naturalWidth || 640;
-      var h = img.naturalHeight || 480;
-      c.width = w * scale;
-      c.height = h * scale;
-      var ctx = c.getContext('2d');
-      if (!ctx) { done(false); return; }
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(img, 0, 0, c.width, c.height);
-      detector.detect(c).then(function (list) {
-        if (list && list.length) done(true, list[0].rawValue);
-        else done(false);
-      }).catch(function () { done(false); });
-    } catch (e) { done(false); }
-  }
-
-  /** ZXing 兜底解码（无原生能力的环境） */
-  function zxingDecode(dataUrl, done) {
-    try {
-      var reader = new window.ZXing.BrowserCodeReader();
-      reader.decodeFromImageUrl(dataUrl).then(function (r) {
-        if (r && r.text) done(true, r.text);
-        else done(false);
-      }).catch(function () { done(false); });
-    } catch (e) { done(false); }
+    img.onerror = function () {
+      if (opts.onError) opts.onError('图片加载失败，请重试或手输');
+    };
+    img.src = dataUrl;
   }
 
   /**
