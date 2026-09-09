@@ -109,3 +109,86 @@ test('scan.frameDue：抓帧节流（默认 500ms 间隔）', () => {
   assert.strictEqual(scan.frameDue(now - 1000, now), true, '默认500ms');
   assert.strictEqual(scan.frameDue(now - 100, now), false);
 });
+
+test('scan.decodeWith：native 挂起超时后 ZXing 兜底成功（华为浏览器半实现场景）', async () => {
+  const old = scan.NATIVE_TIMEOUT_MS;
+  scan.NATIVE_TIMEOUT_MS = 50;
+  try {
+    const nativeDetect = () => {}; // 永不回调：模拟 detect() 挂起
+    let zxingCalled = false;
+    const zxingDecode = (src, cb) => { zxingCalled = true; cb(true, '5012345678900'); };
+    const r = await new Promise((res) => {
+      scan.decodeWith(null, (ok, text) => res({ ok, text }), {
+        native: { available: true, detect: nativeDetect },
+        zxing: { available: true, decode: zxingDecode }
+      });
+    });
+    assert.strictEqual(r.ok, true, '超时后应交给 ZXing 并成功');
+    assert.strictEqual(r.text, '5012345678900');
+    assert.strictEqual(zxingCalled, true, 'ZXing 兜底必须被调用');
+  } finally { scan.NATIVE_TIMEOUT_MS = old; }
+});
+
+test('scan.decodeWith：native 快速失败后 ZXing 兜底成功', async () => {
+  const nativeDetect = (src, cb) => cb(false);
+  const zxingDecode = (src, cb) => cb(true, '6901234567892');
+  const r = await new Promise((res) => {
+    scan.decodeWith(null, (ok, text) => res({ ok, text }), {
+      native: { available: true, detect: nativeDetect },
+      zxing: { available: true, decode: zxingDecode }
+    });
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.text, '6901234567892');
+});
+
+test('scan.decodeWith：native 快速成功时不再等待 ZXing', async () => {
+  const nativeDetect = (src, cb) => cb(true, 'qr-text-ok');
+  let zxingCalled = false;
+  const zxingDecode = (src, cb) => { zxingCalled = true; cb(false); };
+  const r = await new Promise((res) => {
+    scan.decodeWith(null, (ok, text) => res({ ok, text }), {
+      native: { available: true, detect: nativeDetect },
+      zxing: { available: true, decode: zxingDecode }
+    });
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.text, 'qr-text-ok');
+  assert.strictEqual(zxingCalled, false, 'native 成功不应调用 ZXing');
+});
+
+test('scan.decodeWith：双通道均失败 → done(false)', async () => {
+  const nativeDetect = (src, cb) => cb(false);
+  const zxingDecode = (src, cb) => cb(false);
+  const r = await new Promise((res) => {
+    scan.decodeWith(null, (ok) => res({ ok }), {
+      native: { available: true, detect: nativeDetect },
+      zxing: { available: true, decode: zxingDecode }
+    });
+  });
+  assert.strictEqual(r.ok, false);
+});
+
+test('scan.decodeWith：native 不可用时仅走 ZXing', async () => {
+  let zxingCalled = false;
+  const zxingDecode = (src, cb) => { zxingCalled = true; cb(true, 'zx-only'); };
+  const r = await new Promise((res) => {
+    scan.decodeWith(null, (ok, text) => res({ ok, text }), {
+      native: { available: false, detect: null },
+      zxing: { available: true, decode: zxingDecode }
+    });
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.text, 'zx-only');
+  assert.strictEqual(zxingCalled, true);
+});
+
+test('scan.decodeWith：均不可用 → done(false) 不抛错', async () => {
+  const r = await new Promise((res) => {
+    scan.decodeWith(null, (ok) => res({ ok }), {
+      native: { available: false, detect: null },
+      zxing: { available: false, decode: null }
+    });
+  });
+  assert.strictEqual(r.ok, false);
+});
