@@ -276,6 +276,28 @@
         state.page = 1;
       },
 
+      /** 新建/编辑商品：扫码填写原厂条码/二维码（去重追加，多条换行分隔） */
+      'scan-barcode': function (ctx, state) {
+        if (!ERP.scan || !ERP.scan.start) {
+          ui.toast('当前环境不支持扫码，可手动输入条码', 'err');
+          return;
+        }
+        ERP.scan.start({
+          onResult: function (code) {
+            var list = String(state.form.barcodes || '').split(/[,，\n\r]+/).map(function (s) {
+              return s.trim();
+            }).filter(Boolean);
+            if (list.indexOf(code) < 0) list.push(code);
+            state.form.barcodes = list.join('\n');
+            ui.toast('已填入条码：' + code, 'ok');
+            if (ERP.app) ERP.app.render();
+          },
+          onError: function (msg) {
+            ui.toast(msg || '扫码不可用', 'err');
+          }
+        });
+      },
+
       /** 扫码：三级降级（实时摄像头 / 拍照 / 手输），识别后自动搜索商品 */
       'scan': function (ctx, state) {
         if (!ERP.scan || !ERP.scan.start) {
@@ -472,10 +494,11 @@
       '</div>';
     h += '<div class="field"><label>备注</label>' +
       '<input class="input" data-input="field" data-name="note" placeholder="选填，如：一级能效" value="' + esc(form.note) + '"></div>';
-    h += '<div class="field"><label>原厂条码 / 二维码内容（选填，可多条）</label>' +
+    h += '<div class="field"><label>原厂条码 / 二维码内容（选填，可多条）' +
+      '<button class="btn btn-sm" data-act="scan-barcode" title="扫码自动填写">📷 扫码</button></label>' +
       '<textarea class="input" data-input="field" data-name="barcodes" style="min-height:56px" placeholder="粘贴机身条码或二维码内容，多条用逗号或换行分隔">' +
       esc(form.barcodes) + '</textarea>' +
-      '<div class="small muted mt4">录入后可用「扫码」快速定位该商品，也可在开单时扫码加行。</div></div>';
+      '<div class="small muted mt4">可扫码自动填入；录入后可用「扫码」快速定位该商品，也可在开单时扫码加行。</div></div>';
     if (!editing) {
       h += '<div class="field"><label>期初库存（选填，仅新建时生效）</label>' +
         '<input class="input" data-input="field" data-name="openingStock" inputmode="numeric" placeholder="如 10" value="' + esc(form.openingStock) + '"></div>';

@@ -283,3 +283,41 @@ test('搜索模块：搜索框 + 状态下拉同一行（searchBar filters）', 
   assert.ok(status > sb && status - sb < 200, '状态下拉与搜索框同一行（filters 内）');
   assert.ok(html.includes('全部状态'), '状态下拉含全部状态');
 });
+
+test('新建商品：原厂条码区带扫码按钮（data-act="scan-barcode"）', () => {
+  const { ctx, state } = fresh();
+  state.tab = 'new';
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('data-name="barcodes"'), '原厂条码 textarea 存在');
+  assert.ok(html.includes('data-act="scan-barcode"'), '条码区带扫码按钮');
+});
+
+test('新建商品 scan-barcode 动作：扫码内容自动填入（去重追加）', () => {
+  const { ctx, state } = fresh();
+  state.tab = 'new';
+  let captured = null;
+  const orig = globalThis.ERP;
+  globalThis.ERP.scan = { start: (opts) => { captured = opts; } };
+  page.actions['scan-barcode'](ctx, state);
+  assert.ok(captured, '调起 ERP.scan.start');
+  captured.onResult('6901234567892');
+  captured.onResult('6901234567892'); // 重复扫码 → 去重
+  captured.onResult('6923456789012');
+  globalThis.ERP = orig;
+  const lines = state.form.barcodes.split('\n').filter(Boolean);
+  assert.strictEqual(lines.length, 2, '两条不同条码，重复的合并');
+  assert.ok(lines.includes('6901234567892'));
+  assert.ok(lines.includes('6923456789012'));
+});
+
+test('新建商品 scan-barcode 动作：已有内容时追加保留', () => {
+  const { ctx, state } = fresh();
+  state.tab = 'new';
+  state.form.barcodes = '6901234567892';
+  const orig = globalThis.ERP;
+  globalThis.ERP.scan = { start: (o) => o.onResult('6923456789012') };
+  page.actions['scan-barcode'](ctx, state);
+  globalThis.ERP = orig;
+  assert.ok(state.form.barcodes.includes('6901234567892'), '原有条码保留');
+  assert.ok(state.form.barcodes.includes('6923456789012'), '新增条码追加');
+});
