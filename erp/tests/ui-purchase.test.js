@@ -222,3 +222,56 @@ test('V3.17-问题3：新建进货单表单「品」字布局——供应商在�
   const mbBlock = mobile.slice(mobile.indexOf('.purchase-form-grid {'));
   assert.ok(mbBlock.includes('grid-template-columns: 1fr'), '手机端 purchase-form-grid 单列堆叠');
 });
+
+test('新建进货单选货区：搜索框后带扫码按钮（data-act="scan"）', () => {
+  const ctx = newCtx();
+  seed(ctx);
+  const state = fresh(ctx);
+  state.tab = 'form';
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('data-input="form-keyword"'), '选货区搜索框存在');
+  assert.ok(html.includes('data-act="scan"'), '搜索框后带扫码按钮');
+});
+
+test('新建进货单 scan 动作：识别后定位商品并直接加入明细', () => {
+  const ctx = newCtx();
+  const { p2 } = seed(ctx);
+  const state = fresh(ctx);
+  state.tab = 'form';
+  let captured = null;
+  const orig = globalThis.ERP;
+  globalThis.ERP.scan = {
+    start: (opts) => { captured = opts; },
+    resolve: (c, code) => ({ found: true, product: p2 })
+  };
+  page.actions['scan'](ctx, state);
+  assert.ok(captured, '调起 ERP.scan.start');
+  captured.onResult('6923456789012');
+  globalThis.ERP = orig;
+  assert.strictEqual(state.form.keyword, '6923456789012', '选货区回显条码');
+  assert.strictEqual(state.form.items.length, 1, '识别后直接加入明细');
+  assert.strictEqual(state.form.items[0].productId, p2.id);
+  assert.strictEqual(state.form.items[0].qty, 1);
+  // 再次识别同一商品 → 数量累加，不新增行
+  globalThis.ERP.scan = { start: (o) => o.onResult('6923456789012'), resolve: (c, code) => ({ found: true, product: p2 }) };
+  page.actions['scan'](ctx, state);
+  globalThis.ERP = orig;
+  assert.strictEqual(state.form.items.length, 1);
+  assert.strictEqual(state.form.items[0].qty, 2);
+});
+
+test('新建进货单 scan 动作：未找到商品时提示且不加入', () => {
+  const ctx = newCtx();
+  seed(ctx);
+  const state = fresh(ctx);
+  state.tab = 'form';
+  const orig = globalThis.ERP;
+  globalThis.ERP.scan = {
+    start: (o) => o.onResult('9999999999999'),
+    resolve: (c, code) => ({ found: false, code })
+  };
+  page.actions['scan'](ctx, state);
+  globalThis.ERP = orig;
+  assert.strictEqual(state.form.items.length, 0, '未找到时不加入');
+  assert.strictEqual(state.form.keyword, '9999999999999', '关键词仍回显以便列表展示');
+});

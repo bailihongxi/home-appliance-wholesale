@@ -112,10 +112,52 @@
         state.form.pickPage = parseInt(el.getAttribute('data-page'), 10) || 1;
       },
 
+      /** 扫码（新建进货单选货区）：识别后按条码/型号定位商品并直接加入明细 */
+      'scan': function (ctx, state) {
+        if (!ERP.scan || !ERP.scan.start) {
+          ui.toast('当前环境不支持扫码，可手动输入条码', 'err');
+          return;
+        }
+        ERP.scan.start({
+          onResult: function (code) {
+            var r = ERP.scan && ERP.scan.resolve ? ERP.scan.resolve(ctx, code) : null;
+            state.form.keyword = code; // 选货区回显条码
+            state.form.pickPage = 1;
+            if (r && r.found) {
+              var p = r.product;
+              var it = state.form.items.find(function (x) {
+                return x.productId === p.id;
+              });
+              if (!it) {
+                var bulk = String(state.form.bulkPrice || '').trim();
+                it = {
+                  productId: p.id,
+                  brand: p.brand,
+                  model: p.model,
+                  unit: p.unit,
+                  qty: 0,
+                  costPrice: bulk || String(p.cost ? util.fenToYuan(p.cost) : '0')
+                };
+                state.form.items.push(it);
+              }
+              it.qty += 1;
+              ui.toast('已加入：' + product.displayName(p), 'ok');
+            } else if (r && r.ambiguous) {
+              ui.toast('该品牌型号存在多个商品，请在选货区选择', 'err');
+            } else {
+              ui.toast('未找到此条码/型号：' + code + '，请先在「商品档案」建档', 'err');
+            }
+            if (ERP.app) ERP.app.render();
+          },
+          onError: function (msg) {
+            ui.toast(msg || '扫码不可用', 'err');
+          }
+        });
+      },
+
       /** 点「加入」：该商品一行，数量 +1 */
       'add-item': function (ctx, state, el) {
-        var id = el.getAttribute('data-id');
-        var p = product.getById(ctx, id);
+        var id = el.getAttribute('data-id');        var p = product.getById(ctx, id);
         if (!p) return;
         var it = state.form.items.find(function (x) {
           return x.productId === id;
@@ -567,7 +609,8 @@
     /* 选品加行 */
     h += '<div class="card"><div class="card-title">按商品加行' +
       '<span class="more">点「加入」数量 +1</span></div>' +
-      '<div class="row mb8"><input class="input" data-input="form-keyword" data-name="keyword" data-live="1" data-debounce="1" placeholder="搜索 品牌 / 型号 / 类型 / 条码" value="' + esc(form.keyword) + '"></div>';
+      '<div class="row mb8 search-bar"><input class="input" data-input="form-keyword" data-name="keyword" data-live="1" data-debounce="1" placeholder="搜索 品牌 / 型号 / 类型 / 条码" value="' + esc(form.keyword) + '">' +
+      '<button class="btn" data-act="scan" title="扫码定位并加入">📷</button></div>';
 
     var kw = String(form.keyword || '').trim().toUpperCase();
     // 大数据量优化：默认每页 15 条 + 斑马纹 + 分页（避免一次性加载过多商品拉慢速度）
