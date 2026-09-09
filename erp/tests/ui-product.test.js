@@ -377,3 +377,32 @@ test('del-selected：确认后删除未使用商品，清空选择', async () =>
   assert.strictEqual(ctx.data.products[0].id, p2.id, '被引用的 p2 保留');
   assert.deepStrictEqual(state.sel, {}, '删除后清空选择');
 });
+
+/* ---------------- V3.38：删除商品档案功能仅保留在网页版 ---------------- */
+
+test('多选删除 UI 标记 desktop-only：手机端不渲染删除入口', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('class="btn btn-danger desktop-only"'), '删除选中按钮带 desktop-only');
+  assert.ok(html.includes('th class="sel desktop-only"'), '表头全选列带 desktop-only');
+  assert.ok(html.includes('td class="sel desktop-only"'), '行勾选列带 desktop-only');
+});
+
+test('mobile.css：手机断点内隐藏 .desktop-only（删除商品档案仅网页版）', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const css = fs.readFileSync(path.join(__dirname, '../css/mobile.css'), 'utf8');
+  const block = css.slice(css.indexOf('@media (max-width: 599px)'));
+  assert.ok(/\.desktop-only\s*{[^}]*display\s*:\s*none\s*!important/.test(block),
+    '手机断点内 .desktop-only 必须 display:none !important');
+});
+
+test('base.css / desktop.css 不全局隐藏 desktop-only（保证网页版可见）', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  for (const f of ['base.css', 'desktop.css']) {
+    const css = fs.readFileSync(path.join(__dirname, '../css/' + f), 'utf8');
+    assert.ok(!/\.desktop-only\s*{[^}]*display\s*:\s*none/.test(css), f + ' 不应隐藏 desktop-only');
+  }
+});

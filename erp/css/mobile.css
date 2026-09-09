@@ -3,6 +3,9 @@
  */
 
 @media (max-width: 599px) {
+  /* V3.38：删除商品档案功能仅保留在网页版（桌面 ≥600px），手机端整列隐藏 */
+  .desktop-only { display: none !important; }
+
   .app-sidebar { display: none; }
 
   /* Tab 栏：v2 改用薄荷绿激活态 */

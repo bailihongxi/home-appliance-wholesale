@@ -477,7 +477,7 @@
       '<span class="desc">共 ' + ctx.data.products.length + ' 款商品</span>' +
       '<div class="actions">' +
       '<button class="btn" data-act="open-csv">📥 批量导入</button>' +
-      '<button class="btn btn-danger" data-act="del-selected"' + (selCount ? '' : ' disabled') + '>🗑 删除选中' + (selCount ? '（' + selCount + '）' : '') + '</button>' +
+      '<button class="btn btn-danger desktop-only" data-act="del-selected"' + (selCount ? '' : ' disabled') + '>🗑 删除选中' + (selCount ? '（' + selCount + '）' : '') + '</button>' +
       '<button class="btn btn-primary" data-act="open-new">＋ 新建商品</button>' +
       '</div></div>';
 
@@ -506,7 +506,7 @@
       return !!(state.sel || {})[String(p.id)];
     });
     h += '<div class="card"><div class="table-wrap"><table class="tbl tbl-striped"><thead><tr>' +
-      '<th class="sel" style="width:34px"><input type="checkbox" class="row-check" data-change="toggle-all-check"' + (allChecked ? ' checked' : '') + ' title="全选本页"></th>' +
+      '<th class="sel desktop-only" style="width:34px"><input type="checkbox" class="row-check" data-change="toggle-all-check"' + (allChecked ? ' checked' : '') + ' title="全选本页"></th>' +
       '<th>品牌</th><th>型号</th><th>类型</th><th>单位</th>' +
       '<th class="num">成本</th><th class="num">批发价</th><th class="num">零售价</th>' +
       '<th class="num">库存</th><th>备注</th><th>状态</th><th>操作</th>' +
@@ -517,7 +517,7 @@
       var threshold = ctx.settings.defaultThreshold == null ? 3 : ctx.settings.defaultThreshold;
       var stockCls = stock <= 0 ? ' num zero' : (stock < threshold ? ' num low' : ' num');
       h += '<tr' + (checked ? ' class="sel-on"' : '') + '>' +
-        '<td class="sel"><input type="checkbox" class="row-check" data-change="row-check" data-id="' + esc(p.id) + '"' + (checked ? ' checked' : '') + '></td>' +
+        '<td class="sel desktop-only"><input type="checkbox" class="row-check" data-change="row-check" data-id="' + esc(p.id) + '"' + (checked ? ' checked' : '') + '></td>' +
         '<td>' + esc(p.brand) + '</td>' +
         '<td>' + esc(p.model) + '</td>' +
         '<td>' + esc(p.category) + '</td>' +
