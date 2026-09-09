@@ -406,3 +406,70 @@ test('base.css / desktop.css 不全局隐藏 desktop-only（保证网页版可�
     assert.ok(!/\.desktop-only\s*{[^}]*display\s*:\s*none/.test(css), f + ' 不应隐藏 desktop-only');
   }
 });
+
+/* ---------------- V3.40：勾选实时同步 + 搜索/筛选/翻页后清空勾选 ---------------- */
+
+test('勾选计数实时更新：逐行勾选/取消即时增减，与界面勾选一致', () => {
+  const { ctx, state } = fresh();
+  seed(ctx); // 2 款
+  const [p1, p2] = ctx.data.products;
+  page.actions['row-check'](ctx, state, { getAttribute: () => p1.id });
+  assert.ok(page.render(ctx, state).includes('删除选中（1）'), '勾 1 行计数 1');
+  page.actions['row-check'](ctx, state, { getAttribute: () => p2.id });
+  assert.ok(page.render(ctx, state).includes('删除选中（2）'), '再勾 1 行计数 2');
+  page.actions['row-check'](ctx, state, { getAttribute: () => p1.id });
+  assert.ok(page.render(ctx, state).includes('删除选中（1）'), '取消 1 行计数回 1');
+  assert.ok(!page.render(ctx, state).includes('删除选中（2）'), '计数不虚高');
+});
+
+test('搜索词变化：自动清空勾选，删除按钮回到禁用', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const [p1] = ctx.data.products;
+  state.sel = { [p1.id]: true };
+  page.actions['keyword'](ctx, state, { value: 'KFR' });
+  assert.deepStrictEqual(state.sel, {}, '搜索后清空勾选');
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('data-act="del-selected"') && html.includes('disabled'), '删除按钮回到禁用');
+  assert.ok(!html.includes('删除选中（'), '无计数');
+});
+
+test('状态筛选变化：自动清空勾选', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const [p1] = ctx.data.products;
+  state.sel = { [p1.id]: true };
+  page.actions['filter'](ctx, state, { getAttribute: () => 'filterStatus', value: 'off' });
+  assert.deepStrictEqual(state.sel, {}, '筛选后清空勾选');
+});
+
+test('翻页：自动清空勾选，避免跨页计数错乱', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const [p1] = ctx.data.products;
+  state.sel = { [p1.id]: true };
+  page.actions['page'](ctx, state, { getAttribute: () => '2' });
+  assert.deepStrictEqual(state.sel, {}, '翻页后清空勾选');
+});
+
+test('扫码搜索 scan-input：自动清空勾选', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const [p1] = ctx.data.products;
+  state.sel = { [p1.id]: true };
+  page.actions['scan-input'](ctx, state, { value: '6901234567892' });
+  assert.deepStrictEqual(state.sel, {}, '扫码搜索后清空勾选');
+  assert.strictEqual(state.keyword, '6901234567892');
+});
+
+test('无残留时全选/取消全选：勾选数量与显示完全一致', () => {
+  const { ctx, state } = fresh();
+  seed(ctx); // 2 款
+  page.actions['toggle-all-check'](ctx, state, {});
+  let html = page.render(ctx, state);
+  assert.ok(html.includes('删除选中（2）'), '全选后计数 2');
+  assert.strictEqual(html.match(/class="row-check" data-change="row-check"[^>]*checked/g).length, 2, '两行全部勾选');
+  page.actions['toggle-all-check'](ctx, state, {});
+  html = page.render(ctx, state);
+  assert.ok(html.includes('disabled'), '取消全选后按钮禁用');
+});
