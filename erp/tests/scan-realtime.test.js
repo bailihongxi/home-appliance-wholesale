@@ -18,12 +18,20 @@ test('scan.buildFormats：包含常见一维码与二维码码制', () => {
   });
 });
 
-test('scan.pickDecoders：原生 BarcodeDetector 优先，ZXing 兜底', () => {
+test('scan.pickDecoders：原生 BarcodeDetector 优先，自研 EAN-13 其次，ZXing 兜底', () => {
   assert.deepStrictEqual(scan.pickDecoders({ native: true, zxing: true }), ['native', 'zxing']);
   assert.deepStrictEqual(scan.pickDecoders({ native: false, zxing: true }), ['zxing']);
   assert.deepStrictEqual(scan.pickDecoders({ native: true, zxing: false }), ['native']);
   assert.deepStrictEqual(scan.pickDecoders({}), []);
   assert.deepStrictEqual(scan.pickDecoders(null), []);
+});
+
+test('scan.pickDecoders：显式启用 ean13 通道时加入（native → ean13 → zxing）', () => {
+  assert.deepStrictEqual(scan.pickDecoders({ native: true, ean13: true, zxing: true }), ['native', 'ean13', 'zxing']);
+  assert.deepStrictEqual(scan.pickDecoders({ ean13: true }), ['ean13']);
+  assert.deepStrictEqual(scan.pickDecoders({ native: true, ean13: true }), ['native', 'ean13']);
+  assert.deepStrictEqual(scan.pickDecoders({ native: false, ean13: true, zxing: true }), ['ean13', 'zxing']);
+  assert.deepStrictEqual(scan.pickDecoders({ ean13: false, zxing: true }), ['zxing']);
 });
 
 test('scan.needDowngrade：连续空转达到阈值 → 降级', () => {
@@ -187,8 +195,82 @@ test('scan.decodeWith：均不可用 → done(false) 不抛错', async () => {
   const r = await new Promise((res) => {
     scan.decodeWith(null, (ok) => res({ ok }), {
       native: { available: false, detect: null },
+      ean13: { available: false, decode: null },
       zxing: { available: false, decode: null }
     });
   });
   assert.strictEqual(r.ok, false);
+});
+
+test('scan.decodeWith：native 失败 → 自研 EAN-13 成功（不等待 ZXing）', async () => {
+  const nativeDetect = (src, cb) => cb(false);
+  let ean13Called = false;
+  let zxingCalled = false;
+  const ean13Decode = (src, cb) => { ean13Called = true; cb(true, '5012345678900'); };
+  const zxingDecode = (src, cb) => { zxingCalled = true; cb(false); };
+  const r = await new Promise((res) => {
+    scan.decodeWith(null, (ok, text) => res({ ok, text }), {
+      native: { available: true, detect: nativeDetect },
+      ean13: { available: true, decode: ean13Decode },
+      zxing: { available: true, decode: zxingDecode }
+    });
+  });
+  assert.strictEqual(r.ok, true, 'ean13 通道应成功');
+  assert.strictEqual(r.text, '5012345678900');
+  assert.strictEqual(ean13Called, true, 'ean13 必须被调用');
+  assert.strictEqual(zxingCalled, false, 'ean13 成功不应调用 ZXing');
+});
+
+test('scan.decodeWith：native 挂起超时 → 自研 EAN-13 兜底成功（华为浏览器半实现场景）', async () => {
+  const old = scan.NATIVE_TIMEOUT_MS;
+  scan.NATIVE_TIMEOUT_MS = 50;
+  try {
+    const nativeDetect = () => {}; // 永不回调：模拟 detect() 挂起
+    let ean13Called = false;
+    const ean13Decode = (src, cb) => { ean13Called = true; cb(true, '6901234567892'); };
+    const r = await new Promise((res) => {
+      scan.decodeWith(null, (ok, text) => res({ ok, text }), {
+        native: { available: true, detect: nativeDetect },
+        ean13: { available: true, decode: ean13Decode },
+        zxing: { available: true, decode: (src, cb) => cb(false) }
+      });
+    });
+    assert.strictEqual(r.ok, true, '超时后应交给 ean13 并成功');
+    assert.strictEqual(r.text, '6901234567892');
+    assert.strictEqual(ean13Called, true, 'ean13 兜底必须被调用');
+  } finally { scan.NATIVE_TIMEOUT_MS = old; }
+});
+
+test('scan.decodeWith：native 与 ean13 均失败 → ZXing 最后兜底', async () => {
+  const nativeDetect = (src, cb) => cb(false);
+  const ean13Decode = (src, cb) => cb(false);
+  let zxingCalled = false;
+  const zxingDecode = (src, cb) => { zxingCalled = true; cb(true, 'zx-fallback'); };
+  const r = await new Promise((res) => {
+    scan.decodeWith(null, (ok, text) => res({ ok, text }), {
+      native: { available: true, detect: nativeDetect },
+      ean13: { available: true, decode: ean13Decode },
+      zxing: { available: true, decode: zxingDecode }
+    });
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.text, 'zx-fallback');
+  assert.strictEqual(zxingCalled, true, 'ZXing 应作为最后兜底被调用');
+});
+
+test('scan.decodeWith：ean13 不可用时跳过，native → zxing 正常', async () => {
+  const nativeDetect = (src, cb) => cb(true, 'native-ok');
+  const ean13Decode = () => { throw new Error('不应被调用'); };
+  let zxingCalled = false;
+  const zxingDecode = (src, cb) => { zxingCalled = true; cb(false); };
+  const r = await new Promise((res) => {
+    scan.decodeWith(null, (ok, text) => res({ ok, text }), {
+      native: { available: true, detect: nativeDetect },
+      ean13: { available: false, decode: ean13Decode },
+      zxing: { available: true, decode: zxingDecode }
+    });
+  });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.text, 'native-ok');
+  assert.strictEqual(zxingCalled, false);
 });

@@ -102,13 +102,15 @@
   };
 
   /**
-   * 拍照解码优先级：原生 BarcodeDetector（Android/鸿蒙识别率高）优先，ZXing 兜底
-   * @returns {string[]} ['native','zxing'] | ['zxing'] | []
+   * 拍照解码优先级：原生 BarcodeDetector（Android/鸿蒙识别率高）→
+   * 自研 EAN-13（零依赖，替代打包损坏的 ZXing 作为主通道）→ ZXing 兜底
+   * @returns {string[]} ['native','ean13','zxing'] 子集
    */
   scan.pickDecoders = function pickDecoders(env) {
     env = env || {};
     var order = [];
     if (env.native) order.push('native');
+    if (env.ean13) order.push('ean13');
     if (env.zxing) order.push('zxing');
     return order;
   };
@@ -169,16 +171,21 @@
 
   /**
    * 多通道解码（可注入实现，便于测试）：
-   * ① 原生 BarcodeDetector（带超时保护）→ ② ZXing 纯 JS（解码前压缩图片）
+   * ① 原生 BarcodeDetector（带超时保护）→ ② 自研 EAN-13 → ③ ZXing 纯 JS（解码前压缩图片）
    * source：Image 元素 / canvas；done(ok, text)
-   * impl：{ native: { available, detect(src, cb) }, zxing: { available, decode(src, cb) } }
+   * impl：{ native: { available, detect(src, cb) }, ean13: { available, decode(src, cb) }, zxing: { available, decode(src, cb) } }
    */
   scan.decodeWith = function decodeWith(source, done, impl) {
     var env = impl || {
       native: { available: hasNative(), detect: nativeDetect },
+      ean13: { available: hasEan13(), decode: ean13Decode },
       zxing: { available: hasZxing(), decode: zxingDecode }
     };
-    var order = scan.pickDecoders({ native: env.native.available, zxing: env.zxing.available });
+    var order = scan.pickDecoders({
+      native: env.native && env.native.available,
+      ean13: env.ean13 && env.ean13.available,
+      zxing: env.zxing && env.zxing.available
+    });
     if (!order.length) { done(false); return; }
     var i = 0;
     function next() {
@@ -189,7 +196,7 @@
         var timer = setTimeout(function () {
           if (settled) return;
           settled = true;
-          next(); // 超时：跳过 native，交给 ZXing
+          next(); // 超时：跳过 native，交给下一通道
         }, scan.NATIVE_TIMEOUT_MS);
         try {
           env.native.detect(source, function (ok, text) {
@@ -205,6 +212,13 @@
           clearTimeout(timer);
           next();
         }
+      } else if (kind === 'ean13') {
+        try {
+          env.ean13.decode(source, function (ok, text) {
+            if (ok) done(true, text);
+            else next();
+          });
+        } catch (e) { next(); }
       } else {
         try {
           env.zxing.decode(source, function (ok, text) {
@@ -219,6 +233,9 @@
 
   function hasNative() {
     return typeof window !== 'undefined' && !!window.BarcodeDetector;
+  }
+  function hasEan13() {
+    return !!(window.ERP && window.ERP.ean13 && typeof window.ERP.ean13.decode === 'function');
   }
   function hasZxing() {
     return !!(window.ZXing && window.ZXing.BrowserCodeReader);
@@ -245,6 +262,39 @@
       ctx.drawImage(el, 0, 0, c.width, c.height);
       return c;
     } catch (e) { return null; }
+  }
+
+  /** 原图 → 原始尺寸 canvas（自研 EAN-13 用原图精度，不缩放） */
+  function toCanvas(source) {
+    try {
+      if (source && source.tagName === 'CANVAS') return source;
+      if (source && source.tagName === 'IMG') {
+        var w = source.naturalWidth || 0;
+        var h = source.naturalHeight || 0;
+        if (!w || !h) return null;
+        var c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        var ctx = c.getContext('2d');
+        if (!ctx) return null;
+        ctx.drawImage(source, 0, 0, w, h);
+        return c;
+      }
+      return null;
+    } catch (e) { return null; }
+  }
+
+  /** 自研 EAN-13 通道：原图 canvas → 灰度 → 多行投票解码（零依赖，替代损坏的 ZXing 主通道） */
+  function ean13Decode(source, cb) {
+    try {
+      var canvas = toCanvas(source);
+      if (!canvas) { cb(false); return; }
+      var gray = window.ERP.ean13.grayFromCanvas(canvas);
+      if (!gray) { cb(false); return; }
+      var r = window.ERP.ean13.decode(gray, canvas.width, canvas.height);
+      if (r && r.text) cb(true, r.text);
+      else cb(false);
+    } catch (e) { cb(false); }
   }
 
   /** 原生通道（吃压缩后小图，快且稳） */
@@ -392,10 +442,23 @@
             downgrade('摄像头未输出画面，已切换为拍照/手输');
             return;
           }
-          // 抓帧模式：detect(video) 不可用时的兜底，画面保留、静态帧多通道解码
+          // 抓帧模式：detect(video) 不可用/挂起时的兜底，画面保留、静态帧多通道解码
           if (stat.mode === 'frame') { frameTick(); return; }
+          var detectSettled = false;
+          // 超时保护：鸿蒙/Android 自带浏览器 detect(video) 可能挂起永不返回
+          // （取景正常但「无任何识别操作」的根因）→ 超时切抓帧，走多通道解码
+          var detectTimer = setTimeout(function () {
+            if (detectSettled || stop) return;
+            detectSettled = true;
+            stat.mode = 'frame';
+            stat.lastFrameAt = 0;
+            stat.errorFrames = 0;
+            requestAnimationFrame(tick);
+          }, scan.NATIVE_TIMEOUT_MS);
           detector.detect(video).then(function (list) {
-            if (stop) return;
+            if (detectSettled || stop) return;
+            detectSettled = true;
+            clearTimeout(detectTimer);
             if (list && list.length) { success(list[0].rawValue); return; }
             stat.emptyFrames++;
             stat.errorFrames = 0;
@@ -406,7 +469,9 @@
             }
             requestAnimationFrame(tick);
           }).catch(function () {
-            if (stop) return;
+            if (detectSettled || stop) return;
+            detectSettled = true;
+            clearTimeout(detectTimer);
             // 仅画面正常时的异常计数；连续 3 次 → 切抓帧模式（不关闭画面）
             if (scan.shouldCountError(video.videoWidth)) {
               stat.errorFrames++;
