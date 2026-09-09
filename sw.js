@@ -1,9 +1,10 @@
 /**
  * sw.js —— Service Worker（仅 https 托管时生效，file:// 双击无效）
  * 作用：缓存应用外壳，断网后仍可打开使用（PRD 7 / 开发计划 Sprint 8）。
- * 更新策略：外壳走 cache-first，页面导航也优先缓存；后台静默更新。
+ * 更新策略：导航请求 network-first（在线一律拿最新页面，离线回退缓存，避免用户长期停留在旧版）；
+ * 静态资源 cache-first（秒开），后台静默更新缓存。
  */
-var CACHE = 'appliance-erp-v59';
+var CACHE = 'appliance-erp-v60';
 var SHELL = [
   './',
   './index.html',
@@ -44,6 +45,7 @@ var SHELL = [
   './js/ui/page-supplier.js',
   './js/ui/page-customer.js',
   './js/ui/page-login.js',
+  './js/barcode/ean13.js',
   './js/barcode/scan.js',
   './js/app.js'
 ];
@@ -73,18 +75,18 @@ self.addEventListener('activate', function (e) {
 self.addEventListener('fetch', function (e) {
   var req = e.request;
   if (req.method !== 'GET') return;
-  // 导航请求：stale-while-revalidate——先返回缓存（秒开），后台静默更新缓存，避免长期停留在旧版
+  // 导航请求：network-first——在线一律拿最新页面（避免 SW 缓存让用户长期停留在旧版），
+  // 离线时回退缓存外壳
   if (req.mode === 'navigate') {
     e.respondWith(
-      caches.match('./index.html').then(function (cached) {
-        var net = fetch(req).then(function (res) {
-          if (res && res.status === 200 && res.type === 'basic') {
-            var copy = res.clone();
-            caches.open(CACHE).then(function (c) { c.put('./index.html', copy); });
-          }
-          return res;
-        }).catch(function () { return cached; });
-        return cached || net;
+      fetch(req).then(function (res) {
+        if (res && res.status === 200 && res.type === 'basic') {
+          var copy = res.clone();
+          caches.open(CACHE).then(function (c) { c.put('./index.html', copy); });
+        }
+        return res;
+      }).catch(function () {
+        return caches.match('./index.html');
       })
     );
     return;
