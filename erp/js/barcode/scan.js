@@ -96,6 +96,50 @@
     return (detector && secure !== false) ? 'realtime' : 'manual';
   };
 
+  /** 实时识别支持的码制（缺省列表，兼容各平台） */
+  scan.buildFormats = function buildFormats() {
+    return ['code_128', 'ean_13', 'ean_8', 'code_39', 'upc_a', 'upc_e', 'itf', 'qr_code'];
+  };
+
+  /**
+   * 拍照解码优先级：原生 BarcodeDetector（Android/鸿蒙识别率高）优先，ZXing 兜底
+   * @returns {string[]} ['native','zxing'] | ['zxing'] | []
+   */
+  scan.pickDecoders = function pickDecoders(env) {
+    env = env || {};
+    var order = [];
+    if (env.native) order.push('native');
+    if (env.zxing) order.push('zxing');
+    return order;
+  };
+
+  /**
+   * 实时识别是否需要降级到拍照/手输
+   * @param stat { emptyFrames, errorFrames, firstEmptyAt }
+   *   - 连续空转 emptyFrames >= 60（约1秒60帧 或时间兜底 12 秒）
+   *   - 连续异常 errorFrames >= 5（设备实时识别不可用）
+   *   - 自首次空转起超 12 秒（时间兜底，防止帧率波动）
+   */
+  scan.needDowngrade = function needDowngrade(stat) {
+    stat = stat || {};
+    if (stat.errorFrames >= 5) return true;
+    if (stat.emptyFrames >= 60) return true;
+    if (stat.firstEmptyAt && (Date.now() - stat.firstEmptyAt) >= 12000) return true;
+    return false;
+  };
+
+  /** 统一释放摄像头流（幂等：无流/已停止均安全） */
+  scan.closeCamera = function closeCamera(stream) {
+    if (stream && typeof stream.getTracks === 'function') {
+      var tracks = stream.getTracks();
+      for (var i = 0; i < tracks.length; i++) {
+        try { tracks[i].stop(); } catch (e) { /* 忽略单轨停止失败 */ }
+      }
+      return true;
+    }
+    return false;
+  };
+
   /**
    * 启动扫码（三级降级）
    * @param opts { onResult(code), onError(msg) }
@@ -112,52 +156,105 @@
 
   /** ① 实时扫码（一维条码 + QR 二维码） */
   function realtime(opts) {
-    var formats = ['code_128', 'ean_13', 'ean_8', 'code_39', 'upc_a', 'upc_e', 'itf', 'qr_code'];
-    var detector = new window.BarcodeDetector({ formats: formats });
+    var detector = new window.BarcodeDetector({ formats: scan.buildFormats() });
     var video = document.createElement('video');
     video.setAttribute('playsinline', '');
     video.style.cssText = 'width:100%;max-height:50vh;background:#000;border-radius:8px';
     var stop = false;
+    var stream = null;
+    var stat = { emptyFrames: 0, errorFrames: 0, firstEmptyAt: 0, startedAt: Date.now() };
     var mask = ui.modal({
       title: '扫码',
-      body: '<div id="scan-video"></div><p class="muted small">将条码或二维码对准取景框，连续识别</p>',
-      actions: [{ text: '手输', cls: 'btn', act: 'scan-manual' }, { text: '取消', cls: 'btn', act: 'close-modal' }],
+      body: '<div id="scan-video"></div>' +
+        '<p class="muted small" id="scan-hint">将条码或二维码对准取景框，保持平稳、避免反光</p>',
+      actions: [
+        { text: '📷 拍照识别', cls: 'btn', act: 'scan-photo' },
+        { text: '手输', cls: 'btn', act: 'scan-manual' },
+        { text: '取消', cls: 'btn', act: 'scan-cancel' }
+      ],
       maskClose: false,
+      // 统一关闭钩子：取消/X/遮罩/外部 closeModal 都会释放摄像头（修复二次打开黑屏）
+      onClose: function () {
+        stop = true;
+        scan.closeCamera(stream || video.srcObject);
+      },
       onMount: function (body) {
         body.querySelector('#scan-video').appendChild(video);
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-          .then(function (stream) {
-            video.srcObject = stream;
-            video.play();
-            tick();
-          })
-          .catch(function () { closeMask(); manualCard(opts); });
+        navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        }).then(function (s) {
+          if (stop) { scan.closeCamera(s); return; }
+          stream = s;
+          video.srcObject = s;
+          video.play();
+          tick();
+        }).catch(function () {
+          stop = true;
+          ui.closeModal();
+          manualCard(opts);
+        });
+        /** 降级到拍照/手输（释放摄像头 + 关弹窗 + 提示） */
+        function downgrade(msg) {
+          stop = true;
+          scan.closeCamera(stream);
+          ui.closeModal();
+          if (opts.onError) opts.onError(msg);
+          manualCard(opts);
+        }
         function tick() {
           if (stop) return;
+          // 黑屏检测：摄像头已启动但 3 秒无实际画面帧 → 降级
+          if (!video.videoWidth && Date.now() - stat.startedAt >= 3000) {
+            downgrade('摄像头未输出画面，已切换为拍照/手输');
+            return;
+          }
           detector.detect(video).then(function (list) {
+            if (stop) return;
             if (list && list.length) {
               stop = true;
-              streamStop(stream);
-              closeMask();
+              scan.closeCamera(stream);
+              ui.closeModal();
               if (opts.onResult) opts.onResult(list[0].rawValue);
-            } else {
-              requestAnimationFrame(tick);
+              return;
             }
-          }).catch(function () { /* 继续 */ requestAnimationFrame(tick); });
+            stat.emptyFrames++;
+            stat.errorFrames = 0;
+            if (!stat.firstEmptyAt) stat.firstEmptyAt = Date.now();
+            if (scan.needDowngrade(stat)) {
+              downgrade('实时识别超时（约12秒无结果），已切换为拍照/手输');
+              return;
+            }
+            requestAnimationFrame(tick);
+          }).catch(function () {
+            if (stop) return;
+            stat.errorFrames++;
+            if (scan.needDowngrade(stat)) {
+              downgrade('当前设备无法实时识别，已切换为拍照/手输');
+              return;
+            }
+            requestAnimationFrame(tick);
+          });
         }
       }
     });
-    // 手输按钮
-    if (mask) {
-      mask.querySelector('[data-act="scan-manual"]').addEventListener('click', function () {
-        stop = true;
-        streamStop(video.srcObject);
-        closeMask();
-        manualCard(opts);
-      });
-    }
-    function streamStop(s) { if (s && s.getTracks) s.getTracks().forEach(function (t) { t.stop(); }); }
-    function closeMask() { if (ui && ui.closeModal) ui.closeModal(); }
+    if (!mask) return;
+    // 「📷 拍照识别」：随时可切（onClose 自动释放摄像头）
+    var photoBtn = mask.querySelector('[data-act="scan-photo"]');
+    if (photoBtn) photoBtn.addEventListener('click', function () {
+      ui.closeModal();
+      photoInput(opts);
+    });
+    // 「手输」：释放后切手动卡片
+    var manualBtn = mask.querySelector('[data-act="scan-manual"]');
+    if (manualBtn) manualBtn.addEventListener('click', function () {
+      ui.closeModal();
+      manualCard(opts);
+    });
+    // 「取消」：直接关闭（onClose 释放摄像头）
+    var cancelBtn = mask.querySelector('[data-act="scan-cancel"]');
+    if (cancelBtn) cancelBtn.addEventListener('click', function () {
+      ui.closeModal();
+    });
   }
 
   /** ② 拍照识别：懒加载 vendor/zxing 解码 */
@@ -182,20 +279,57 @@
   }
 
   function decodeImage(dataUrl, opts) {
-    // 优先用已加载的 ZXing 全局（支持 QR）
-    if (window.ZXing && window.ZXing.BrowserCodeReader) {
-      try {
-        var reader = new window.ZXing.BrowserCodeReader();
-        reader.decodeFromImageUrl(dataUrl).then(function (r) {
-          if (r && r.text && opts.onResult) opts.onResult(r.text);
-          else if (opts.onError) opts.onError('未识别到条码/二维码，请重试或手输');
-        }).catch(function () {
-          if (opts.onError) opts.onError('识别失败，请重试或手输');
-        });
-        return;
-      } catch (e) { /* 落到手输 */ }
+    var env = {
+      native: typeof window !== 'undefined' && !!window.BarcodeDetector,
+      zxing: !!(window.ZXing && window.ZXing.BrowserCodeReader)
+    };
+    var order = scan.pickDecoders(env);
+    if (!order.length) {
+      if (opts.onError) opts.onError('当前环境无法拍照识别，请手输条码');
+      return;
     }
-    if (opts.onError) opts.onError('当前环境无法拍照识别，请手输条码');
+    var i = 0;
+    function next() {
+      if (i >= order.length) {
+        if (opts.onError) opts.onError('未识别到条码/二维码，请重试或手输');
+        return;
+      }
+      var kind = order[i++];
+      var done = function (ok, text) {
+        if (ok) { if (opts.onResult) opts.onResult(text); }
+        else next();
+      };
+      if (kind === 'native') nativeDecode(dataUrl, done);
+      else zxingDecode(dataUrl, done);
+    }
+    next();
+  }
+
+  /** 原生解码图片（Android/鸿蒙识别率高于 ZXing 纯 JS） */
+  function nativeDecode(dataUrl, done) {
+    try {
+      var detector = new window.BarcodeDetector();
+      var img = new Image();
+      img.onload = function () {
+        detector.detect(img).then(function (list) {
+          if (list && list.length) done(true, list[0].rawValue);
+          else done(false);
+        }).catch(function () { done(false); });
+      };
+      img.onerror = function () { done(false); };
+      img.src = dataUrl;
+    } catch (e) { done(false); }
+  }
+
+  /** ZXing 兜底解码（无原生能力的环境） */
+  function zxingDecode(dataUrl, done) {
+    try {
+      var reader = new window.ZXing.BrowserCodeReader();
+      reader.decodeFromImageUrl(dataUrl).then(function (r) {
+        if (r && r.text) done(true, r.text);
+        else done(false);
+      }).catch(function () { done(false); });
+    } catch (e) { done(false); }
   }
 
   /**
