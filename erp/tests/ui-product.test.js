@@ -473,3 +473,42 @@ test('无残留时全选/取消全选：勾选数量与显示完全一致', () =
   html = page.render(ctx, state);
   assert.ok(html.includes('disabled'), '取消全选后按钮禁用');
 });
+
+/* ---------------- V3.41：全选与当前页渲染完全一致（大库存场景） ---------------- */
+
+test('全选 200 与当前页渲染一致：乱序插入 250 款，勾选集合=显示集合', () => {
+  const { ctx, state } = fresh();
+  // 乱序插入 250 款（品牌/型号排列与插入顺序不同，模拟 6198 款大库存）
+  for (let i = 0; i < 250; i++) {
+    product.save(ctx, {
+      brand: 'B' + String((i * 7) % 50).padStart(2, '0'),
+      model: 'M' + String((i * 13) % 250).padStart(3, '0'),
+      category: '冰箱', unit: '台', cost: '1000', priceWholesale: '1200', priceRetail: '1399'
+    });
+  }
+  page.actions['toggle-all-check'](ctx, state, {});
+  const html = page.render(ctx, state);
+  // 当前页每一行都应勾选
+  const rowIds = Array.from(html.matchAll(/class="row-check" data-change="row-check" data-id="([^"]*)"/g)).map(m => m[1]);
+  assert.strictEqual(rowIds.length, 200, '第 1 页 200 行');
+  assert.ok(rowIds.every(id => state.sel[id]), '当前页每一行都在选中集合（行勾选标志可见）');
+  assert.ok(html.includes('删除选中（200）'), '删除按钮计数 200');
+  const checkedRows = (html.match(/class="row-check" data-change="row-check" data-id="[^"]*" checked/g) || []).length;
+  assert.strictEqual(checkedRows, 200, '200 行全部带 checked 勾选标志');
+  // 勾选集合不多不少：恰为当前页 200 个 id
+  assert.strictEqual(Object.keys(state.sel).filter(k => state.sel[k]).length, 200);
+});
+
+test('全选后翻到第 2 页：勾选清空，第 2 页无勾选、按钮禁用', () => {
+  const { ctx, state } = fresh();
+  for (let i = 0; i < 250; i++) {
+    product.save(ctx, { brand: 'B' + (i % 50), model: 'M' + i, category: '冰箱', unit: '台' });
+  }
+  page.actions['toggle-all-check'](ctx, state, {});
+  page.actions['page'](ctx, state, { getAttribute: () => '2' });
+  const html = page.render(ctx, state);
+  assert.deepStrictEqual(state.sel, {}, '翻页后清空勾选');
+  assert.ok(html.includes('disabled'), '第 2 页删除按钮禁用');
+  const checkedRows = (html.match(/class="row-check" data-change="row-check" data-id="[^"]*" checked/g) || []).length;
+  assert.strictEqual(checkedRows, 0, '第 2 页无任何勾选');
+});

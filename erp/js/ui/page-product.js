@@ -157,24 +157,9 @@
 
       /* ---- V3.37：多选删除未使用商品档案 ---- */
 
-      /** 表头全选/取消全选（当前页全部商品） */
+      /** 表头全选/取消全选（当前页全部商品，与列表渲染同一分页管道） */
       'toggle-all-check': function (ctx, state, el) {
-        var list = (ctx.data.products || []);
-        var kw = String(state.keyword || '').trim().toUpperCase();
-        var filtered = list.filter(function (p) {
-          if (kw) {
-            var bc = (Array.isArray(p.barcodes) ? p.barcodes : []).some(function (b) {
-              return String(b || '').toUpperCase().indexOf(kw) >= 0;
-            });
-            if (String(p.brand || '').toUpperCase().indexOf(kw) < 0 &&
-              String(p.model || '').toUpperCase().indexOf(kw) < 0 &&
-              String(p.category || '').toUpperCase().indexOf(kw) < 0 &&
-              String(p.note || '').toUpperCase().indexOf(kw) < 0 && !bc) return false;
-          }
-          if (state.filterStatus !== 'all' && (p.status || schema.STATUS.ON) !== state.filterStatus) return false;
-          return true;
-        });
-        var pg = util.paginate(filtered, state.page, 200);
+        var pg = computePage(ctx, state); // 与渲染完全一致：过滤 → 排序 → 分页
         var curIds = pg.items.map(function (p) { return String(p.id); });
         var allOn = curIds.every(function (id) { return state.sel[id]; });
         state.sel = state.sel || {};
@@ -448,8 +433,12 @@
 
   /* ---------------- 列表 ---------------- */
 
-  function renderList(ctx, state) {
-    // 显示本账号全部商品（用户已创建的商品必须可见；自定义类型也一并显示）
+  /**
+   * V3.41：列表统一分页管道（过滤 → 品牌+型号排序 → 分页）。
+   * 渲染与全选必须走同一管道，否则排序前后第 N 页的 id 集合不一致，
+   * 会出现「删除选中（200）但行未勾选」（大库存 6198 款场景实测）。
+   */
+  function computePage(ctx, state) {
     var list = (ctx.data.products || []).slice();
     var kw = String(state.keyword || '').trim().toUpperCase();
     if (kw) {
@@ -472,9 +461,13 @@
     list = util.sortBy(list, function (p) {
       return String(p.brand || '') + String(p.model || '');
     });
-
     var pg = util.paginate(list, state.page, 200);
     state.page = pg.page;
+    return pg;
+  }
+
+  function renderList(ctx, state) {
+    var pg = computePage(ctx, state);
 
     var h = '';
     var selCount = Object.keys(state.sel || {}).filter(function (k) { return state.sel[k]; }).length;
