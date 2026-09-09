@@ -1,10 +1,10 @@
 /**
  * sw.js —— Service Worker（仅 https 托管时生效，file:// 双击无效）
  * 作用：缓存应用外壳，断网后仍可打开使用（PRD 7 / 开发计划 Sprint 8）。
- * 更新策略：导航请求 network-first（在线一律拿最新页面，离线回退缓存，避免用户长期停留在旧版）；
- * 静态资源 cache-first（秒开），后台静默更新缓存。
+ * 更新策略（V3.34 起）：导航与静态资源全部 network-first——在线一律拿最新
+ * 页面与资源（新功能一次打开即生效，杜绝「旧缓存卡版本」），离线回退缓存外壳。
  */
-var CACHE = 'appliance-erp-v61';
+var CACHE = 'appliance-erp-v62';
 var SHELL = [
   './',
   './index.html',
@@ -91,17 +91,17 @@ self.addEventListener('fetch', function (e) {
     );
     return;
   }
-  // 静态资源：cache-first，命中后顺带用网络更新
+  // 静态资源（js/css/图片等）：network-first——在线一律拿最新资源
+  // （避免旧缓存让用户首次打开看不到新功能），离线回退缓存
   e.respondWith(
-    caches.match(req).then(function (cached) {
-      var net = fetch(req).then(function (res) {
-        if (res && res.status === 200 && res.type === 'basic') {
-          var copy = res.clone();
-          caches.open(CACHE).then(function (c) { c.put(req, copy); });
-        }
-        return res;
-      }).catch(function () { return cached; });
-      return cached || net;
+    fetch(req).then(function (res) {
+      if (res && res.status === 200 && res.type === 'basic') {
+        var copy = res.clone();
+        caches.open(CACHE).then(function (c) { c.put(req, copy); });
+      }
+      return res;
+    }).catch(function () {
+      return caches.match(req);
     })
   );
 });
