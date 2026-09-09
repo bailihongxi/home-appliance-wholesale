@@ -91,3 +91,21 @@ test('scan.shouldCountError：仅画面正常时计数异常（黑屏异常不�
   assert.strictEqual(scan.shouldCountError(1), true);
   assert.strictEqual(scan.shouldCountError(640), true);
 });
+
+test('scan.shouldSwitchFrame：实时模式 detect 连续异常 3 次 → 切抓帧模式（画面保留）', () => {
+  assert.strictEqual(scan.shouldSwitchFrame('video', 2), false, '2次异常不切换');
+  assert.strictEqual(scan.shouldSwitchFrame('video', 3), true, '3次异常切换抓帧');
+  assert.strictEqual(scan.shouldSwitchFrame('video', 5), true);
+  assert.strictEqual(scan.shouldSwitchFrame('frame', 3), false, '已在抓帧模式不重复切换');
+  assert.strictEqual(scan.shouldSwitchFrame('frame', 10), false);
+});
+
+test('scan.frameDue：抓帧节流（默认 500ms 间隔）', () => {
+  const now = Date.now();
+  assert.strictEqual(scan.frameDue(0, now, 500), true, '首帧立即抓');
+  assert.strictEqual(scan.frameDue(now - 499, now, 500), false, '未到间隔不抓');
+  assert.strictEqual(scan.frameDue(now - 500, now, 500), true, '满间隔可抓');
+  assert.strictEqual(scan.frameDue(now - 1000, now, 500), true);
+  assert.strictEqual(scan.frameDue(now - 1000, now), true, '默认500ms');
+  assert.strictEqual(scan.frameDue(now - 100, now), false);
+});
