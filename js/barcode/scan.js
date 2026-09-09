@@ -33,6 +33,18 @@
   }
 
   /**
+   * 扫码结果规范化（V3.35 参考鞋服 V1.3-10 思路、独立实现）：
+   * UPC-A 为 12 位纯数字条码，补前导 0 即等价于 EAN-13（13 位）——
+   * 使扫码枪/相机扫出的 12 位 UPC-A 能匹配以 0 开头的 13 位商品条码。
+   * 非 12 位纯数字内容原样保留（不局限国标长度）。
+   */
+  scan.normalizeCode = function normalizeCode(text) {
+    var s = String(text == null ? '' : text).trim();
+    if (/^\d{12}$/.test(s)) return '0' + s;
+    return s;
+  };
+
+  /**
    * 解析扫码/手输结果 → 定位商品（电器版）
    * @returns {found, product, code}
    * 优先原厂条码精确匹配；再按 品牌+型号 组合匹配（手输场景）；
@@ -44,6 +56,18 @@
     // ① 原厂条码 / 二维码内容精确匹配
     var byCode = ctx.getProductByCode(c);
     if (byCode) return { found: true, product: byCode, code: c };
+    // ①b UPC-A ↔ EAN-13 规范化变体匹配：12 位补前导 0 / 13 位以 0 开头去前导 0，
+    //     使扫码或手输的两种长度都能对上商品档案中的另一长度条码
+    var upc = scan.normalizeCode(c); // 12 位 → 补 0（13 位原样）
+    if (upc !== c) {
+      var byUpc = ctx.getProductByCode(upc);
+      if (byUpc) return { found: true, product: byUpc, code: c };
+    }
+    var trim0 = /^0\d{12}$/.test(c) ? c.slice(1) : '';
+    if (trim0 && trim0 !== c) {
+      var byTrim = ctx.getProductByCode(trim0);
+      if (byTrim) return { found: true, product: byTrim, code: c };
+    }
     // ② 品牌+型号 组合（空格分隔，如「海尔 BCD-200」）
     var parts = c.split(/\s+/).filter(Boolean);
     if (parts.length >= 2) {
@@ -187,6 +211,10 @@
       zxing: env.zxing && env.zxing.available
     });
     if (!order.length) { done(false); return; }
+    // 出口统一规范化：所有通道的成功结果过 normalizeCode（UPC-A 12 位 → EAN-13 13 位）
+    var finalize = function (ok, text) {
+      done(ok, ok ? scan.normalizeCode(text) : text);
+    };
     var i = 0;
     function next() {
       if (i >= order.length) { done(false); return; }
@@ -203,7 +231,7 @@
             if (settled) return;
             settled = true;
             clearTimeout(timer);
-            if (ok) done(true, text);
+            if (ok) finalize(true, text);
             else next();
           });
         } catch (e) {
@@ -215,14 +243,14 @@
       } else if (kind === 'ean13') {
         try {
           env.ean13.decode(source, function (ok, text) {
-            if (ok) done(true, text);
+            if (ok) finalize(true, text);
             else next();
           });
         } catch (e) { next(); }
       } else {
         try {
           env.zxing.decode(source, function (ok, text) {
-            if (ok) done(true, text);
+            if (ok) finalize(true, text);
             else next();
           });
         } catch (e) { next(); }
@@ -284,7 +312,8 @@
     } catch (e) { return null; }
   }
 
-  /** 自研 EAN-13 通道：原图 canvas → 灰度 → 多行投票解码；0° 失败时 ±4° 旋转重试（手持拍摄角度兜底） */
+  /** 自研 EAN-13 通道：原图 canvas → 灰度 → 多行投票解码；
+   *  0° 失败 → ±4° 旋转重试（手持倾斜）→ 90°/270° 转置重试（竖排印刷/竖版标签条码） */
   function ean13Decode(source, cb) {
     try {
       var canvas = toCanvas(source);
@@ -299,6 +328,14 @@
         var rg = window.ERP.ean13.grayFromCanvas(rc);
         var rr = rg ? window.ERP.ean13.decode(rg, rc.width, rc.height) : null;
         if (rr && rr.text) { cb(true, rr.text); return; }
+      }
+      // 转置重试（V3.35）：条码竖排印刷/竖版标签时，转置 90°/270° 后按行扫描
+      for (var t = 0; t < 2; t++) {
+        var tc = transposeCanvas(canvas, t === 0 ? 90 : 270);
+        if (!tc) continue;
+        var tg = window.ERP.ean13.grayFromCanvas(tc);
+        var tr = tg ? window.ERP.ean13.decode(tg, tc.width, tc.height) : null;
+        if (tr && tr.text) { cb(true, tr.text); return; }
       }
       cb(false);
     } catch (e) { cb(false); }
@@ -318,6 +355,26 @@
       ctx.fillStyle = '#fff';
       ctx.fillRect(0, 0, diag, diag);
       ctx.translate(diag / 2, diag / 2);
+      ctx.rotate(deg * Math.PI / 180);
+      ctx.drawImage(canvas, -w / 2, -h / 2);
+      return c;
+    } catch (e) { return null; }
+  }
+
+  /** canvas 转置（V3.35）：90°/270° 旋转且宽高互换、白底补齐——
+   *  竖排印刷/竖版标签的条码转成横向后可按行扫描 */
+  function transposeCanvas(canvas, deg) {
+    try {
+      var w = canvas.width, h = canvas.height;
+      if (!w || !h) return null;
+      var c = document.createElement('canvas');
+      c.width = h; // 宽高互换
+      c.height = w;
+      var ctx = c.getContext('2d');
+      if (!ctx) return null;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.translate(c.width / 2, c.height / 2);
       ctx.rotate(deg * Math.PI / 180);
       ctx.drawImage(canvas, -w / 2, -h / 2);
       return c;
