@@ -159,6 +159,142 @@
     return (now - lastFrameAt) >= (interval == null ? 500 : interval);
   };
 
+  /**
+   * 原生通道超时保护：华为/鸿蒙等自带浏览器 BarcodeDetector.detect() 可能
+   * 挂起不返回或耗时 5-10 秒，超时后强制跳过 native，交给 ZXing 兜底
+   */
+  scan.NATIVE_TIMEOUT_MS = 2500;
+  /** ZXing 纯 JS 解码长边上限：原图过大逐行扫描极慢（5-10s+），压缩后 <1s 且识别率更高 */
+  scan.ZXING_MAX_EDGE = 1280;
+
+  /**
+   * 多通道解码（可注入实现，便于测试）：
+   * ① 原生 BarcodeDetector（带超时保护）→ ② ZXing 纯 JS（解码前压缩图片）
+   * source：Image 元素 / canvas；done(ok, text)
+   * impl：{ native: { available, detect(src, cb) }, zxing: { available, decode(src, cb) } }
+   */
+  scan.decodeWith = function decodeWith(source, done, impl) {
+    var env = impl || {
+      native: { available: hasNative(), detect: nativeDetect },
+      zxing: { available: hasZxing(), decode: zxingDecode }
+    };
+    var order = scan.pickDecoders({ native: env.native.available, zxing: env.zxing.available });
+    if (!order.length) { done(false); return; }
+    var i = 0;
+    function next() {
+      if (i >= order.length) { done(false); return; }
+      var kind = order[i++];
+      if (kind === 'native') {
+        var settled = false;
+        var timer = setTimeout(function () {
+          if (settled) return;
+          settled = true;
+          next(); // 超时：跳过 native，交给 ZXing
+        }, scan.NATIVE_TIMEOUT_MS);
+        try {
+          env.native.detect(source, function (ok, text) {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            if (ok) done(true, text);
+            else next();
+          });
+        } catch (e) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          next();
+        }
+      } else {
+        try {
+          env.zxing.decode(source, function (ok, text) {
+            if (ok) done(true, text);
+            else next();
+          });
+        } catch (e) { next(); }
+      }
+    }
+    next();
+  };
+
+  function hasNative() {
+    return typeof window !== 'undefined' && !!window.BarcodeDetector;
+  }
+  function hasZxing() {
+    return !!(window.ZXing && window.ZXing.BrowserCodeReader);
+  }
+
+  /** 统一转为「适合解码的 canvas」（长边 ≤ ZXING_MAX_EDGE，只缩小不放大） */
+  function toDecodeCanvas(source) {
+    try {
+      var w = 0, h = 0, el = null;
+      if (source && source.tagName === 'IMG') {
+        w = source.naturalWidth; h = source.naturalHeight; el = source;
+      } else if (source && source.tagName === 'CANVAS') {
+        w = source.width; h = source.height; el = source;
+      } else { return null; }
+      if (!w || !h) return null;
+      var scale = Math.min(1, scan.ZXING_MAX_EDGE / Math.max(w, h));
+      if (scale >= 1) return source;
+      var c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(w * scale));
+      c.height = Math.max(1, Math.round(h * scale));
+      var ctx = c.getContext('2d');
+      if (!ctx) return null;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(el, 0, 0, c.width, c.height);
+      return c;
+    } catch (e) { return null; }
+  }
+
+  /** 原生通道（吃压缩后小图，快且稳） */
+  function nativeDetect(source, cb) {
+    try {
+      var d = new window.BarcodeDetector();
+      var canvas = toDecodeCanvas(source);
+      if (!canvas) { cb(false); return; }
+      d.detect(canvas).then(function (list) {
+        if (list && list.length) cb(true, list[0].rawValue);
+        else cb(false);
+      }).catch(function () { cb(false); });
+    } catch (e) { cb(false); }
+  }
+
+  /** ZXing 纯 JS 通道（解码前压缩到长边 ≤1280，避免大图逐行扫描 5-10 秒） */
+  function zxingDecode(source, cb) {
+    try {
+      var canvas = toDecodeCanvas(source);
+      if (!canvas) { cb(false); return; }
+      var reader = new window.ZXing.BrowserCodeReader();
+      var url = canvas.toDataURL('image/jpeg', 0.85);
+      reader.decodeFromImageUrl(url).then(function (r) {
+        if (r && r.text) cb(true, r.text);
+        else cb(false);
+      }).catch(function () { cb(false); });
+    } catch (e) { cb(false); }
+  }
+
+  /** 中心区域放大重试：条码占照片比例小时，放大画面中心后识别率提升 */
+  function zoomCenterCanvas(img, factor) {
+    try {
+      var w = img.naturalWidth || 640;
+      var h = img.naturalHeight || 480;
+      if (!w || !h) return null;
+      var cw = Math.max(1, Math.round(w / factor));
+      var ch = Math.max(1, Math.round(h / factor));
+      var sx = Math.round((w - cw) / 2);
+      var sy = Math.round((h - ch) / 2);
+      var c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      var ctx = c.getContext('2d');
+      if (!ctx) return null;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(img, sx, sy, cw, ch, 0, 0, w, h);
+      return c;
+    } catch (e) { return null; }
+  }
+
   /** 统一释放摄像头流（幂等：无流/已停止均安全） */
   scan.closeCamera = function closeCamera(stream) {
     if (stream && typeof stream.getTracks === 'function') {
@@ -295,7 +431,7 @@
           stat.lastFrameAt = now;
           var canvas = captureFrame(video);
           if (!canvas) { requestAnimationFrame(frameTick); return; }
-          decodeWith(canvas, function (ok, text) {
+          scan.decodeWith(canvas, function (ok, text) {
             if (stop) return;
             if (ok) { success(text); return; }
             if (Date.now() - stat.startedAt >= 15000) {
@@ -343,71 +479,6 @@
     } catch (e) { return null; }
   }
 
-  /**
-   * 多通道解码（图片源 Image 或 canvas）：
-   * ① 原生 BarcodeDetector.detect(source) → ② ZXing（Image 元素 / canvas dataURL）
-   * 兼容 BarcodeDetector 半实现与 ZXing 纯 JS 各自的成功路径
-   */
-  function decodeWith(source, done) {
-    var env = {
-      native: typeof window !== 'undefined' && !!window.BarcodeDetector,
-      zxing: !!(window.ZXing && window.ZXing.BrowserCodeReader)
-    };
-    var order = scan.pickDecoders(env);
-    if (!order.length) { done(false); return; }
-    var i = 0;
-    function next() {
-      if (i >= order.length) { done(false); return; }
-      var kind = order[i++];
-      if (kind === 'native') nativeDetect(source, next);
-      else zxingDetect(source, next);
-    }
-    function nativeDetect(src, fail) {
-      try {
-        var d = new window.BarcodeDetector();
-        d.detect(src).then(function (list) {
-          if (list && list.length) done(true, list[0].rawValue);
-          else fail();
-        }).catch(function () { fail(); });
-      } catch (e) { fail(); }
-    }
-    function zxingDetect(src, fail) {
-      try {
-        var reader = new window.ZXing.BrowserCodeReader();
-        if (src && src.tagName === 'IMG') {
-          reader.decodeFromImageElement(src).then(function (r) {
-            if (r && r.text) done(true, r.text);
-            else fail();
-          }).catch(function () { fail(); });
-        } else if (src && typeof src.toDataURL === 'function') {
-          var url = src.toDataURL('image/jpeg', 0.85);
-          reader.decodeFromImageUrl(url).then(function (r) {
-            if (r && r.text) done(true, r.text);
-            else fail();
-          }).catch(function () { fail(); });
-        } else { fail(); }
-      } catch (e) { fail(); }
-    }
-    next();
-  }
-
-  /** 画布放大：照片中条码占比小/模糊时，放大后识别率提升 */
-  function scaleCanvas(img, scale) {
-    try {
-      var w = img.naturalWidth || img.videoWidth || 640;
-      var h = img.naturalHeight || img.videoHeight || 480;
-      if (!w || !h) return null;
-      var c = document.createElement('canvas');
-      c.width = w * scale;
-      c.height = h * scale;
-      var ctx = c.getContext('2d');
-      if (!ctx) return null;
-      ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(img, 0, 0, c.width, c.height);
-      return c;
-    } catch (e) { return null; }
-  }
-
   /** ② 拍照识别：懒加载 vendor/zxing 解码 */
   function photoInput(opts) {
     var input = document.createElement('input');
@@ -432,12 +503,12 @@
   function decodeImage(dataUrl, opts) {
     var img = new Image();
     img.onload = function () {
-      decodeWith(img, function (ok, text) {
+      scan.decodeWith(img, function (ok, text) {
         if (ok) { if (opts.onResult) opts.onResult(text); return; }
-        // 放大 2 倍重试：照片中条码占比小/模糊时提升识别率
-        var big = scaleCanvas(img, 2);
-        if (big) {
-          decodeWith(big, function (ok2, text2) {
+        // 中心区域放大重试：条码占照片比例小时提升识别率
+        var zoomed = zoomCenterCanvas(img, 2);
+        if (zoomed) {
+          scan.decodeWith(zoomed, function (ok2, text2) {
             if (ok2) { if (opts.onResult) opts.onResult(text2); return; }
             if (opts.onError) opts.onError('未识别到条码/二维码，请对准条码、避免反光、保持完整后重拍，或手输');
           });
