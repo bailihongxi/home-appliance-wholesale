@@ -171,7 +171,7 @@
         });
         // V3.43：局部更新当前页行勾选 + 按钮，不整页重渲染 → 滚动位置保持
         if (typeof document !== 'undefined' && document.querySelectorAll) {
-          document.querySelectorAll('tbody input.row-check[data-change="row-check"]').forEach(function (cb) {
+          document.querySelectorAll('tbody input.row-check[data-act="row-check"]').forEach(function (cb) {
             var rid = cb.getAttribute('data-id');
             cb.checked = !!(state.sel[rid]);
           });
@@ -525,7 +525,7 @@
       mg.textContent = '🔀 合并选中' + (selCount >= 2 ? '（' + selCount + '）' : '');
       mg.disabled = selCount < 2;
     }
-    var all = document.querySelector('[data-change="toggle-all-check"]');
+    var all = document.querySelector('[data-act="toggle-all-check"]');
     if (all) {
       var curIds = computePage(ctx, state).items.map(function (p) { return String(p.id); });
       all.checked = curIds.length > 0 && curIds.every(function (id) { return state.sel[id]; });
@@ -604,7 +604,7 @@
       return !!(state.sel || {})[String(p.id)];
     });
     h += '<div class="card"><div class="table-wrap"><table class="tbl tbl-striped"><thead><tr>' +
-      '<th class="sel desktop-only" style="width:34px"><input type="checkbox" class="row-check" data-change="toggle-all-check"' + (allChecked ? ' checked' : '') + ' title="全选本页"></th>' +
+      '<th class="sel desktop-only" style="width:34px"><input type="checkbox" class="row-check" data-act="toggle-all-check"' + (allChecked ? ' checked' : '') + ' title="全选本页"></th>' +
       '<th>品牌</th><th>型号</th><th>类型</th><th>单位</th>' +
       '<th class="num">成本</th><th class="num">批发价</th><th class="num">零售价</th>' +
       '<th class="num">库存</th><th>备注</th><th>状态</th><th>操作</th>' +
@@ -615,7 +615,7 @@
       var threshold = ctx.settings.defaultThreshold == null ? 3 : ctx.settings.defaultThreshold;
       var stockCls = stock <= 0 ? ' num zero' : (stock < threshold ? ' num low' : ' num');
       h += '<tr' + (checked ? ' class="sel-on"' : '') + '>' +
-        '<td class="sel desktop-only"><input type="checkbox" class="row-check" data-change="row-check" data-id="' + esc(p.id) + '"' + (checked ? ' checked' : '') + '></td>' +
+        '<td class="sel desktop-only"><input type="checkbox" class="row-check" data-act="row-check" data-id="' + esc(p.id) + '"' + (checked ? ' checked' : '') + '></td>' +
         '<td>' + esc(p.brand) + '</td>' +
         '<td>' + esc(p.model) + '</td>' +
         '<td>' + esc(p.category) + '</td>' +
