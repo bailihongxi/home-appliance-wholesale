@@ -156,6 +156,7 @@
       },
 
       /* ---- V3.37：多选删除未使用商品档案 ---- */
+      /* V3.43：勾选/全选改为局部刷新选择区（refreshSelUI，见模块级函数），不再整页重渲染 */
 
       /** 表头全选/取消全选（当前页全部商品，与列表渲染同一分页管道） */
       'toggle-all-check': function (ctx, state, el) {
@@ -168,7 +169,14 @@
           if (next) state.sel[id] = true;
           else delete state.sel[id];
         });
-        if (ERP.app && ERP.app.render) ERP.app.render();
+        // V3.43：局部更新当前页行勾选 + 按钮，不整页重渲染 → 滚动位置保持
+        if (typeof document !== 'undefined' && document.querySelectorAll) {
+          document.querySelectorAll('tbody input.row-check[data-change="row-check"]').forEach(function (cb) {
+            var rid = cb.getAttribute('data-id');
+            cb.checked = !!(state.sel[rid]);
+          });
+        }
+        refreshSelUI(ctx, state);
       },
 
       /** 单行勾选/取消 */
@@ -178,7 +186,8 @@
         state.sel = state.sel || {};
         if (state.sel[id]) delete state.sel[id];
         else state.sel[id] = true;
-        if (ERP.app && ERP.app.render) ERP.app.render();
+        // V3.43：局部刷新选择区，不整页重渲染 → 长列表多选不再跳回顶部
+        refreshSelUI(ctx, state);
       },
 
       /** 删除选中（仅删未使用的商品档案；被单据/库存引用自动跳过） */
@@ -497,6 +506,31 @@
   }
 
   /* ---------------- 列表 ---------------- */
+
+  /**
+   * V3.43：局部刷新选择区（删除/合并按钮计数与禁用、表头全选状态），
+   * 不整页重渲染 → 长列表多选时滚动位置不再跳回顶部。
+   */
+  function refreshSelUI(ctx, state) {
+    if (typeof document === 'undefined' || !document.querySelector) return;
+    var selCount = 0;
+    Object.keys(state.sel || {}).forEach(function (k) { if (state.sel[k]) selCount++; });
+    var del = document.querySelector('[data-act="del-selected"]');
+    if (del) {
+      del.textContent = '🗑 删除选中' + (selCount ? '（' + selCount + '）' : '');
+      del.disabled = !selCount;
+    }
+    var mg = document.querySelector('[data-act="merge-selected"]');
+    if (mg) {
+      mg.textContent = '🔀 合并选中' + (selCount >= 2 ? '（' + selCount + '）' : '');
+      mg.disabled = selCount < 2;
+    }
+    var all = document.querySelector('[data-change="toggle-all-check"]');
+    if (all) {
+      var curIds = computePage(ctx, state).items.map(function (p) { return String(p.id); });
+      all.checked = curIds.length > 0 && curIds.every(function (id) { return state.sel[id]; });
+    }
+  }
 
   /**
    * V3.41：列表统一分页管道（过滤 → 品牌+型号排序 → 分页）。
