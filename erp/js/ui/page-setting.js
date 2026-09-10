@@ -112,8 +112,11 @@
       /* ---- 危险操作 ---- */
       var danger =
         '<div class="card mb8"><h3 class="card-title">数据管理</h3>' +
+        '<div class="row">' +
+        '<button class="btn btn-danger" data-act="clear-stock-products" title="仅清空商品档案/库存/变动流水/盘点记录，已生成的进货单/销售单/记账全部保留。不可恢复，请先导出备份">清空库存与档案</button>' +
         '<button class="btn btn-danger" data-act="clear-data">清空全部数据</button>' +
-        '<span class="muted small ml8">清空后不可恢复，请先导出备份。</span>' +
+        '</div>' +
+        '<span class="muted small ml8">「清空库存与档案」保留全部单据；「清空全部数据」清空所有表。均不可恢复，请先导出备份。</span>' +
         '</div>';
 
       /* ---- 操作日志 ---- */
@@ -287,6 +290,34 @@
       'toggle-log': function (ctx, state) {
         state.showLog = !state.showLog;
         return true;
+      },
+
+      /** V3.46：仅清空库存与档案（商品档案/库存流水/盘点），保留全部单据/记账/客户/日志/设置 */
+      'clear-stock-products': function (ctx, state) {
+        var doClear = async function () {
+          var clearStores = ['products', 'stockLogs', 'stocktakes'];
+          var db = app() && app().db;
+          for (var i = 0; i < clearStores.length; i++) {
+            var name = clearStores[i];
+            ctx.data[name] = [];
+            if (db && typeof db.clear === 'function') {
+              try { await db.clear(name); } catch (e) { /* 忽略单表清空失败 */ }
+            }
+          }
+          if (repo && repo.log) {
+            try { repo.log(ctx, '清空库存与档案', '仅清空商品档案/库存/变动流水/盘点，保留全部单据'); } catch (e) { /* ignore */ }
+          }
+          if (app() && app().commit) await app().commit();
+          if (app() && app().toast) app().toast('已清空库存与档案（保留全部单据）', 'ok');
+          return true;
+        };
+        if (app() && app().commit && C.confirm) {
+          return C.confirm('清空库存与档案', '将清空：商品档案、库存数量与变动流水、盘点记录。\n保留：全部进货单/销售单/记账/客户供应商/操作日志/系统设置。\n此操作不可恢复，请确认已先「导出备份」。', '确认清空').then(function (ok) {
+            if (!ok) return false;
+            return doClear();
+          });
+        }
+        return doClear();
       },
 
       'clear-data': function (ctx, state) {
