@@ -328,8 +328,8 @@ test('列表渲染：含全选 checkbox、行 checkbox 与删除选中按钮（�
   const { ctx, state } = fresh();
   seed(ctx);
   const html = page.render(ctx, state);
-  assert.ok(html.includes('data-change="toggle-all-check"'), '表头全选 checkbox');
-  assert.ok(html.includes('class="row-check" data-change="row-check"'), '行 checkbox');
+  assert.ok(html.includes('data-act="toggle-all-check"'), '表头全选 checkbox');
+  assert.ok(html.includes('class="row-check" data-act="row-check"'), '行 checkbox');
   assert.ok(html.includes('data-act="del-selected"'), '删除选中按钮');
   assert.ok(html.includes('disabled'), '未选中时按钮禁用');
   assert.ok(!html.includes('删除选中（'), '未选中不显示计数');
@@ -468,7 +468,7 @@ test('无残留时全选/取消全选：勾选数量与显示完全一致', () =
   page.actions['toggle-all-check'](ctx, state, {});
   let html = page.render(ctx, state);
   assert.ok(html.includes('删除选中（2）'), '全选后计数 2');
-  assert.strictEqual(html.match(/class="row-check" data-change="row-check"[^>]*checked/g).length, 2, '两行全部勾选');
+  assert.strictEqual(html.match(/class="row-check" data-act="row-check"[^>]*checked/g).length, 2, '两行全部勾选');
   page.actions['toggle-all-check'](ctx, state, {});
   html = page.render(ctx, state);
   assert.ok(html.includes('disabled'), '取消全选后按钮禁用');
@@ -489,11 +489,11 @@ test('全选 200 与当前页渲染一致：乱序插入 250 款，勾选集合=
   page.actions['toggle-all-check'](ctx, state, {});
   const html = page.render(ctx, state);
   // 当前页每一行都应勾选
-  const rowIds = Array.from(html.matchAll(/class="row-check" data-change="row-check" data-id="([^"]*)"/g)).map(m => m[1]);
+  const rowIds = Array.from(html.matchAll(/class="row-check" data-act="row-check" data-id="([^"]*)"/g)).map(m => m[1]);
   assert.strictEqual(rowIds.length, 200, '第 1 页 200 行');
   assert.ok(rowIds.every(id => state.sel[id]), '当前页每一行都在选中集合（行勾选标志可见）');
   assert.ok(html.includes('删除选中（200）'), '删除按钮计数 200');
-  const checkedRows = (html.match(/class="row-check" data-change="row-check" data-id="[^"]*" checked/g) || []).length;
+  const checkedRows = (html.match(/class="row-check" data-act="row-check" data-id="[^"]*" checked/g) || []).length;
   assert.strictEqual(checkedRows, 200, '200 行全部带 checked 勾选标志');
   // 勾选集合不多不少：恰为当前页 200 个 id
   assert.strictEqual(Object.keys(state.sel).filter(k => state.sel[k]).length, 200);
@@ -509,7 +509,7 @@ test('全选后翻到第 2 页：勾选清空，第 2 页无勾选、按钮禁�
   const html = page.render(ctx, state);
   assert.deepStrictEqual(state.sel, {}, '翻页后清空勾选');
   assert.ok(html.includes('disabled'), '第 2 页删除按钮禁用');
-  const checkedRows = (html.match(/class="row-check" data-change="row-check" data-id="[^"]*" checked/g) || []).length;
+  const checkedRows = (html.match(/class="row-check" data-act="row-check" data-id="[^"]*" checked/g) || []).length;
   assert.strictEqual(checkedRows, 0, '第 2 页无任何勾选');
 });
 
@@ -642,4 +642,41 @@ test('Node 无 DOM：refreshSelUI 安全跳过，勾选逻辑不受影响', () =
   assert.deepStrictEqual(state.sel, { [ids[0]]: true, [ids[1]]: true }, '全选：本页全部置为勾选');
   page.actions['toggle-all-check'](ctx, state, {});
   assert.deepStrictEqual(state.sel, {}, '再点全选=取消全选，集合为空');
+});
+
+/* ---------------- V3.43 修复：勾选改用 click 委托（真实浏览器 change 委托被第三方框架拦截，click 委托正常） ---------------- */
+
+test('勾选 checkbox 使用 data-act（click 委托）：行/表头均不带 data-change，避免被 change 委托拦截', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('data-act="toggle-all-check"'), '表头全选走 click 委托');
+  assert.ok(html.includes('class="row-check" data-act="row-check"'), '行勾选走 click 委托');
+  assert.ok(!html.includes('data-change="toggle-all-check"'), '表头不再依赖 change 委托');
+  assert.ok(!html.includes('data-change="row-check"'), '行不再依赖 change 委托');
+});
+
+test('click 委托路径：row-check 仍正确更新选中集合（局部刷新不重渲染）', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const [p1, p2] = ctx.data.products;
+  let renderCount = 0;
+  const orig = globalThis.ERP;
+  globalThis.ERP = { app: { render: () => { renderCount++; } } };
+  // click 委托 dispatch 的参数与 change 委托一致（el 为 checkbox 本身）
+  page.actions['row-check'](ctx, state, { getAttribute: () => p1.id });
+  page.actions['row-check'](ctx, state, { getAttribute: () => p2.id });
+  globalThis.ERP = orig;
+  assert.strictEqual(renderCount, 0, '局部刷新不整页重渲染');
+  assert.deepStrictEqual(state.sel, { [p1.id]: true, [p2.id]: true });
+});
+
+test('click 委托路径：toggle-all-check 全选/取消一致', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  page.actions['toggle-all-check'](ctx, state, {});
+  const ids = ctx.data.products.map(p => String(p.id));
+  assert.deepStrictEqual(state.sel, { [ids[0]]: true, [ids[1]]: true });
+  page.actions['toggle-all-check'](ctx, state, {});
+  assert.deepStrictEqual(state.sel, {});
 });
