@@ -1,8 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert');
+// 模块内 ERP 为加载时快照：须在 require 前注入 app 桩（render/download）
+globalThis.ERP = globalThis.ERP || {};
+globalThis.ERP.app = globalThis.ERP.app || {};
+globalThis.ERP.app.render = function () { globalThis.__renderCount = (globalThis.__renderCount || 0) + 1; };
+globalThis.ERP.app.download = function (name, content, mime) { globalThis.__lastDownload = { name: name, content: content, mime: mime }; };
 const page = require('../js/ui/page-product.js');
 const { newCtx } = require('./helpers/ctx.js');
 const product = require('../js/core/product.js');
+const util = require('../js/core/util.js');
 
 function fresh() {
   const ctx = newCtx();
@@ -644,6 +650,103 @@ test('Node 无 DOM：refreshSelUI 安全跳过，勾选逻辑不受影响', () =
   assert.deepStrictEqual(state.sel, {}, '再点全选=取消全选，集合为空');
 });
 
+
+
+/* ---------------- V3.45：导出全部商品档案（CSV），外部核实后可重新导入 ---------------- */
+
+function captureDownload() {
+  // 防御：旧测试可能替换过 globalThis.ERP.app，这里重新确保 download 桩可用
+  globalThis.ERP = globalThis.ERP || {};
+  globalThis.ERP.app = globalThis.ERP.app || {};
+  globalThis.ERP.app.download = function (name, content, mime) { globalThis.__lastDownload = { name: name, content: content, mime: mime }; };
+  globalThis.__lastDownload = null;
+  return {
+    getCaptured: () => globalThis.__lastDownload,
+    restore: () => { /* 数据保留给 getCaptured 读取；下次 captureDownload 自动清零 */ }
+  };
+}
+
+test('导出全部按钮位于批量导入按钮前面', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const html = page.render(ctx, state);
+  const a = html.indexOf('data-act="export-all"');
+  const b = html.indexOf('data-act="open-csv"');
+  assert.ok(a >= 0, '存在导出全部按钮');
+  assert.ok(b >= 0, '存在批量导入按钮');
+  assert.ok(a < b, '导出全部在批量导入前面');
+});
+
+test('export-all 导出全部商品（表头齐全、行数=商品数+1、含品牌型号/成本/条码）', () => {
+  const { ctx, state } = fresh();
+  seed(ctx); // 2 款商品
+  const cap = captureDownload();
+  try {
+    page.actions['export-all'](ctx, state, null);
+  } finally { cap.restore(); }
+  const captured = cap.getCaptured();
+  assert.ok(captured, 'download 被调用');
+  assert.strictEqual(captured.name, '商品档案全部.csv');
+  assert.strictEqual(captured.mime, 'text/csv');
+  const lines = captured.content.replace(/^\uFEFF/, '').split('\r\n');
+  assert.strictEqual(lines.length, 3, '表头 + 2 行商品');
+  const head = lines[0].split(',');
+  assert.deepStrictEqual(head, ['品牌','型号','类型','单位','成本','批发价','零售价','库存','备注','原厂条码','状态']);
+  const all = lines.join('\n');
+  assert.ok(all.indexOf('海尔') >= 0 && all.indexOf('BCD-200') >= 0, '含海尔/BCD-200');
+  assert.ok(all.indexOf('格力') >= 0 && all.indexOf('KFR-35') >= 0, '含格力/KFR-35');
+  // 金额以「元」导出（内部存分，避免重导入放大 100 倍）
+  const haierRow = lines.find(l => l.indexOf('BCD-200') >= 0);
+  assert.ok(haierRow.indexOf('1000,1200,1399') >= 0, '成本1000/批发1200/零售1399（元）');
+});
+
+test('导出-重导入往返：按型号匹配更新品牌/成本/备注一致', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  // 修改一条记录模拟外部核实修改（改品牌/成本/备注）
+  ctx.data.products[0].brand = '海尔智家';
+  ctx.data.products[0].cost = 999;
+  ctx.data.products[0].note = '核实修正';
+  const cap = captureDownload();
+  try { page.actions['export-all'](ctx, state, null); } finally { cap.restore(); }
+  const captured = cap.getCaptured();
+  // 把导出的 CSV 重新导入到一个全新的 ctx
+  const fresh2 = fresh();
+  const parsed = util.parseCSV(captured.content);
+  const res = product.importFromRows(parsed.rows, fresh2.ctx);
+  assert.ok(res.created >= 1 || res.updated >= 1, '导入有结果');
+  const byModel = fresh2.ctx.data.products.filter(p => String(p.model).trim().toUpperCase() === String(ctx.data.products[0].model).trim().toUpperCase());
+  assert.ok(byModel.length >= 1, '重新导入后存在该型号');
+  assert.strictEqual(String(byModel[0].brand || '').trim().toUpperCase(), '海尔智家'.toUpperCase(), '品牌以导入为准');
+  assert.strictEqual(Number(byModel[0].cost), 999, '成本以导入为准');
+  assert.ok(String(byModel[0].note || '').indexOf('核实修正') >= 0, '备注保留');
+});
+
+test('空档案导出仅表头', () => {
+  const { ctx, state } = fresh(); // 无 seed
+  const cap = captureDownload();
+  try { page.actions['export-all'](ctx, state, null); } finally { cap.restore(); }
+  const captured = cap.getCaptured();
+  const lines = captured.content.replace(/^\uFEFF/, '').split('\r\n');
+  assert.strictEqual(lines.length, 1, '只有表头');
+});
+
+test('多条码以分号连接且可被 normBarcodes 复原', () => {
+  const { ctx, state } = fresh();
+  ctx.data.products.push({
+    id: 'bc1', brand: '测试', model: 'BC-1', category: '其他', unit: '台',
+    cost: 100, priceWholesale: 120, priceRetail: 150, stock: 3,
+    note: '', barcodes: ['6900000000001', '6900000000002'], status: 'on'
+  });
+  const cap = captureDownload();
+  try { page.actions['export-all'](ctx, state, null); } finally { cap.restore(); }
+  const captured = cap.getCaptured();
+  const lines = captured.content.replace(/^\uFEFF/, '').split('\r\n');
+  const row = lines.find(l => l.indexOf('BC-1') >= 0);
+  assert.ok(row && row.indexOf('6900000000001;6900000000002') >= 0, '条码分号连接');
+  const norm = product.normBarcodes(['6900000000001;6900000000002']);
+  assert.deepStrictEqual(norm, ['6900000000001', '6900000000002'], '重导入可拆分');
+});
 /* ---------------- V3.43 修复：勾选改用 click 委托（真实浏览器 change 委托被第三方框架拦截，click 委托正常） ---------------- */
 
 test('勾选 checkbox 使用 data-act（click 委托）：行/表头均不带 data-change，避免被 change 委托拦截', () => {
@@ -656,18 +759,15 @@ test('勾选 checkbox 使用 data-act（click 委托）：行/表头均不带 da
   assert.ok(!html.includes('data-change="row-check"'), '行不再依赖 change 委托');
 });
 
-test('click 委托路径：row-check 仍正确更新选中集合（局部刷新不重渲染）', () => {
+test('click 委托路径：row-check 仍正确更新选中集合（局部刷新不整页重渲染）', () => {
   const { ctx, state } = fresh();
   seed(ctx);
   const [p1, p2] = ctx.data.products;
-  let renderCount = 0;
-  const orig = globalThis.ERP;
-  globalThis.ERP = { app: { render: () => { renderCount++; } } };
+  globalThis.__renderCount = 0;
   // click 委托 dispatch 的参数与 change 委托一致（el 为 checkbox 本身）
   page.actions['row-check'](ctx, state, { getAttribute: () => p1.id });
   page.actions['row-check'](ctx, state, { getAttribute: () => p2.id });
-  globalThis.ERP = orig;
-  assert.strictEqual(renderCount, 0, '局部刷新不整页重渲染');
+  assert.strictEqual(globalThis.__renderCount, 0, '局部刷新不整页重渲染');
   assert.deepStrictEqual(state.sel, { [p1.id]: true, [p2.id]: true });
 });
 

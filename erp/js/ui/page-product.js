@@ -407,6 +407,39 @@
         ERP.app.download('商品导入模板.csv', csv, 'text/csv');
       },
 
+      /** V3.45：导出全部商品档案（CSV）——外部核实后可按型号重新导入 */
+      'export-all': function (ctx, state) {
+        // 实时读取全局 ERP（模块快照的 app 可能被测试/运行期替换，读全局最稳）
+        var g = (typeof globalThis !== 'undefined') ? globalThis : (typeof window !== 'undefined' ? window : null);
+        var app = (g && g.ERP && g.ERP.app) || (ERP && ERP.app);
+        if (!app || !app.download) return;
+        var list = ctx.data.products.slice();
+        list = util.sortBy(list, function (p) {
+          return String(p.brand || '') + String(p.model || '');
+        });
+        // 成本/批发/零售内部以「分」存储，导出换算为「元」，重导入经 parseMoney 还原，避免放大 100 倍
+        function yuan(v) { return (v == null || v === '') ? '' : String(Number(v) / 100); }
+        var rows = list.map(function (p) {
+          return [
+            p.brand || '', p.model || '', p.category || '', p.unit || '',
+            yuan(p.cost),
+            yuan(p.priceWholesale),
+            yuan(p.priceRetail),
+            p.stock != null ? p.stock : '',
+            p.note || '',
+            (Array.isArray(p.barcodes) ? p.barcodes : []).join(';'),
+            p.status === 'off' ? '停售' : '在售'
+          ];
+        });
+        var csv = util.toCSV(
+          ['品牌', '型号', '类型', '单位', '成本', '批发价', '零售价', '库存', '备注', '原厂条码', '状态'],
+          rows
+        );
+        app.download('商品档案全部.csv', csv, 'text/csv');
+        repo.log(ctx, '导出商品档案', '导出全部 ' + list.length + ' 款商品');
+        ui.toast('已导出全部 ' + list.length + ' 款商品档案', 'ok');
+      },
+
       'scan-input': function (ctx, state, payload) {
         var code = String((payload && payload.value) || '').trim();
         if (!code) return;
@@ -573,6 +606,7 @@
     h += '<div class="page-head"><h2>商品档案</h2>' +
       '<span class="desc">共 ' + ctx.data.products.length + ' 款商品</span>' +
       '<div class="actions">' +
+      '<button class="btn" data-act="export-all" title="导出全部商品档案（CSV），外部核实后可重新导入">📤 导出全部</button>' +
       '<button class="btn" data-act="open-csv">📥 批量导入</button>' +
       '<button class="btn btn-danger desktop-only" data-act="del-selected"' + (selCount ? '' : ' disabled') + '>🗑 删除选中' + (selCount ? '（' + selCount + '）' : '') + '</button>' +
       '<button class="btn btn-orange desktop-only" data-act="merge-selected"' + (selCount >= 2 ? '' : ' disabled') + ' title="仅型号相同的商品可合并，保留库存最大者，库存/备注/条码合并">🔀 合并选中' + (selCount >= 2 ? '（' + selCount + '）' : '') + '</button>' +
