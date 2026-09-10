@@ -75,28 +75,40 @@ test('debt.list / payables / receivables / totals', () => {
   assert.strictEqual(debt.payables(ctx).length, 0, '应付余额为 0 不计入清单');
 });
 
+/** 相对「今天」偏移 N 天的日期（YYYY-MM-DD），避免测试日期随时间漂移失效 */
+function shiftDays(n) {
+  const t = new Date();
+  t.setDate(t.getDate() + n);
+  const y = t.getFullYear();
+  const m = String(t.getMonth() + 1).padStart(2, '0');
+  const d = String(t.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + d;
+}
+
 test('debt.overdue：应收超期（>15 天）提醒', () => {
   const ctx = newCtx();
   const old = debt.ensurePartner(ctx, { name: '老客户', type: 'customer' });
   const recent = debt.ensurePartner(ctx, { name: '新客户', type: 'customer' });
   const p = seed(ctx);
+  const oldDate = shiftDays(-20);   // 20 天前 → 必超期
+  const recentDate = shiftDays(-5); // 5 天前 → 必不超期
   engine.saveSale(ctx, {
-    date: '2026-08-01', partnerId: old.id,
+    date: oldDate, partnerId: old.id,
     items: [{ productId: p.id, qty: 1, price: '1399' }],
     payments: [{ method: 'debt', amount: '1399' }]
   });
   engine.saveSale(ctx, {
-    date: '2026-08-25', partnerId: recent.id,
+    date: recentDate, partnerId: recent.id,
     items: [{ productId: p.id, qty: 1, price: '1399' }],
     payments: [{ method: 'debt', amount: '1399' }]
   });
   const over = debt.overdue(ctx, 15); // 超期天数按系统“今天”动态计算
   const found = over.find((o) => o.partner.id === old.id);
   const util = require('../js/core/util.js');
-  const expectDays = util.diffDays('2026-08-01', util.today());
-  assert.ok(found, '8/1 的应收应超期');
-  assert.strictEqual(found.days, expectDays, '8/1 距今天 ' + expectDays + ' 天');
-  assert.strictEqual(over.some((o) => o.partner.id === recent.id), false, '8/25 未超期');
+  const expectDays = util.diffDays(oldDate, util.today());
+  assert.ok(found, oldDate + ' 的应收应超期');
+  assert.strictEqual(found.days, expectDays, oldDate + ' 距今天 ' + expectDays + ' 天');
+  assert.strictEqual(over.some((o) => o.partner.id === recent.id), false, recentDate + ' 未超期');
 });
 
 test('PRD 10.1-④ 进货欠款付款闭环', () => {

@@ -512,3 +512,93 @@ test('全选后翻到第 2 页：勾选清空，第 2 页无勾选、按钮禁�
   const checkedRows = (html.match(/class="row-check" data-change="row-check" data-id="[^"]*" checked/g) || []).length;
   assert.strictEqual(checkedRows, 0, '第 2 页无任何勾选');
 });
+
+/* ---------------- V3.42：同型号商品信息合并（仅网页版） ---------------- */
+
+function seedMerge(ctx) {
+  const a = product.save(ctx, {
+    brand: '海尔', model: 'BCD-200', category: '冰箱', unit: '台',
+    cost: '1000', priceWholesale: '1200', priceRetail: '1399', note: '一级能效',
+    barcodes: '6901234567892'
+  }).product;
+  const b = product.save(ctx, {
+    brand: '美的', model: 'BCD-200', category: '冰箱', unit: '台',
+    cost: '1200', priceWholesale: '1500', priceRetail: '1699', note: '送安装',
+    barcodes: '6923456789012'
+  }).product;
+  a.stock = 5; b.stock = 3;
+  return [a, b];
+}
+
+test('合并按钮：仅网页版渲染，勾选≥2 可用并显示计数', () => {
+  const { ctx, state } = fresh();
+  const [a, b] = seedMerge(ctx);
+  let html = page.render(ctx, state);
+  assert.ok(html.includes('data-act="merge-selected"'), '合并按钮存在');
+  assert.ok(html.includes('class="btn btn-orange desktop-only"'), '合并按钮 desktop-only（手机版隐藏）');
+  assert.ok(html.includes('merge-selected" disabled'), '未勾选时禁用');
+  state.sel[a.id] = true;
+  html = page.render(ctx, state);
+  assert.ok(html.includes('merge-selected" disabled'), '勾选 1 个仍禁用');
+  state.sel[b.id] = true;
+  html = page.render(ctx, state);
+  assert.ok(!/merge-selected" disabled/.test(html), '勾选 2 个可用');
+  assert.ok(html.includes('🔀 合并选中（2）'), '按钮显示勾选数');
+});
+
+test('merge-selected：确认后同型号合并——库存相加、备注拼接、副档删除、清空选择', async () => {
+  const { ctx, state } = fresh();
+  const [a, b] = seedMerge(ctx);
+  state.sel[a.id] = true;
+  state.sel[b.id] = true;
+  const orig = globalThis.ERP;
+  globalThis.ERP = globalThis.ERP || {};
+  globalThis.ERP.app = { commit: () => Promise.resolve(), render: () => {} };
+  page.actions['merge-selected'](ctx, state);
+  await new Promise(r => setTimeout(r, 20));
+  globalThis.ERP = orig;
+  assert.strictEqual(ctx.data.products.length, 1, '合并后只剩主档案');
+  const keep = ctx.data.products[0];
+  assert.strictEqual(keep.id, a.id, '主档案 = 库存最大者（海尔 5 > 美的 3）');
+  assert.strictEqual(keep.stock, 8, '库存相加');
+  assert.strictEqual(keep.brand, '海尔', '品牌取主档');
+  assert.strictEqual(keep.cost, 100000, '成本保留主档（分）');
+  assert.ok(keep.note.includes('一级能效') && keep.note.includes('送安装'), '备注拼接');
+  assert.strictEqual(keep.barcodes.length, 2, '条码合并');
+  assert.deepStrictEqual(state.sel, {}, '合并后清空选择');
+});
+
+test('merge-selected：型号不一致拒绝合并，数据不动', () => {
+  const { ctx, state } = fresh();
+  seed(ctx); // 海尔 BCD-200 + 格力 KFR-35（不同型号）
+  const [p1, p2] = ctx.data.products;
+  state.sel[p1.id] = true;
+  state.sel[p2.id] = true;
+  page.actions['merge-selected'](ctx, state);
+  assert.strictEqual(ctx.data.products.length, 2, '型号不一致不合并');
+  assert.strictEqual(ctx.data.products[0].id, p1.id, '无任何改动');
+});
+
+test('merge-selected：勾选少于 2 个拒绝', () => {
+  const { ctx, state } = fresh();
+  const [a] = seedMerge(ctx);
+  state.sel[a.id] = true;
+  page.actions['merge-selected'](ctx, state);
+  assert.strictEqual(ctx.data.products.length, 2, '1 个不合并');
+});
+
+test('merge-selected：停售商品也可合并', async () => {
+  const { ctx, state } = fresh();
+  const [a, b] = seedMerge(ctx);
+  b.status = 'off';
+  state.sel[a.id] = true;
+  state.sel[b.id] = true;
+  const orig = globalThis.ERP;
+  globalThis.ERP = globalThis.ERP || {};
+  globalThis.ERP.app = { commit: () => Promise.resolve(), render: () => {} };
+  page.actions['merge-selected'](ctx, state);
+  await new Promise(r => setTimeout(r, 20));
+  globalThis.ERP = orig;
+  assert.strictEqual(ctx.data.products.length, 1, '停售副档被合并');
+  assert.strictEqual(ctx.data.products[0].stock, 8);
+});
