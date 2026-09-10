@@ -602,3 +602,44 @@ test('merge-selected：停售商品也可合并', async () => {
   assert.strictEqual(ctx.data.products.length, 1, '停售副档被合并');
   assert.strictEqual(ctx.data.products[0].stock, 8);
 });
+
+/* ---------------- V3.43：多选勾选不再整页重渲染（滚动位置不跳回顶部） ---------------- */
+
+test('row-check：只局部刷新，不调用整页 render（长列表多选不跳顶）', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const [p1, p2] = ctx.data.products;
+  let renderCount = 0;
+  const orig = globalThis.ERP;
+  globalThis.ERP = { app: { render: () => { renderCount++; } } };
+  page.actions['row-check'](ctx, state, { getAttribute: () => p1.id });
+  page.actions['row-check'](ctx, state, { getAttribute: () => p2.id });
+  globalThis.ERP = orig;
+  assert.strictEqual(renderCount, 0, '勾选不触发整页重渲染（滚动位置保持不变）');
+  assert.deepStrictEqual(state.sel, { [p1.id]: true, [p2.id]: true }, '选中集合正确更新');
+});
+
+test('toggle-all-check：只局部更新，不调用整页 render', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  let renderCount = 0;
+  const orig = globalThis.ERP;
+  globalThis.ERP = { app: { render: () => { renderCount++; } } };
+  page.actions['toggle-all-check'](ctx, state, {});
+  globalThis.ERP = orig;
+  assert.strictEqual(renderCount, 0, '全选不触发整页重渲染');
+  assert.strictEqual(Object.keys(state.sel).filter(k => state.sel[k]).length, 2, '全选本页全部');
+});
+
+test('Node 无 DOM：refreshSelUI 安全跳过，勾选逻辑不受影响', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const [p1] = ctx.data.products;
+  page.actions['row-check'](ctx, state, { getAttribute: () => p1.id });
+  assert.deepStrictEqual(state.sel, { [p1.id]: true });
+  page.actions['toggle-all-check'](ctx, state, {});
+  const ids = ctx.data.products.map(p => String(p.id));
+  assert.deepStrictEqual(state.sel, { [ids[0]]: true, [ids[1]]: true }, '全选：本页全部置为勾选');
+  page.actions['toggle-all-check'](ctx, state, {});
+  assert.deepStrictEqual(state.sel, {}, '再点全选=取消全选，集合为空');
+});
