@@ -215,6 +215,71 @@
         doDelete();
       },
 
+      /** V3.42：同型号商品信息合并（仅网页版；手机端按钮 desktop-only 隐藏） */
+      'merge-selected': function (ctx, state) {
+        var ids = Object.keys(state.sel || {}).filter(function (k) { return state.sel[k]; });
+        if (ids.length < 2) {
+          ui.toast('请至少勾选 2 个同型号商品再合并', 'warn');
+          return false;
+        }
+        // 预校验：型号一致（忽略首尾空格与大小写）
+        var modelKeys = ids.map(function (id) {
+          var p = product.getById(ctx, id);
+          return p ? String(p.model || '').trim().toUpperCase() : '';
+        });
+        for (var i = 1; i < modelKeys.length; i++) {
+          if (modelKeys[i] !== modelKeys[0]) {
+            ui.toast('所选商品型号不一致，无法合并（仅支持同型号合并）', 'err');
+            return false;
+          }
+        }
+        // 主档案 = 库存最大者（与核心层一致）
+        var keepP = null;
+        ids.forEach(function (id) {
+          var p = product.getById(ctx, id);
+          if (!p) return;
+          if (!keepP || (p.stock || 0) > (keepP.stock || 0)) keepP = p;
+        });
+        if (!keepP) return false;
+        var stockTotal = ids.reduce(function (sum, id) {
+          var p = product.getById(ctx, id);
+          return sum + (p ? (p.stock || 0) : 0);
+        }, 0);
+        var doMerge = function () {
+          var res = product.mergeByModel(ctx, ids);
+          if (!res.ok) {
+            ui.toast(res.error || '合并失败', 'err');
+            state.sel = {};
+            if (ERP.app) {
+              if (ERP.app.commit) ERP.app.commit().then(function () { ERP.app.render(); }).catch(function () { ERP.app.render(); });
+              else if (ERP.app.render) ERP.app.render();
+            }
+            return;
+          }
+          repo.log(ctx, '合并商品档案',
+            product.displayName(res.keep) + ' 并入 ' + res.merged.length + ' 款同型号，库存合计 ' + res.stockTotal);
+          ui.toast('已合并 ' + (res.merged.length + 1) + ' 款 → 保留「' + product.displayName(res.keep) + '」，库存合计 ' + res.stockTotal, 'ok');
+          state.sel = {};
+          if (ERP.app) {
+            if (ERP.app.commit) ERP.app.commit().then(function () { ERP.app.render(); }).catch(function () { ERP.app.render(); });
+            else if (ERP.app.render) ERP.app.render();
+          }
+        };
+        if (ui.confirm) {
+          ui.confirm('合并同型号商品',
+            '将合并勾选的 <b>' + ids.length + '</b> 款<b>同型号</b>商品：<br>' +
+            '· 保留档案：<b>' + esc(product.displayName(keepP)) + '</b>（库存最大者）<br>' +
+            '· 库存相加（合计 <b>' + stockTotal + '</b>）、备注拼接、条码合并<br>' +
+            '· 品牌/成本/价格/类型/单位/状态保留主档案<br>' +
+            '· 其余 ' + (ids.length - 1) + ' 款档案将<b>删除</b>，历史单据不受影响<br>' +
+            '合并不可恢复，确定继续？', '确认合并').then(function (yes) {
+            if (yes) doMerge();
+          });
+          return false;
+        }
+        doMerge();
+      },
+
       filter: function (ctx, state, el) {
         var key = el.getAttribute('data-name');
         state[key] = el.value;
@@ -476,6 +541,7 @@
       '<div class="actions">' +
       '<button class="btn" data-act="open-csv">📥 批量导入</button>' +
       '<button class="btn btn-danger desktop-only" data-act="del-selected"' + (selCount ? '' : ' disabled') + '>🗑 删除选中' + (selCount ? '（' + selCount + '）' : '') + '</button>' +
+      '<button class="btn btn-orange desktop-only" data-act="merge-selected"' + (selCount >= 2 ? '' : ' disabled') + ' title="仅型号相同的商品可合并，保留库存最大者，库存/备注/条码合并">🔀 合并选中' + (selCount >= 2 ? '（' + selCount + '）' : '') + '</button>' +
       '<button class="btn btn-primary" data-act="open-new">＋ 新建商品</button>' +
       '</div></div>';
 

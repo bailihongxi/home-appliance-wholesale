@@ -329,6 +329,78 @@
     return { deleted: deleted, blocked: blocked };
   };
 
+  /**
+   * V3.42：同型号商品信息合并（网页版专用）。
+   * 规则（用户确认方案 B/C/①）：
+   *  - 仅「型号相同」即可合并（品牌可不同，合并后品牌取主档案）；
+   *  - 主档案 = 勾选商品中库存最大者（相同则取第一个勾选顺序）；
+   *  - 库存相加、备注拼接（按行去重）、条码合并（去重）到主档案；
+   *  - 品牌/类型/单位/成本/批发价/零售价/状态保留主档案原值；
+   *  - 副档案一律物理删除（__deleted → flush 走 db.del），
+   *    即使被单据引用也删除——历史单据已存品牌型号快照，不受影响；
+   *  - 不管是否停售均可合并。
+   * @returns {ok, error} 或 {ok:true, keep:{id,brand,model,stock}, merged:[{id,brand,model}], stockTotal}
+   */
+  api.mergeByModel = function mergeByModel(ctx, ids) {
+    ids = (ids || []).filter(function (id) { return id !== undefined && id !== null && id !== ''; });
+    if (ids.length < 2) return err('至少选择 2 个同型号商品才能合并');
+    var list = ctx.data.products || [];
+    var chosen = ids.map(function (id) {
+      for (var i = 0; i < list.length; i++) {
+        if (String(list[i].id) === String(id)) return list[i];
+      }
+      return null;
+    }).filter(Boolean);
+    if (chosen.length !== ids.length) return err('部分商品不存在，请刷新后重试');
+    // 校验型号一致（忽略首尾空格与大小写）
+    var modelKey = String(chosen[0].model || '').trim().toUpperCase();
+    if (!modelKey) return err('商品缺少型号，无法合并');
+    for (var i = 1; i < chosen.length; i++) {
+      if (String(chosen[i].model || '').trim().toUpperCase() !== modelKey) {
+        return err('所选商品型号不一致（含 ' + chosen[i].brand + ' ' + chosen[i].model + '），无法合并');
+      }
+    }
+    // 主档案 = 库存最大（相同取先勾选）
+    var keep = chosen[0];
+    for (var j = 1; j < chosen.length; j++) {
+      if ((chosen[j].stock || 0) > (keep.stock || 0)) keep = chosen[j];
+    }
+    var merged = [];
+    var stockTotal = keep.stock || 0;
+    // 备注按整条去重拼接（save 已 cleanText，备注无内部换行）
+    var noteLines = [];
+    if (String(keep.note || '').trim()) noteLines.push(String(keep.note).trim());
+    var barcodes = (Array.isArray(keep.barcodes) ? keep.barcodes.slice() : []);
+    chosen.forEach(function (p) {
+      if (p === keep) return;
+      stockTotal += (p.stock || 0);
+      var note = String(p.note || '').trim();
+      if (note && noteLines.indexOf(note) < 0) noteLines.push(note);
+      (Array.isArray(p.barcodes) ? p.barcodes : []).forEach(function (b) {
+        if (barcodes.indexOf(b) < 0) barcodes.push(b);
+      });
+      // 从内存移除 + 标记删除（flush 走 db.del 物理删除）
+      for (var k = 0; k < list.length; k++) {
+        if (list[k] === p) { list.splice(k, 1); break; }
+      }
+      p.__deleted = true;
+      ctx.touch('products', p);
+      merged.push({ id: p.id, brand: p.brand, model: p.model });
+    });
+    // 合并结果写入主档案
+    keep.stock = stockTotal;
+    keep.note = noteLines.join('\n');
+    keep.barcodes = barcodes;
+    keep.updatedAt = util.today ? util.today() : keep.updatedAt;
+    ctx.touch('products', keep);
+    return {
+      ok: true,
+      keep: { id: keep.id, brand: keep.brand, model: keep.model, stock: stockTotal },
+      merged: merged,
+      stockTotal: stockTotal
+    };
+  };
+
   /** 商品对外展示名：品牌 + 型号 */
   api.displayName = function displayName(p) {
     if (!p) return '';
