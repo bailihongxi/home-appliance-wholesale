@@ -134,7 +134,9 @@ test('进货选货区：默认每页 15 条 + 斑马纹 + 分页导航（pick-pa
   const state = fresh(ctx);
   state.tab = 'form';
   const html = page.render(ctx, state);
-  assert.ok(html.includes('tbl tbl-striped'), '进货选货表格应带斑马纹样式');
+  // V3.50 选货区改为两行卡片式（无需横向滚动）
+  assert.ok(html.includes('class="pick-list"'), '进货选货区应为两行卡片式 pick-list');
+  assert.ok(html.includes('pick-sub'), '进货选货卡片第二行（类型/单位 + 成本）');
   assert.strictEqual((html.match(/data-act="add-item"/g) || []).length, 15, '默认只显示前 15 条商品');
   assert.ok(html.includes('data-act="pick-page"'), '进货选货分页应使用 pick-page 动作');
   assert.ok(html.includes('共 18 条'), '分页显示总条数');

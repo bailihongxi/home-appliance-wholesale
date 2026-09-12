@@ -417,6 +417,20 @@ textarea.input { min-height: 72px; resize: vertical; }
 /* ---------- 表格 ---------- */
 
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* V3.50 选货区两行卡片式（手机/电脑均无需横向滚动） */
+.pick-list { display: flex; flex-direction: column; }
+.pick-item { display: flex; align-items: center; gap: 12px; padding: 10px 2px; border-top: 0.5px solid var(--c-border); }
+.pick-item:first-child { border-top: none; }
+.pick-main { flex: 1; min-width: 0; }
+.pick-name { font-size: 14px; font-weight: 500; line-height: 1.4; color: var(--c-text); }
+.pick-sub { margin-top: 5px; font-size: 12px; color: var(--c-text-sub); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.pick-sub .weak { color: var(--c-text-weak); }
+.pick-price b { font-weight: 500; color: var(--c-text); }
+.pick-side { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.pick-stock { font-size: 14px; color: var(--c-text); font-variant-numeric: tabular-nums; }
+.pick-stock.low { color: var(--c-danger); }
+
 table.tbl {
   width: 100%;
   border-collapse: collapse;

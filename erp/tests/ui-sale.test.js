@@ -250,8 +250,9 @@ test('选货区：默认每页 15 条 + 斑马纹 + 分页导航（pick-page）'
   }
   const state = fresh(ctx);
   const html = page.render(ctx, state);
-  // 斑马纹 + 默认 15 行
-  assert.ok(html.includes('tbl tbl-striped'), '选货表格应带斑马纹样式');
+  // V3.50 选货区改为两行卡片式（无需横向滚动）
+  assert.ok(html.includes('class="pick-list"'), '选货区应为两行卡片式 pick-list');
+  assert.ok(html.includes('pick-sub'), '选货卡片第二行（类型/单位 + 批/零价格）');
   const rows = (html.match(/data-act="pick-product"/g) || []).length;
   assert.strictEqual(rows, 15, '默认只显示前 15 条商品，避免加载过多');
   // 分页导航：共 20 条 → 2 页，动作名为 pick-page

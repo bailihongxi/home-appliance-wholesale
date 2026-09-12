@@ -428,20 +428,25 @@
     if (!pick.list.length) {
       h += ui.empty('没有匹配的商品，请先到「商品档案」建档');
     } else {
-      h += '<div class="table-wrap"><table class="tbl tbl-striped"><thead><tr>' +
-        '<th>商品</th><th class="num">批发</th><th class="num">零售</th><th class="num">库存</th><th></th>' +
-        '</tr></thead><tbody>';
+      h += '<div class="pick-list">';
       pick.list.forEach(function (p) {
         var low = (p.stock || 0) < (ctx.settings.defaultThreshold == null ? 3 : ctx.settings.defaultThreshold);
-        h += '<tr>' +
-          '<td>' + esc(p.brand) + ' <b>' + esc(p.model) + '</b><br><span class="weak small">' + esc(p.category) + ' / ' + esc(p.unit) + '</span></td>' +
-          '<td class="num">' + ui.money(p.priceWholesale) + '</td>' +
-          '<td class="num">' + ui.money(p.priceRetail) + '</td>' +
-          '<td class="num' + (low ? ' low' : '') + '">' + (p.stock || 0) + '</td>' +
-          '<td class="act"><button class="btn btn-sm btn-orange" data-act="pick-product" data-id="' + esc(p.id) + '">加入</button></td>' +
-          '</tr>';
+        h += '<div class="pick-item">' +
+          '<div class="pick-main">' +
+            '<div class="pick-name">' + esc(p.brand) + ' <b>' + esc(p.model) + '</b></div>' +
+            '<div class="pick-sub">' +
+              '<span class="weak">' + esc(p.category) + ' / ' + esc(p.unit) + '</span>' +
+              '<span class="pick-price">批: <b>' + ui.money(p.priceWholesale) + '</b></span>' +
+              '<span class="pick-price">零: <b>' + ui.money(p.priceRetail) + '</b></span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="pick-side">' +
+            '<div class="pick-stock' + (low ? ' low' : '') + '">' + (p.stock || 0) + '</div>' +
+            '<button class="btn btn-sm btn-orange" data-act="pick-product" data-id="' + esc(p.id) + '">加入</button>' +
+          '</div>' +
+        '</div>';
       });
-      h += '</tbody></table></div>' + ui.pager(pick.page, pick.pages, pick.total, 'pick-page');
+      h += '</div>' + ui.pager(pick.page, pick.pages, pick.total, 'pick-page');
     }
     h += '</div>';
     h += '</div>';
