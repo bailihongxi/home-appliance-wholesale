@@ -414,7 +414,21 @@
       offStatus: schema.STATUS.OFF
     });
     if (styles.length) {
-      h += '<div class="pick-list">';
+      // 桌面端（≥600px）：V3.49 5 列横向表格（商品/批发/零售/库存/加入），电脑端不变
+      h += '<div class="pick-desktop"><div class="table-wrap"><table class="tbl"><thead><tr><th>商品</th>' +
+        '<th class="num">批发</th><th class="num">零售</th><th class="num">库存</th><th></th></tr></thead><tbody>';
+      styles.forEach(function (p) {
+        h += '<tr>' +
+          '<td>' + esc(p.brand) + ' <b>' + esc(p.model) + '</b><br><span class="weak small">' + esc(p.category) + ' / ' + esc(p.unit) + '</span></td>' +
+          '<td class="num">' + ui.money(p.priceWholesale) + '</td>' +
+          '<td class="num">' + ui.money(p.priceRetail) + '</td>' +
+          '<td class="num">' + (p.stock || 0) + '</td>' +
+          '<td class="act"><button class="btn btn-sm btn-orange" data-act="repl-add" data-id="' + esc(p.id) + '">加入</button></td>' +
+          '</tr>';
+      });
+      h += '</tbody></table></div></div>';
+      // 手机端（≤599px）：V3.51 两行卡片式选货区（无需横向滚动）
+      h += '<div class="pick-mobile"><div class="pick-list">';
       styles.forEach(function (p) {
         h += '<div class="pick-item">' +
           '<div class="pick-main">' +
@@ -431,7 +445,9 @@
           '</div>' +
         '</div>';
       });
-      h += '</div>';
+      h += '</div></div>';
+    } else {
+      h += '<div class="pick-desktop"></div><div class="pick-mobile"></div>';
     }
     h += '</div>';
 

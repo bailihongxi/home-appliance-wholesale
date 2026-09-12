@@ -232,4 +232,8 @@
     writing-mode: vertical-rl;
     text-orientation: upright;
   }
+
+  /* V3.52 手机端选货区双布局切换：隐藏桌面端表格 .pick-desktop，显示手机卡片 .pick-mobile */
+  .pick-desktop { display: none !important; }
+  .pick-mobile { display: block !important; }
 }
