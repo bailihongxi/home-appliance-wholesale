@@ -106,3 +106,18 @@ test('换货：退旧换新收差价，两单联动', () => {
   assert.strictEqual(product.getById(ctx, p1.id).stock, 10);
   assert.strictEqual(product.getById(ctx, p2.id).stock, 7);
 });
+
+/* V3.48：换货补货搜索框启用原生一键清除 */
+test('换货补货搜索框为 type="search" 且带 data-live/debounce', () => {
+  const { ctx, p1, p2, saleNo } = seedSale(newCtx());
+  const state = fresh();
+  state.tab = 'exchange';
+  state.originalNo = saleNo;
+  const html = page.render(ctx, state);
+  const tagMatch = html.match(/<input[^>]*data-name="replKeyword"[^>]*>/);
+  assert.ok(tagMatch, '找到 replKeyword 输入框');
+  const tag = tagMatch[0];
+  assert.ok(/type\s*=\s*["']search["']/.test(tag), '换货搜索框为 type="search"');
+  assert.ok(tag.includes('data-live="1"'), '换货搜索框有 data-live="1"');
+  assert.ok(tag.includes('data-debounce="1"'), '换货搜索框有 data-debounce="1"');
+});

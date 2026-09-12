@@ -233,6 +233,21 @@ test('新建进货单选货区：搜索框后带扫码按钮（data-act="scan"�
   assert.ok(html.includes('data-act="scan"'), '搜索框后带扫码按钮');
 });
 
+/* V3.48：进货选货区搜索框启用原生一键清除 */
+test('新建进货单选货区搜索框为 type="search" 且带 data-live/debounce', () => {
+  const ctx = newCtx();
+  seed(ctx);
+  const state = fresh(ctx);
+  state.tab = 'form';
+  const html = page.render(ctx, state);
+  const tagMatch = html.match(/<input[^>]*data-input="form-keyword"[^>]*>/);
+  assert.ok(tagMatch, '找到 form-keyword 输入框');
+  const tag = tagMatch[0];
+  assert.ok(/type\s*=\s*["']search["']/.test(tag), '进货选货搜索框为 type="search"');
+  assert.ok(tag.includes('data-live="1"'), '进货选货搜索框有 data-live="1"');
+  assert.ok(tag.includes('data-debounce="1"'), '进货选货搜索框有 data-debounce="1"');
+});
+
 test('新建进货单 scan 动作：识别后定位商品并直接加入明细', () => {
   const ctx = newCtx();
   const { p2 } = seed(ctx);

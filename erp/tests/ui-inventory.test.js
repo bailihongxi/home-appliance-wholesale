@@ -101,6 +101,20 @@ test('盘点：填实盘数保存，生成盘点单并调整库存', () => {
   assert.ok(html.includes('最近盘点记录'));
 });
 
+/* V3.48：盘点搜索框启用原生一键清除 */
+test('盘点录入搜索框为 type="search" 且带 data-live/debounce', () => {
+  const ctx = seed(newCtx());
+  const st = fresh(ctx);
+  st.tab = 'take';
+  const html = page.render(ctx, st);
+  const tagMatch = html.match(/<input[^>]*data-input="take-keyword"[^>]*>/);
+  assert.ok(tagMatch, '找到 take-keyword 输入框');
+  const tag = tagMatch[0];
+  assert.ok(/type\s*=\s*["']search["']/.test(tag), '盘点搜索框为 type="search"');
+  assert.ok(tag.includes('data-live="1"'), '盘点搜索框有 data-live="1"');
+  assert.ok(tag.includes('data-debounce="1"'), '盘点搜索框有 data-debounce="1"');
+});
+
 test('变动明细：show-logs 显示进货入库记录', () => {
   const ctx = seed(newCtx());
   const p = ctx.data.products[0];

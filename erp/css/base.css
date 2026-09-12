@@ -362,6 +362,21 @@ button, input, select, textarea {
 .input[type="number"] { -moz-appearance: textfield; }
 textarea.input { min-height: 72px; resize: vertical; }
 
+/* V3.48：搜索框启用浏览器原生一键清除按钮（有内容时自动显示） */
+.input[type="search"] {
+  -webkit-appearance: textfield;
+  appearance: textfield;
+}
+.input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: searchfield-cancel-button;
+  appearance: searchfield-cancel-button;
+  height: 14px;
+  width: 14px;
+  cursor: pointer;
+  opacity: 0.55;
+}
+.input[type="search"]::-webkit-search-cancel-button:hover { opacity: 1; }
+
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {
   padding: 6px 12px;

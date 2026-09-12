@@ -490,6 +490,11 @@
 
   /* ---------------- 渲染 ---------------- */
 
+  // V3.48：同路由重渲染保持滚动位置；仅路由切换时回到顶部。
+  // 解决「销售开单/进货单/商品档案等页面内点加入/勾选/改数量后整页重渲染跳回顶部」问题。
+  var lastRoute = null;
+  var savedScroll = { x: 0, y: 0 };
+
   function render() {
     if (!app.ready) return;
     // V3：未登录 → 只渲染登录页（不进入业务路由）
@@ -516,6 +521,16 @@
     }
     html = decorateHtml(page, html);
 
+    var routeName = router().currentName ? router().currentName() : (page && page.name);
+    var routeChanged = lastRoute !== routeName;
+    lastRoute = routeName;
+
+    var win = typeof window !== 'undefined' ? window : null;
+    if (win && !routeChanged) {
+      savedScroll.x = win.scrollX || win.pageXOffset || 0;
+      savedScroll.y = win.scrollY || win.pageYOffset || 0;
+    }
+
     app.main.innerHTML = html;
     document.title = (ERP.branding ? ERP.branding.pageTitle(app.ctx.settings, page.title) : ((app.ctx.settings.shopName || '电器店') + ' · ' + (page.title || '')));
     applyFavicon();
@@ -526,7 +541,13 @@
         if (typeof console !== 'undefined') console.error(err2);
       }
     }
-    if (typeof window !== 'undefined') window.scrollTo(0, 0);
+    if (win) {
+      if (routeChanged) {
+        win.scrollTo(0, 0);
+      } else {
+        win.scrollTo(savedScroll.x, savedScroll.y);
+      }
+    }
   }
 
   /** 页面渲染结果是否已自带薄荷绿 banner（home/inventory/mine 已内置） */
@@ -552,6 +573,8 @@
   app.decorateHtml = decorateHtml;
 
   app.render = render;
+  app.lastRoute = function () { return lastRoute; };
+  app._savedScroll = function () { return { x: savedScroll.x, y: savedScroll.y }; };
 
   /* ---------------- 实时输入判定（纯函数，可单测） ---------------- */
 

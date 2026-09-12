@@ -29,13 +29,14 @@
     return '<div class="empty">' + esc(text || '暂无数据') + '</div>';
   };
 
-  /** 搜索栏：data-input="keyword" 由页面自行处理；data-live+data-debounce 实现防抖实时搜索（大数据量不卡顿） */
+  /** 搜索栏：data-input="keyword" 由页面自行处理；data-live+data-debounce 实现防抖实时搜索（大数据量不卡顿）
+   * type="search" 启用浏览器原生一键清除按钮（V3.48）。 */
   C.searchBar = function searchBar(opts) {
     opts = opts || {};
     var ph = opts.placeholder || '搜索名称 / 款号 / 条码';
     return (
       '<div class="row mb8 search-bar' + (opts.cls ? ' ' + esc(opts.cls) : '') + '">' +
-      '<input class="input" data-input="keyword" data-live="1" data-debounce="1" placeholder="' + esc(ph) + '" value="' + esc(opts.value || '') + '">' +
+      '<input class="input" type="search" data-input="keyword" data-live="1" data-debounce="1" placeholder="' + esc(ph) + '" value="' + esc(opts.value || '') + '">' +
       (opts.scan === false ? '' : '<button class="btn" data-act="scan" title="扫码">📷</button>') +
       (opts.filters || '') +
       '</div>'

@@ -33,3 +33,22 @@ test('V3.17-手机端筛选区整行换行、下拉与重置按钮同一行', ()
     '容器内下拉 flex:auto 与重置按钮并排同一行');
   assert.ok(block.includes('.search-bar { flex-wrap: wrap; }'), '手机端搜索栏允许换行保持不变');
 });
+
+/* V3.48：搜索框统一启用浏览器原生一键清除按钮 */
+
+test('searchBar 组件使用 type="search" 以启用原生清除按钮', () => {
+  const src = read('js/ui/components.js');
+  const fn = src.match(/C\.searchBar = function searchBar\(opts\) \{[\s\S]*?\n  \};/);
+  assert.ok(fn, '找到 searchBar 函数');
+  assert.ok(fn[0].includes('type="search"'), 'searchBar 输入框为 type="search"');
+  assert.ok(fn[0].includes('data-live="1"'), 'searchBar 保持 data-live="1"');
+  assert.ok(fn[0].includes('data-debounce="1"'), 'searchBar 保持 data-debounce="1"');
+});
+
+test('CSS 为 input[type=search] 显式启用原生清除按钮样式', () => {
+  const base = read('css/base.css');
+  const block = base.slice(base.indexOf('.input[type="search"]'));
+  assert.ok(block.includes('-webkit-appearance: textfield'), '搜索框使用 textfield 外观');
+  assert.ok(block.includes('::-webkit-search-cancel-button'), '定义原生清除按钮伪元素');
+  assert.ok(block.includes('searchfield-cancel-button'), '启用原生 searchfield-cancel-button 图标');
+});
