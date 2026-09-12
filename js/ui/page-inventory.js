@@ -365,7 +365,7 @@
 
     var h = '<div class="card"><div class="card-title">录入实盘数' +
       '<span class="more">留空表示不盘该项</span></div>' +
-      '<div class="row mb8"><input class="input" data-input="take-keyword" placeholder="搜索 品牌 / 型号 / 类型" value="' + esc(st.take.keyword) + '"></div>';
+      '<div class="row mb8"><input class="input" type="search" data-input="take-keyword" data-live="1" data-debounce="1" placeholder="搜索 品牌 / 型号 / 类型" value="' + esc(st.take.keyword) + '"></div>';
 
     if (!list.length) {
       h += ui.empty('没有找到商品');

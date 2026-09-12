@@ -406,7 +406,7 @@
 
     /* 换新商品选择 */
     h += '<div class="card"><div class="card-title">② 选换新商品</div>';
-    h += '<div class="row mb8"><input class="input" data-input="field" data-name="replKeyword" data-live="1" data-debounce="1" placeholder="搜索 品牌 / 型号 / 类型 / 条码" value="' + esc(state.replKeyword) + '"></div>';
+    h += '<div class="row mb8"><input class="input" type="search" data-input="field" data-name="replKeyword" data-live="1" data-debounce="1" placeholder="搜索 品牌 / 型号 / 类型 / 条码" value="' + esc(state.replKeyword) + '"></div>';
     var kw = String(state.replKeyword || '').trim().toUpperCase();
     // 大数据量优化：提前终止取前 30 个（无关键词不全量遍历；有关键词命中即停）
     var styles = util.pickProducts(ctx.data.products, kw, {
