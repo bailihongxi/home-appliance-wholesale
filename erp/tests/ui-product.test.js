@@ -780,3 +780,35 @@ test('click 委托路径：toggle-all-check 全选/取消一致', () => {
   page.actions['toggle-all-check'](ctx, state, {});
   assert.deepStrictEqual(state.sel, {});
 });
+
+/* ---------------- V3.47：修复「勾选复选框后页面跳回顶部」 ----------------
+ * 根因：V3.43 去掉了动作内的 ERP.app.render()，但动作返回 undefined，
+ * 框架 actHandler 在 返回值 !== false 时仍会调用 afterAction() → render() → window.scrollTo(0,0)，
+ * 长列表勾选后依旧整页重渲染并跳回顶部。
+ * 修复：row-check / toggle-all-check 显式 return false，跳过框架整页重渲染。
+ * 回归测试（此前缺失）：断言勾选动作返回 false，框架因此不会触发 afterAction（即不会整页重渲染+滚动）。 */
+
+test('row-check 必须返回 false：框架 actHandler 才不会触发 afterAction（不整页重渲染、不跳顶）', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const [p1] = ctx.data.products;
+  const ret = page.actions['row-check'](ctx, state, { getAttribute: () => p1.id });
+  assert.strictEqual(ret, false, '勾选动作必须 return false，否则框架会 afterAction → render → scrollTo(0,0) 跳回顶部');
+  assert.strictEqual(state.sel[p1.id], true, '选中集合仍正确更新');
+  // 模拟框架 actHandler 的真实分支：返回值 !== false 才 afterAction（整页重渲染+滚动）
+  let afterActionCalled = false;
+  const handled = ret;
+  if (handled !== false) afterActionCalled = true;
+  assert.strictEqual(afterActionCalled, false, '框架不应触发 afterAction（否则会跳顶）');
+});
+
+test('toggle-all-check 必须返回 false：框架 actHandler 才不会触发 afterAction', () => {
+  const { ctx, state } = fresh();
+  seed(ctx);
+  const ret = page.actions['toggle-all-check'](ctx, state, {});
+  assert.strictEqual(ret, false, '全选动作必须 return false，避免整页重渲染跳顶');
+  assert.strictEqual(Object.keys(state.sel).filter(k => state.sel[k]).length, 2, '全选本页全部');
+  let afterActionCalled = false;
+  if (ret !== false) afterActionCalled = true;
+  assert.strictEqual(afterActionCalled, false, '框架不应触发 afterAction（否则会跳顶）');
+});
