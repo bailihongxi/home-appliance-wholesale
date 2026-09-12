@@ -133,10 +133,10 @@ test('测试连接-失败(401 Token 无效)：显示细分原因', async () => {
   }
 });
 
-test('关于：版本号统一为 V3.54（与 PRD / 开发计划一致）', () => {
+test('关于：版本号统一为 V3.55（与 PRD / 开发计划一致）', () => {
   const { ctx, state } = fresh();
   const html = page.render(ctx, state);
-  assert.ok(html.includes('版本：V3.54'), '关于页显示 V3.54');
+  assert.ok(html.includes('版本：V3.55'), '关于页显示 V3.55');
   // V3.54：关于卡片提供「检查更新」按钮，便于旧缓存时手动强制刷新
   assert.ok(html.includes('data-act="check-update"'), '关于卡片含「检查更新」按钮');
   assert.ok(typeof page.actions['check-update'] === 'function', 'check-update 动作已注册');

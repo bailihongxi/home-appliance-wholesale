@@ -418,19 +418,23 @@
       h += '<div class="pick-desktop"><div class="table-wrap"><table class="tbl"><thead><tr><th>商品</th>' +
         '<th class="num">批发</th><th class="num">零售</th><th class="num">库存</th><th></th></tr></thead><tbody>';
       styles.forEach(function (p) {
-        h += '<tr>' +
+        // V3.55：已加入换新商品列表的商品 → 整行灰底 + 蓝色「加入」按钮
+        var pickedD = !!findRepl(state, p.id);
+        h += '<tr' + (pickedD ? ' class="picked"' : '') + '>' +
           '<td>' + esc(p.brand) + ' <b>' + esc(p.model) + '</b><br><span class="weak small">' + esc(p.category) + ' / ' + esc(p.unit) + '</span></td>' +
           '<td class="num">' + ui.money(p.priceWholesale) + '</td>' +
           '<td class="num">' + ui.money(p.priceRetail) + '</td>' +
           '<td class="num">' + (p.stock || 0) + '</td>' +
-          '<td class="act"><button class="btn btn-sm btn-orange" data-act="repl-add" data-id="' + esc(p.id) + '">加入</button></td>' +
+          '<td class="act"><button class="btn btn-sm ' + (pickedD ? 'btn-added' : 'btn-orange') + '" data-act="repl-add" data-id="' + esc(p.id) + '">加入</button></td>' +
           '</tr>';
       });
       h += '</tbody></table></div></div>';
       // 手机端（≤599px）：V3.51 两行卡片式选货区（无需横向滚动）
       h += '<div class="pick-mobile"><div class="pick-list">';
       styles.forEach(function (p) {
-        h += '<div class="pick-item">' +
+        // V3.55：已加入换新商品列表的商品 → 整行灰底 + 蓝色「加入」按钮
+        var picked = !!findRepl(state, p.id);
+        h += '<div class="pick-item' + (picked ? ' picked' : '') + '">' +
           '<div class="pick-main">' +
             '<div class="pick-name">' + esc(p.brand) + ' <b>' + esc(p.model) + '</b></div>' +
             '<div class="pick-sub">' +
@@ -441,7 +445,7 @@
           '</div>' +
           '<div class="pick-side">' +
             '<div class="pick-stock">' + (p.stock || 0) + '</div>' +
-            '<button class="btn btn-sm btn-orange" data-act="repl-add" data-id="' + esc(p.id) + '">加入</button>' +
+            '<button class="btn btn-sm ' + (picked ? 'btn-added' : 'btn-orange') + '" data-act="repl-add" data-id="' + esc(p.id) + '">加入</button>' +
           '</div>' +
         '</div>';
       });

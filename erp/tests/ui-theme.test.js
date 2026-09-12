@@ -94,7 +94,10 @@ test('所有 .tbl 表格默认启用斑马纹（交替行底色）', () => {
   // 所有 .tbl 表格（不仅限 .tbl-striped）都有斑马纹规则
   assert.ok(/table\.tbl tbody tr:nth-child\(even\) \{/.test(base),
     'base.css 中存在 table.tbl tbody tr:nth-child(even) 斑马纹规则（所有表格默认启用）');
-  assert.ok(base.includes('background: #f6f7f9'), '斑马纹底色为 #f6f7f9');
+  // V3.55：色值抽成变量 --c-stripe，与手机端选货卡片共用同一支色
+  assert.ok(/--c-stripe:\s*#f6f7f9/.test(base), '--c-stripe 变量定义为 #f6f7f9');
+  assert.ok(/table\.tbl tbody tr:nth-child\(even\) \{\s*background:\s*var\(--c-stripe\)/.test(base),
+    '斑马纹底色改用 var(--c-stripe)（表格与卡片统一）');
 });
 
 test('侧边栏折叠按钮基础样式在 base.css（不依赖媒体查询），展开态红色长条+折叠态小方形', () => {

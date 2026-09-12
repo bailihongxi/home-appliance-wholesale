@@ -37,6 +37,12 @@
   --c-text-sub:    #6b7280;
   --c-text-weak:   #9ca3af;
 
+  /* —— 底色（列表可读性）——
+   * stripe：斑马纹交替行底色，所有商品列表（表格 table.tbl / 手机卡片 .pick-item）统一使用
+   * picked：已加入当前明细的行底色，必须比 stripe 更深一眼可辨（用户要求） */
+  --c-stripe: #f6f7f9;
+  --c-picked: #e2e5ea;
+
   /* —— 背景 —— */
   --c-bg:    #f5f7fa;
   --c-card:  #ffffff;
@@ -301,6 +307,11 @@ button, input, select, textarea {
 .btn-orange { background: #f97316; border-color: #f97316; color: #fff; box-shadow: 0 4px 12px rgba(249, 115, 22, .25); }
 .btn-orange:hover { background: #ea580c; border-color: #ea580c; }
 .btn-orange:active { background: #c2410c; }
+/* V3.55 「已加入」态：加入按钮由橙转蓝，表示该商品已在当前明细/订单里
+   * （按钮文案仍固定为「加入」，点击继续累加数量） */
+.btn-added { background: var(--c-primary); border-color: var(--c-primary); color: #fff; box-shadow: 0 4px 12px rgba(37, 99, 235, .25); }
+.btn-added:hover { background: var(--c-primary-dark); border-color: var(--c-primary-dark); }
+.btn-added:active { background: #1e40af; border-color: #1e40af; }
 .btn-yellow { background: #eab308; border-color: #eab308; color: #fff; }
 .btn-yellow:active { background: #ca8a04; }
 
@@ -430,8 +441,13 @@ textarea.input { min-height: 72px; resize: vertical; }
 
 /* V3.50 选货区两行卡片式（手机端使用，电脑端不渲染可见） */
 .pick-list { display: flex; flex-direction: column; }
-.pick-item { display: flex; align-items: center; gap: 12px; padding: 10px 2px; border-top: 0.5px solid var(--c-border); }
+.pick-item { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-top: 0.5px solid var(--c-border); }
 .pick-item:first-child { border-top: none; }
+/* V3.55 斑马纹：手机端选货卡片同样启用交替行底色，与电脑端 table.tbl 保持一致，
+   * 共用 --c-stripe 变量保证两边颜色完全相同 */
+.pick-item:nth-child(even) { background: var(--c-stripe); }
+/* V3.55 已加入当前明细的行：整行灰底（比斑马纹更深），配合 .btn-added 蓝色按钮识别 */
+.pick-item.picked { background: var(--c-picked); }
 .pick-main { flex: 1; min-width: 0; }
 .pick-name { font-size: 14px; font-weight: 500; line-height: 1.4; color: var(--c-text); overflow-wrap: anywhere; }
 .pick-sub { margin-top: 5px; font-size: 12px; color: var(--c-text-sub); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
@@ -456,10 +472,13 @@ table.tbl th, table.tbl td {
 table.tbl th { color: var(--c-text-sub); font-weight: 500; font-size: 13px; background: #fafafa; }
 table.tbl tbody tr:active { background: #f9fafb; }
 /* 斑马纹：交替行底色，长列表不易看错行（手机版/电脑版共用，所有 .tbl 表格默认启用） */
-table.tbl tbody tr:nth-child(even) { background: #f6f7f9; }
-table.tbl tbody tr:nth-child(even) td.cell-note { background: #f6f7f9; }
-table.tbl.tbl-striped tbody tr:nth-child(even) { background: #f6f7f9; }
-table.tbl.tbl-striped tbody tr:nth-child(even) td.cell-note { background: #f6f7f9; }
+table.tbl tbody tr:nth-child(even) { background: var(--c-stripe); }
+table.tbl tbody tr:nth-child(even) td.cell-note { background: var(--c-stripe); }
+table.tbl.tbl-striped tbody tr:nth-child(even) { background: var(--c-stripe); }
+table.tbl.tbl-striped tbody tr:nth-child(even) td.cell-note { background: var(--c-stripe); }
+/* V3.55 已加入当前明细的行：整行铺「比斑马纹更深」的灰底 + 按钮转蓝。
+   !important 确保同时压过斑马纹（nth-child(even)）与多选选中态排列顺序问题 */
+table.tbl tbody tr.picked, table.tbl tbody tr.picked td { background: var(--c-picked) !important; }
 table.tbl td.num, table.tbl th.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* V3.37：多选删除——勾选列与选中行高亮（覆盖斑马纹，弱蓝底） */
 table.tbl th.sel, table.tbl td.sel { width: 34px; padding: 10px 6px; text-align: center; white-space: nowrap; }

@@ -176,6 +176,143 @@ test('V3.54 CSS：.pick-name 允许长型号换行（overflow-wrap: anywhere）�
   assert.ok(/overflow-wrap:\s*anywhere/.test(rule[0]), '.pick-name 含 overflow-wrap: anywhere');
 });
 
+/* ==================== V3.55 ====================
+ * 需求①：只要出现商品列表的模块全部使用斑马纹（电脑端表格 + 手机端卡片统一）
+ * 需求②：点「加入」后该行整行灰底（比斑马纹深）+ 加入按钮转蓝，
+ *         用于区分「已加入当前明细」与「未加入」的行 */
+
+/** 把 CSS 里的十六进制色转为相对明度（0=黑，1=白），用于比较两个颜色的深浅 */
+function lum(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+
+function readBaseCss() {
+  return fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
+}
+
+function cssVar(base, name) {
+  const m = base.match(new RegExp('--c-' + name + ':\\s*(#[0-9a-fA-F]{6})'));
+  return m ? m[1] : null;
+}
+
+test('V3.55 斑马纹统一：电脑端 table.tbl 与手机端 .pick-item 卡片共用同一支色 --c-stripe', () => {
+  const base = readBaseCss();
+  const stripe = cssVar(base, 'stripe');
+  assert.ok(stripe, 'base.css 定义了 --c-stripe 变量');
+  // 电脑端：所有 .tbl 表格（含 .tbl-striped）都有 nth-child(even) 斑马纹
+  assert.ok(/table\.tbl tbody tr:nth-child\(even\) \{\s*background:\s*var\(--c-stripe\)/.test(base),
+    '电脑端 table.tbl 斑马纹使用 var(--c-stripe)');
+  // 手机端：选货卡片此前完全没有斑马纹，本版补齐
+  const pickRule = base.match(/\.pick-item:nth-child\(even\)\s*\{[^}]*\}/);
+  assert.ok(pickRule, 'base.css 新增 .pick-item:nth-child(even) 手机卡片斑马纹规则');
+  assert.ok(pickRule[0].includes('var(--c-stripe)'),
+    '手机卡片斑马纹同样使用 var(--c-stripe)，与电脑端颜色一致');
+});
+
+test('V3.55 已加入底色：--c-picked 必须比斑马纹 --c-stripe 更深（用户明确要求）', () => {
+  const base = readBaseCss();
+  const stripe = cssVar(base, 'stripe');
+  const picked = cssVar(base, 'picked');
+  assert.ok(stripe && picked, '--c-stripe / --c-picked 均已定义');
+  assert.ok(lum(picked) < lum(stripe),
+    '已加入底色（' + picked + '）应比斑马纹（' + stripe + '）更深一眼可辨');
+  // 深得看得出来，但又不至于黑块：留 ±0.05~0.6 明度差的合理区间
+  const gap = lum(stripe) - lum(picked);
+  assert.ok(gap > 0.03, '两者明度差应 > 0.03，实际 ' + gap.toFixed(3));
+});
+
+test('V3.55 已加入行样式：电脑端 tr.picked（含 td）与手机端 .pick-item.picked 都铺灰底', () => {
+  const base = readBaseCss();
+  const trRule = base.match(/table\.tbl tbody tr\.picked,\s*table\.tbl tbody tr\.picked td\s*\{[^}]*\}/);
+  assert.ok(trRule, '电脑端 tr.picked 整行（含单元格）灰底规则存在');
+  assert.ok(trRule[0].includes('var(--c-picked)'), '电脑端已加入行使用 --c-picked');
+  assert.ok(trRule[0].includes('!important'),
+    '必须 !important 才能压过 nth-child(even) 斑马纹（同特异性靠后者胜出不稳）');
+  const itemRule = base.match(/\.pick-item\.picked\s*\{[^}]*\}/);
+  assert.ok(itemRule, '手机端 .pick-item.picked 灰底规则存在');
+  assert.ok(itemRule[0].includes('var(--c-picked)'), '手机端已加入卡片使用 --c-picked');
+});
+
+/** 把整份页面 HTML 切成「桌面段」与「手机段」，分别断言排版不受彼此影响 */
+function splitLayouts(html) {
+  const i = html.indexOf('class="pick-mobile"');
+  return {
+    desktop: i > -1 ? html.slice(0, i) : html,
+    mobile: i > -1 ? html.slice(i) : html
+  };
+}
+
+test('V3.55 销售开单：已加入当前订单的商品，桌面行 tr.picked + 手机卡片 picked，按钮 btn-added', () => {
+  const ctx = newCtx();
+  seed(ctx);
+  const state = salePage.init();
+  state.tab = 'new';
+  // 未加入时：不应出现任何 picked / btn-added
+  let html = salePage.render(ctx, state);
+  assert.ok(!html.includes('pick-item picked'), '未加入时手机卡片不应有 picked 类');
+  assert.ok(!html.includes('btn-added'), '未加入时按钮不应是 btn-added');
+  assert.ok(html.includes('btn btn-sm btn-orange" data-act="pick-product"'),
+    '未加入时按钮仍为橘色 btn-orange');
+
+  // 加入第一款商品后重新渲染
+  state.form.items.push({
+    productId: ctx.data.products[0].id, brand: '海尔', model: 'BCD-200', unit: '台',
+    qty: 1, priceType: 'retail'
+  });
+  html = salePage.render(ctx, state);
+  const parts = splitLayouts(html);
+  assert.ok(parts.desktop.includes('<tr class="picked">'), '桌面端已加入行带 class="picked"');
+  assert.ok(parts.mobile.includes('pick-item picked'), '手机端已加入卡片带 picked 类');
+  // 按钮：只统计「加入」按钮总数不变，但已有 1 个变蓝（2 款商品 × 双布局 = 4 个，其中 2 个变蓝）
+  const added = (html.match(/btn btn-sm btn-added" data-act="pick-product"/g) || []).length;
+  const orange = (html.match(/btn btn-sm btn-orange" data-act="pick-product"/g) || []).length;
+  assert.strictEqual(added, 2, '已加入商品在桌面+手机两处都会变蓝按钮');
+  assert.strictEqual(orange, 2, '未加入商品保持橘色按钮');
+  assert.ok(!html.includes('＋再加'), '按钮文案仍固定为「加入」，不再变「＋再加」');
+});
+
+test('V3.55 进货单按商品加行：已加入进货明细的商品同样灰底 + 蓝钮，桌面手机一致', () => {
+  const ctx = newCtx();
+  seed(ctx);
+  const state = purchasePage.init();
+  state.tab = 'form';
+  const html = purchasePage.render(ctx, state);
+  const parts = splitLayouts(html);
+  // 只加第一款：另外 1 款保持原样
+  state.form.items.push({ productId: ctx.data.products[0].id, qty: 1, costPrice: '1000' });
+  const html2 = purchasePage.render(ctx, state);
+  const p2 = splitLayouts(html2);
+  assert.ok(!html.includes('<tr class="picked">'), '未加入前桌面行无 picked');
+  assert.ok(p2.desktop.includes('<tr class="picked">'), '进货桌面端已加入行灰底');
+  assert.ok(p2.mobile.includes('pick-item picked'), '进货手机端已加入卡片灰底');
+  const added = (html2.match(/btn btn-sm btn-added" data-act="add-item"/g) || []).length;
+  assert.strictEqual(added, 2, '已加入商品桌面+手机两处按钮均转蓝');
+  assert.ok(!parts.mobile.includes('btn-added'), '渲染前手机段不含已加入态');
+});
+
+test('V3.55 退换货换货选货区：已加入换新商品的商品同样灰底 + 蓝钮，桌面手机一致', () => {
+  const ctx = newCtx();
+  const saleNo = seed(ctx);
+  const state = exchangePage.init();
+  state.tab = 'exchange';
+  state.originalNo = saleNo;
+  const html = exchangePage.render(ctx, state);
+  assert.ok(!html.includes('pick-item picked'), '未加入前无 picked 行');
+  // 加入第一款商品到换新列表
+  state.replItems.push({ productId: ctx.data.products[0].id, qty: 1, price: 100000 });
+  const html2 = exchangePage.render(ctx, state);
+  const p2 = splitLayouts(html2);
+  assert.ok(p2.desktop.includes('<tr class="picked">'), '换货桌面端已加入行灰底');
+  assert.ok(p2.mobile.includes('pick-item picked'), '换货手机端已加入卡片灰底');
+  const added = (html2.match(/btn btn-sm btn-added" data-act="repl-add"/g) || []).length;
+  assert.ok(added >= 2, '换货已加入商品桌面+手机两处按钮均转蓝（实际 ' + added + '）');
+});
+
 test('V3.54 sw.js：network-first 追加 cache:"no-cache" 强制重新校验，避免部署后仍拿旧 JS/CSS', () => {
   const sw = fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
   // 导航请求与静态资源两条 fetch 分支都应带 no-cache

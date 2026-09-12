@@ -437,12 +437,14 @@
         '</tr></thead><tbody>';
       pick.list.forEach(function (p) {
         var lowD = (p.stock || 0) < (ctx.settings.defaultThreshold == null ? 3 : ctx.settings.defaultThreshold);
-        h += '<tr>' +
+        // V3.55：已在当前订单里的商品 → 整行灰底 + 蓝色「加入」按钮
+        var pickedD = !!findItem(state, p.id);
+        h += '<tr' + (pickedD ? ' class="picked"' : '') + '>' +
           '<td>' + esc(p.brand) + ' <b>' + esc(p.model) + '</b><br><span class="weak small">' + esc(p.category) + ' / ' + esc(p.unit) + '</span></td>' +
           '<td class="num">' + ui.money(p.priceWholesale) + '</td>' +
           '<td class="num">' + ui.money(p.priceRetail) + '</td>' +
           '<td class="num' + (lowD ? ' low' : '') + '">' + (p.stock || 0) + '</td>' +
-          '<td class="act"><button class="btn btn-sm btn-orange" data-act="pick-product" data-id="' + esc(p.id) + '">加入</button></td>' +
+          '<td class="act"><button class="btn btn-sm ' + (pickedD ? 'btn-added' : 'btn-orange') + '" data-act="pick-product" data-id="' + esc(p.id) + '">加入</button></td>' +
           '</tr>';
       });
       h += '</tbody></table></div></div>';
@@ -450,7 +452,9 @@
       h += '<div class="pick-mobile"><div class="pick-list">';
       pick.list.forEach(function (p) {
         var low = (p.stock || 0) < (ctx.settings.defaultThreshold == null ? 3 : ctx.settings.defaultThreshold);
-        h += '<div class="pick-item">' +
+        // V3.55：已在当前订单里的商品 → 整行灰底 + 蓝色「加入」按钮
+        var picked = !!findItem(state, p.id);
+        h += '<div class="pick-item' + (picked ? ' picked' : '') + '">' +
           '<div class="pick-main">' +
             '<div class="pick-name">' + esc(p.brand) + ' <b>' + esc(p.model) + '</b></div>' +
             '<div class="pick-sub">' +
@@ -461,7 +465,7 @@
           '</div>' +
           '<div class="pick-side">' +
             '<div class="pick-stock' + (low ? ' low' : '') + '">' + (p.stock || 0) + '</div>' +
-            '<button class="btn btn-sm btn-orange" data-act="pick-product" data-id="' + esc(p.id) + '">加入</button>' +
+            '<button class="btn btn-sm ' + (picked ? 'btn-added' : 'btn-orange') + '" data-act="pick-product" data-id="' + esc(p.id) + '">加入</button>' +
           '</div>' +
         '</div>';
       });
