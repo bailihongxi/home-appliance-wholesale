@@ -211,4 +211,25 @@
 
   /* 概览标题在手机上小一档 */
   .overview-head .title { font-size: 22px; letter-spacing: 1px; }
+
+  /* V3.51 手机端选货区右侧排版：库存前置 + 「加入」按钮竖排文字 + 收窄增高
+   * 需求：将库存数字置于加入按钮前面（左侧），按钮两个汉字改为竖排排版，
+   *       按钮宽度收缩 30%（≈30px），高度增大 50%（≈45px），按钮排布位置不变 */
+  .pick-side {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+  .pick-side .pick-stock { order: 0; }
+  .pick-side .btn {
+    order: 1;
+    width: 30px;
+    height: 45px;
+    padding: 0;
+    line-height: 1;
+    font-size: 13px;
+    letter-spacing: 0;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+  }
 }
