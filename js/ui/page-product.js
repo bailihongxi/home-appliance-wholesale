@@ -177,17 +177,25 @@
           });
         }
         refreshSelUI(ctx, state);
+        // 必须 return false：否则框架 actHandler 会触发 afterAction → render() → scrollTo(0,0) 跳回顶部
+        return false;
       },
 
-      /** 单行勾选/取消 */
+      /**
+       * 单行勾选/取消。
+       * 必须 return false：框架 actHandler 在动作返回 !==false 时会调用 afterAction → render()，
+       * 而 render() 末尾 window.scrollTo(0,0) 会让长列表勾选后跳回页面顶部（本轮 bug 的根因）。
+       * 勾选只改内存 state.sel + 局部刷新按钮/表头，无需整页重渲染，故显式 return false 跳过 afterAction。
+       */
       'row-check': function (ctx, state, el) {
         var id = String(el.getAttribute('data-id') || '');
-        if (!id) return;
+        if (!id) return false;
         state.sel = state.sel || {};
         if (state.sel[id]) delete state.sel[id];
         else state.sel[id] = true;
         // V3.43：局部刷新选择区，不整页重渲染 → 长列表多选不再跳回顶部
         refreshSelUI(ctx, state);
+        return false;
       },
 
       /** 删除选中（仅删未使用的商品档案；被单据/库存引用自动跳过） */
