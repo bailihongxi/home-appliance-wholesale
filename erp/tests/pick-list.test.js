@@ -80,6 +80,27 @@ test('V3.52 退换货换货选货区：双布局（桌面表格 + 手机卡片�
   assert.ok(html.includes('零:'), '换货第二行含零售价');
 });
 
+test('V3.53 进货单选货区：无论商品是否已在明细中，加入按钮始终显示「加入」，不再变为「＋再加」', () => {
+  const ctx = newCtx();
+  seed(ctx);
+  const state = purchasePage.init();
+  state.tab = 'form';
+  // 先把第一款商品加入进货明细，模拟「已加入过」的状态
+  state.form.items.push({ productId: ctx.data.products[0].id, qty: 2, costPrice: '1000' });
+  const html = purchasePage.render(ctx, state);
+  // 电脑端表格按钮文本
+  assert.ok(!html.includes('＋再加'), '桌面端选货按钮不应出现「＋再加」');
+  assert.ok(!html.includes('+再加'), '桌面端选货按钮不应出现「+再加」');
+  // 手机端卡片按钮文本（pick-mobile 在 pick-desktop 之后）
+  const mobileMatch = html.match(/class="pick-desktop"[\s\S]*?class="pick-mobile"([\s\S]*?)ui-pager/);
+  const mobileHtml = mobileMatch ? mobileMatch[1] : html;
+  assert.ok(!mobileHtml.includes('＋再加'), '手机端选货按钮不应出现「＋再加」');
+  assert.ok(!mobileHtml.includes('+再加'), '手机端选货按钮不应出现「+再加」');
+  // 确认「加入」按钮数量正确（seed 建 2 款商品 × 桌面+手机双渲染 = 4）
+  const joinCount = (html.match(/data-act="add-item"/g) || []).length;
+  assert.strictEqual(joinCount, 4, '每条商品保留一个「加入」按钮（2 款商品 × 双布局）');
+});
+
 test('V3.50 CSS：定义 pick-list / pick-item / pick-sub 两行卡片样式', () => {
   const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
   assert.ok(css.includes('.pick-list'), 'CSS 含 .pick-list');
