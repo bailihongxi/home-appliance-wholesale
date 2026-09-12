@@ -76,3 +76,25 @@ test('V3.50 CSS：定义 pick-list / pick-item / pick-sub 两行卡片样式', (
   assert.ok(css.includes('.pick-sub'), 'CSS 含 .pick-sub');
   assert.ok(css.includes('.pick-stock'), 'CSS 含 .pick-stock');
 });
+
+test('V3.51 手机端 CSS：选货区右侧库存前置 + 加入按钮竖排文字（更窄更高）', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
+  // 必须在 @media (max-width: 599px) 内部
+  const mediaMatch = css.match(/@media\s*\(\s*max-width:\s*599px\s*\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(mediaMatch, 'mobile.css 含 @media (max-width: 599px) 块');
+  const inner = mediaMatch[0];
+  // pick-side 在手机端改为 row + center（库存左，按钮右）+ gap
+  assert.ok(/\.pick-side\s*\{[\s\S]*?flex-direction:\s*row[\s\S]*?\}/.test(inner),
+    '手机端 .pick-side 改 flex-direction: row（库存左、按钮右）');
+  // pick-stock order 0（前置），btn order 1（在后）
+  assert.ok(/\.pick-side\s+\.pick-stock\s*\{\s*order:\s*0/.test(inner),
+    '手机端 .pick-side .pick-stock order: 0（库存前置）');
+  // 按钮宽度 ≈30px（基础 .btn-sm 默认宽约 44px，-30% ≈ 30px），高度 45px（30px + 50%）
+  const btnRule = inner.match(/\.pick-side\s+\.btn\s*\{[\s\S]*?\}/);
+  assert.ok(btnRule, '手机端 .pick-side .btn 规则存在');
+  assert.ok(/width:\s*30px/.test(btnRule[0]), '加入按钮宽度 30px（收缩30%）');
+  assert.ok(/height:\s*45px/.test(btnRule[0]), '加入按钮高度 45px（+50%）');
+  // 「加入」两个汉字改竖排
+  assert.ok(/writing-mode:\s*vertical-rl/.test(btnRule[0]), '加入按钮文字竖排（writing-mode: vertical-rl）');
+  assert.ok(/text-orientation:\s*upright/.test(btnRule[0]), '加入按钮文字保持正立（text-orientation: upright）');
+});
