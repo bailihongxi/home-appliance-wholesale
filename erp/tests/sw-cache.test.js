@@ -50,7 +50,7 @@ test('sw.js 导航与静态资源使用 network-first（在线拿最新，离线
   // V3.34 起：全部请求 network-first——在线一律拿最新页面与资源，
   // 杜绝「旧缓存让用户首次打开看不到新功能」；离线时才回退缓存外壳。
   const block = sw.slice(sw.indexOf("self.addEventListener('fetch'"));
-  assert.ok(block.includes('fetch(req)'), '应先尝试网络获取最新资源');
+  assert.ok(block.includes('fetch(req'), '应先尝试网络获取最新资源（V3.54 起附 cache: no-cache 强制与服务端重新校验）');
   assert.ok(block.includes('caches.match(req)'), '网络失败时回退到缓存');
   assert.ok(block.includes('.catch(function ()'), '离线走 catch 回退分支');
   // 不应再存在 cache-first 的「先返回缓存再后台更新」逻辑

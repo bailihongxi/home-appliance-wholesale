@@ -46,7 +46,8 @@
   .grid-4 { grid-template-columns: repeat(4, 1fr); }
   .grid-3 { grid-template-columns: repeat(3, 1fr); }
   /* V3.17 问题3：进货单新建页「选品加行 + 进货明细」桌面端两列，手机端单列堆叠 */
-  .purchase-form-grid { grid-template-columns: 1fr; }
+  /* V3.54：单列也用 minmax(0,1fr)，避免内部宽表格（进货明细）把整页撑破 */
+  .purchase-form-grid { grid-template-columns: minmax(0, 1fr); }
   /* 库存紧凑统计卡：移动端 2 列自适应屏幕宽度（minmax(0,1fr) 防止内容撑破溢出），
      卡片改竖排（标签上、数字下）保证长金额完整显示 */
   .stat-grid-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
@@ -143,6 +144,9 @@
 
   /* 主区 padding：保留底部 Tab + 安全区 */
   .app-main { padding: 12px 12px calc(var(--tab-h) + 28px); }
+  /* V3.54 兜底：手机端禁止主区横向溢出（clip 不产生滚动容器，不影响 window 纵向滚动与
+   * V3.48/V3.49 的滚动位置保持逻辑）；内部 .table-wrap 仍可各自横向滚动 */
+  .app-main { overflow-x: clip; }
 
   /* 老式快捷入口网格（兼容旧逻辑）*/
   .quick-grid { grid-template-columns: repeat(5, 1fr); gap: 6px; }

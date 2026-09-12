@@ -3,8 +3,11 @@
  * 作用：缓存应用外壳，断网后仍可打开使用（PRD 7 / 开发计划 Sprint 8）。
  * 更新策略（V3.34 起）：导航与静态资源全部 network-first——在线一律拿最新
  * 页面与资源（新功能一次打开即生效，杜绝「旧缓存卡版本」），离线回退缓存外壳。
+ * V3.54 起：network-first 的 fetch 追加 cache:'no-cache'（强制与服务端重新校验），
+ * 解决 GitHub Pages 静态资源 Cache-Control: max-age=600 导致部署后 10 分钟内
+ * 手机端仍拿到旧 JS/CSS 的问题（服务端未变时返回 304，几乎不增加流量）。
  */
-var CACHE = 'appliance-erp-v82';
+var CACHE = 'appliance-erp-v83';
 var SHELL = [
   './',
   './index.html',
@@ -80,7 +83,7 @@ self.addEventListener('fetch', function (e) {
   // 离线时回退缓存外壳
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req).then(function (res) {
+      fetch(req, { cache: 'no-cache' }).then(function (res) {
         if (res && res.status === 200 && res.type === 'basic') {
           var copy = res.clone();
           caches.open(CACHE).then(function (c) { c.put('./index.html', copy); });
@@ -95,7 +98,7 @@ self.addEventListener('fetch', function (e) {
   // 静态资源（js/css/图片等）：network-first——在线一律拿最新资源
   // （避免旧缓存让用户首次打开看不到新功能），离线回退缓存
   e.respondWith(
-    fetch(req).then(function (res) {
+    fetch(req, { cache: 'no-cache' }).then(function (res) {
       if (res && res.status === 200 && res.type === 'basic') {
         var copy = res.clone();
         caches.open(CACHE).then(function (c) { c.put(req, copy); });

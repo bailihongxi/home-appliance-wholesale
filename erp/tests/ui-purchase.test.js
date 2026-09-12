@@ -216,16 +216,16 @@ test('V3.17-问题3：新建进货单表单「品」字布局——供应商在�
   const paidStart = html.indexOf('data-name="paid"');
   assert.ok(paidStart > gridEnd, '已付款模块在 purchase-form-grid 下方');
 
-  // 桌面端：两列布局
+  // 桌面端：两列布局（V3.54 起用 minmax(0,1fr) 防止内部宽表格撑破页面）
   const base = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
   const baseBlock = base.slice(base.indexOf('.purchase-form-grid {'));
   assert.ok(baseBlock.includes('display: grid'), 'purchase-form-grid 使用 grid 布局');
-  assert.ok(baseBlock.includes('grid-template-columns: 1fr 1fr'), '桌面端为两列布局');
+  assert.ok(baseBlock.includes('grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)'), '桌面端为两列布局（minmax(0,1fr) 防溢出）');
 
-  // 手机端：单列堆叠
+  // 手机端：单列堆叠（同样 minmax(0,1fr) 防溢出）
   const mobile = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
   const mbBlock = mobile.slice(mobile.indexOf('.purchase-form-grid {'));
-  assert.ok(mbBlock.includes('grid-template-columns: 1fr'), '手机端 purchase-form-grid 单列堆叠');
+  assert.ok(mbBlock.includes('grid-template-columns: minmax(0, 1fr)'), '手机端 purchase-form-grid 单列堆叠（minmax(0,1fr) 防溢出）');
 });
 
 test('新建进货单选货区：搜索框后带扫码按钮（data-act="scan"）', () => {

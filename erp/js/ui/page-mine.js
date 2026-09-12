@@ -125,6 +125,28 @@
     },
 
     actions: {
+      /** V3.54：检查更新——清空 SW 缓存 + 更新注册 + 重新拉取最新版本
+       *  场景：部署新版本后，手机端仍显示旧界面（HTTP 缓存/SW 缓存残留）时手动强制刷新 */
+      'check-update': function (ctx, state) {
+        ui.toast('正在检查更新…', 'ok');
+        var doReload = function () {
+          try { location.reload(); } catch (e) { location.href = location.href; }
+        };
+        var hasSW = (typeof navigator !== 'undefined') && navigator.serviceWorker;
+        var hasCaches = (typeof caches !== 'undefined') && caches && caches.keys;
+        if (!hasSW) { doReload(); return false; }
+        Promise.resolve(hasCaches ? caches.keys() : [])
+          .then(function (keys) {
+            return Promise.all((keys || []).map(function (k) { return caches.delete(k); }));
+          })
+          .catch(function () {})
+          .then(function () { return navigator.serviceWorker.getRegistration(); })
+          .then(function (reg) { return reg ? reg.update() : null; })
+          .catch(function () {})
+          .then(function () { doReload(); });
+        return false; // 不重渲染，避免闪烁
+      },
+
       /** 展开/收起同步设置 */
       'toggle-sync-cfg': function (ctx, state) {
         state.syncOpen = !state.syncOpen;
@@ -538,10 +560,14 @@
       '<div class="card about-card">' +
         '<h3 class="card-title">关于</h3>' +
         '<ul class="about-list">' +
-          '<li>版本：V3.53（schema v' + schema.VERSION + '）</li>' +
+          '<li>版本：V3.54（schema v' + schema.VERSION + '）</li>' +
           '<li>数据存储于本机 IndexedDB</li>' +
           '<li>自动备份保障数据安全</li>' +
         '</ul>' +
+        '<div class="row mt8" style="flex-wrap:wrap;gap:8px;align-items:center">' +
+          '<button class="btn btn-sm" data-act="check-update">🔄 检查更新</button>' +
+          '<span class="small weak">界面还是旧版时点这里，强制拉取最新版本</span>' +
+        '</div>' +
       '</div>'
     );
   }

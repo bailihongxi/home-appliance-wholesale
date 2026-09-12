@@ -149,3 +149,37 @@ test('V3.51 手机端 CSS：选货区右侧库存前置 + 加入按钮竖排文�
   assert.ok(/writing-mode:\s*vertical-rl/.test(btnRule[0]), '加入按钮文字竖排（writing-mode: vertical-rl）');
   assert.ok(/text-orientation:\s*upright/.test(btnRule[0]), '加入按钮文字保持正立（text-orientation: upright）');
 });
+
+/* V3.54：修复「进货明细」宽表格把整页撑破 + 强制手机端不横向溢出 + 版本缓存校验 */
+test('V3.54 CSS：purchase-form-grid 用 minmax(0,1fr) 且子卡片 min-width:0（防宽表格撑破页面）', () => {
+  const base = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
+  const block = base.slice(base.indexOf('.purchase-form-grid {'));
+  assert.ok(block.includes('grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)'),
+    '桌面端 grid 轨道用 minmax(0,1fr)，允许收缩到可视宽度以内');
+  assert.ok(/\.purchase-form-grid\s*>\s*\.card\s*\{[^}]*min-width:\s*0/.test(block),
+    'purchase-form-grid 直接子卡片 min-width: 0');
+
+  const mobile = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
+  const mb = mobile.slice(mobile.indexOf('.purchase-form-grid {'));
+  assert.ok(mb.includes('grid-template-columns: minmax(0, 1fr)'),
+    '手机端 purchase-form-grid 单列仍用 minmax(0,1fr)');
+
+  // 手机端主区兜底：禁止横向溢出（clip 不产生滚动容器，不影响纵向滚动）
+  assert.ok(/\.app-main\s*\{[^}]*overflow-x:\s*clip/.test(mobile),
+    '手机端 .app-main overflow-x: clip 兜底，防止整页横向被撑破');
+});
+
+test('V3.54 CSS：.pick-name 允许长型号换行（overflow-wrap: anywhere），不撑破卡片', () => {
+  const base = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
+  const rule = base.match(/\.pick-name\s*\{[^}]*\}/);
+  assert.ok(rule, '.pick-name 规则存在');
+  assert.ok(/overflow-wrap:\s*anywhere/.test(rule[0]), '.pick-name 含 overflow-wrap: anywhere');
+});
+
+test('V3.54 sw.js：network-first 追加 cache:"no-cache" 强制重新校验，避免部署后仍拿旧 JS/CSS', () => {
+  const sw = fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
+  // 导航请求与静态资源两条 fetch 分支都应带 no-cache
+  const hits = (sw.match(/fetch\(req,\s*\{\s*cache:\s*'no-cache'\s*\}\)/g) || []).length;
+  assert.ok(hits >= 2, '导航与静态资源两处 fetch 均使用 cache: no-cache（实际 ' + hits + ' 处）');
+  assert.ok(!/fetch\(req\)\.then/.test(sw), '不再存在旧的 fetch(req) 无 cache 选项写法');
+});

@@ -225,6 +225,8 @@ button, input, select, textarea {
   box-shadow: var(--shadow-card);
   padding: 14px;
   margin-bottom: 12px;
+  /* V3.54：作为 flex/grid 子项时允许收缩到可视宽度以内，防止内部宽表格撑破页面 */
+  min-width: 0;
 }
 .card-title {
   display: flex;
@@ -245,9 +247,12 @@ button, input, select, textarea {
 .grid-3 { grid-template-columns: repeat(3, 1fr); }
 .grid-4 { grid-template-columns: repeat(4, 1fr); }
 /* V3.17 问题3：新建进货单「品」字布局——供应商模块在上，选品加行与进货明细并排两列，已付款在下 */
-.purchase-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch; }
-.purchase-form-grid > .card { display: flex; flex-direction: column; }
-.purchase-form-grid > .card .table-wrap { flex: 1; min-height: 0; }
+/* V3.54 修复：grid 子项默认 min-width:auto，会被内部超宽表格（table.tbl td white-space:nowrap）
+ * 撑开到 min-content 宽度，导致「进货明细」宽度溢出、整页被撑破（手机端尤其明显）。
+ * 用 minmax(0,1fr) 约束轨道 + 子项 min-width:0，让宽表格只在 .table-wrap 内部横向滚动。 */
+.purchase-form-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
+.purchase-form-grid > .card { display: flex; flex-direction: column; min-width: 0; }
+.purchase-form-grid > .card .table-wrap { flex: 1; min-height: 0; min-width: 0; }
 
 .row { display: flex; gap: 8px; align-items: center; }
 .row.wrap { flex-wrap: wrap; }
@@ -428,7 +433,7 @@ textarea.input { min-height: 72px; resize: vertical; }
 .pick-item { display: flex; align-items: center; gap: 12px; padding: 10px 2px; border-top: 0.5px solid var(--c-border); }
 .pick-item:first-child { border-top: none; }
 .pick-main { flex: 1; min-width: 0; }
-.pick-name { font-size: 14px; font-weight: 500; line-height: 1.4; color: var(--c-text); }
+.pick-name { font-size: 14px; font-weight: 500; line-height: 1.4; color: var(--c-text); overflow-wrap: anywhere; }
 .pick-sub { margin-top: 5px; font-size: 12px; color: var(--c-text-sub); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
 .pick-sub .weak { color: var(--c-text-weak); }
 .pick-price b { font-weight: 500; color: var(--c-text); }
