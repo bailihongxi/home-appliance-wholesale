@@ -631,24 +631,17 @@
         '<th>商品</th><th class="num">档案成本</th><th class="num">库存</th><th></th>' +
         '</tr></thead><tbody>';
       pick.list.forEach(function (p) {
-        var hasD = state.form.items.some(function (it) {
-          return it.productId === p.id;
-        });
         h += '<tr>' +
           '<td>' + esc(p.brand) + ' <b>' + esc(p.model) + '</b><br><span class="weak small">' + esc(p.category) + ' / ' + esc(p.unit) + '</span></td>' +
           '<td class="num">' + ui.money(p.cost) + '</td>' +
           '<td class="num">' + (p.stock || 0) + '</td>' +
-          '<td class="act"><button class="btn btn-sm btn-orange" data-act="add-item" data-id="' + esc(p.id) + '">' +
-          (hasD ? '＋ 再加' : '加入') + '</button></td>' +
+          '<td class="act"><button class="btn btn-sm btn-orange" data-act="add-item" data-id="' + esc(p.id) + '">加入</button></td>' +
           '</tr>';
       });
       h += '</tbody></table></div></div>';
       // 手机端（≤599px）：V3.51 两行卡片式选货区（无需横向滚动）
       h += '<div class="pick-mobile"><div class="pick-list">';
       pick.list.forEach(function (p) {
-        var has = state.form.items.some(function (it) {
-          return it.productId === p.id;
-        });
         h += '<div class="pick-item">' +
           '<div class="pick-main">' +
             '<div class="pick-name">' + esc(p.brand) + ' <b>' + esc(p.model) + '</b></div>' +
@@ -659,8 +652,7 @@
           '</div>' +
           '<div class="pick-side">' +
             '<div class="pick-stock">' + (p.stock || 0) + '</div>' +
-            '<button class="btn btn-sm btn-orange" data-act="add-item" data-id="' + esc(p.id) + '">' +
-            (has ? '＋ 再加' : '加入') + '</button>' +
+            '<button class="btn btn-sm btn-orange" data-act="add-item" data-id="' + esc(p.id) + '">加入</button>' +
           '</div>' +
         '</div>';
       });
