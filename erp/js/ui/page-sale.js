@@ -426,9 +426,28 @@
       offStatus: schema.STATUS.OFF
     });
     if (!pick.list.length) {
-      h += ui.empty('没有匹配的商品，请先到「商品档案」建档');
+      // 桌面端（≥600px）：V3.49 5 列横向表格（商品/批发/零售/库存/加入），电脑端不变
+      h += '<div class="pick-desktop">' + ui.empty('没有匹配的商品，请先到「商品档案」建档') + '</div>';
+      // 手机端（≤599px）：V3.51 两行卡片式选货区
+      h += '<div class="pick-mobile">' + ui.empty('没有匹配的商品，请先到「商品档案」建档') + '</div>';
     } else {
-      h += '<div class="pick-list">';
+      // 桌面端（≥600px）：V3.49 5 列横向表格
+      h += '<div class="pick-desktop"><div class="table-wrap"><table class="tbl tbl-striped"><thead><tr>' +
+        '<th>商品</th><th class="num">批发</th><th class="num">零售</th><th class="num">库存</th><th></th>' +
+        '</tr></thead><tbody>';
+      pick.list.forEach(function (p) {
+        var lowD = (p.stock || 0) < (ctx.settings.defaultThreshold == null ? 3 : ctx.settings.defaultThreshold);
+        h += '<tr>' +
+          '<td>' + esc(p.brand) + ' <b>' + esc(p.model) + '</b><br><span class="weak small">' + esc(p.category) + ' / ' + esc(p.unit) + '</span></td>' +
+          '<td class="num">' + ui.money(p.priceWholesale) + '</td>' +
+          '<td class="num">' + ui.money(p.priceRetail) + '</td>' +
+          '<td class="num' + (lowD ? ' low' : '') + '">' + (p.stock || 0) + '</td>' +
+          '<td class="act"><button class="btn btn-sm btn-orange" data-act="pick-product" data-id="' + esc(p.id) + '">加入</button></td>' +
+          '</tr>';
+      });
+      h += '</tbody></table></div></div>';
+      // 手机端（≤599px）：V3.51 两行卡片式选货区（无需横向滚动）
+      h += '<div class="pick-mobile"><div class="pick-list">';
       pick.list.forEach(function (p) {
         var low = (p.stock || 0) < (ctx.settings.defaultThreshold == null ? 3 : ctx.settings.defaultThreshold);
         h += '<div class="pick-item">' +
@@ -446,7 +465,9 @@
           '</div>' +
         '</div>';
       });
-      h += '</div>' + ui.pager(pick.page, pick.pages, pick.total, 'pick-page');
+      h += '</div></div>';
+      // 分页（桌面与手机共用一份 ui.pager）
+      h += ui.pager(pick.page, pick.pages, pick.total, 'pick-page');
     }
     h += '</div>';
     h += '</div>';

@@ -30,43 +30,54 @@ function seed(ctx) {
   return sale.doc.no;
 }
 
-test('V3.50 销售开单选货区：两行卡片式，价格内联、无需横向滚动', () => {
+test('V3.52 销售开单选货区：双布局（桌面 .pick-desktop 表格 + 手机 .pick-mobile 卡片）', () => {
   const ctx = newCtx();
   seed(ctx);
   const state = salePage.init();
   state.tab = 'new';
   const html = salePage.render(ctx, state);
-  assert.ok(html.includes('class="pick-list"'), '选货区使用 pick-list 容器');
+  // 桌面端（≥600px）：V3.49 5 列横向表格
+  assert.ok(html.includes('class="pick-desktop"'), '桌面端使用 pick-desktop 包装');
+  assert.ok(html.includes('tbl tbl-striped'), '桌面端表格仍为 tbl-striped（V3.49 风格）');
+  assert.ok(html.includes('<th>商品</th><th class="num">批发</th><th class="num">零售</th>'), '桌面端表头含 商品/批发/零售');
+  // 手机端（≤599px）：V3.51 两行卡片
+  assert.ok(html.includes('class="pick-mobile"'), '手机端使用 pick-mobile 包装');
+  assert.ok(html.includes('class="pick-list"'), '手机端使用 pick-list 容器');
   assert.ok(html.includes('class="pick-item"'), '每个商品一个 pick-item 卡片');
   assert.ok(html.includes('class="pick-name"'), '第一行为品牌+型号');
   assert.ok(html.includes('class="pick-sub"'), '第二行存在');
   assert.ok(html.includes('批:'), '第二行含批发价');
   assert.ok(html.includes('零:'), '第二行含零售价');
-  assert.ok(!html.includes('tbl tbl-striped'), '选货区不再使用横向表格');
 });
 
-test('V3.50 进货单按商品加行：两行卡片式，第二行显示成本', () => {
+test('V3.52 进货单按商品加行：双布局（桌面表格 + 手机卡片，第二行显示成本）', () => {
   const ctx = newCtx();
   seed(ctx);
   const state = purchasePage.init();
   state.tab = 'form';
   const html = purchasePage.render(ctx, state);
-  assert.ok(html.includes('class="pick-list"'), '进货选货区使用 pick-list 容器');
-  assert.ok(html.includes('class="pick-sub"'), '第二行存在');
-  assert.ok(html.includes('成本:'), '第二行含档案成本');
-  assert.ok(!html.includes('tbl tbl-striped'), '进货选货区不再使用横向表格');
+  assert.ok(html.includes('class="pick-desktop"'), '进货选货区桌面端使用 pick-desktop');
+  assert.ok(html.includes('tbl tbl-striped'), '进货桌面端表格 tbl-striped');
+  assert.ok(html.includes('<th class="num">档案成本</th>'), '进货桌面端表头含档案成本');
+  assert.ok(html.includes('class="pick-mobile"'), '进货选货区手机端使用 pick-mobile');
+  assert.ok(html.includes('class="pick-list"'), '进货手机端 pick-list 容器');
+  assert.ok(html.includes('class="pick-sub"'), '进货第二行存在');
+  assert.ok(html.includes('成本:'), '进货第二行含档案成本');
 });
 
-test('V3.50 退换货换货选货区：两行卡片式，批/零内联', () => {
+test('V3.52 退换货换货选货区：双布局（桌面表格 + 手机卡片，批/零内联）', () => {
   const ctx = newCtx();
   const saleNo = seed(ctx);
   const state = exchangePage.init();
   state.tab = 'exchange';
   state.originalNo = saleNo;
   const html = exchangePage.render(ctx, state);
-  assert.ok(html.includes('class="pick-list"'), '换货选货区使用 pick-list 容器');
-  assert.ok(html.includes('批:'), '第二行含批发价');
-  assert.ok(html.includes('零:'), '第二行含零售价');
+  assert.ok(html.includes('class="pick-desktop"'), '换货选货区桌面端使用 pick-desktop');
+  assert.ok(html.includes('<th>商品</th>'), '换货桌面端表头含商品');
+  assert.ok(html.includes('class="pick-mobile"'), '换货选货区手机端使用 pick-mobile');
+  assert.ok(html.includes('class="pick-list"'), '换货手机端 pick-list 容器');
+  assert.ok(html.includes('批:'), '换货第二行含批发价');
+  assert.ok(html.includes('零:'), '换货第二行含零售价');
 });
 
 test('V3.50 CSS：定义 pick-list / pick-item / pick-sub 两行卡片样式', () => {
@@ -75,6 +86,25 @@ test('V3.50 CSS：定义 pick-list / pick-item / pick-sub 两行卡片样式', (
   assert.ok(css.includes('.pick-item'), 'CSS 含 .pick-item');
   assert.ok(css.includes('.pick-sub'), 'CSS 含 .pick-sub');
   assert.ok(css.includes('.pick-stock'), 'CSS 含 .pick-stock');
+});
+
+test('V3.52 CSS：默认（桌面 ≥600px）显示 .pick-desktop 表格，隐藏 .pick-mobile', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'base.css'), 'utf8');
+  assert.ok(/\.pick-desktop\s*\{\s*display:\s*block/.test(css),
+    'base.css 默认 .pick-desktop display: block');
+  assert.ok(/\.pick-mobile\s*\{\s*display:\s*none/.test(css),
+    'base.css 默认 .pick-mobile display: none');
+});
+
+test('V3.52 mobile.css：≤599px 反转显示 .pick-mobile 卡片，隐藏 .pick-desktop 表格', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'mobile.css'), 'utf8');
+  const mediaMatch = css.match(/@media\s*\(\s*max-width:\s*599px\s*\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(mediaMatch, 'mobile.css 含 @media (max-width: 599px) 块');
+  const inner = mediaMatch[0];
+  assert.ok(/\.pick-desktop\s*\{\s*display:\s*none\s*!important/.test(inner),
+    '手机端 .pick-desktop display: none !important');
+  assert.ok(/\.pick-mobile\s*\{\s*display:\s*block\s*!important/.test(inner),
+    '手机端 .pick-mobile display: block !important');
 });
 
 test('V3.51 手机端 CSS：选货区右侧库存前置 + 加入按钮竖排文字（更窄更高）', () => {

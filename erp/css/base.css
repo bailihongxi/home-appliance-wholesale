@@ -418,7 +418,12 @@ textarea.input { min-height: 72px; resize: vertical; }
 
 .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-/* V3.50 选货区两行卡片式（手机/电脑均无需横向滚动） */
+/* V3.52 选货区双布局切换：默认（≥600px 桌面端）显示 .pick-desktop 表格，
+ * 手机端（≤599px）通过 mobile.css 反转显示 .pick-mobile 卡片 */
+.pick-desktop { display: block; }
+.pick-mobile { display: none; }
+
+/* V3.50 选货区两行卡片式（手机端使用，电脑端不渲染可见） */
 .pick-list { display: flex; flex-direction: column; }
 .pick-item { display: flex; align-items: center; gap: 12px; padding: 10px 2px; border-top: 0.5px solid var(--c-border); }
 .pick-item:first-child { border-top: none; }

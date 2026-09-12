@@ -134,17 +134,20 @@ test('进货选货区：默认每页 15 条 + 斑马纹 + 分页导航（pick-pa
   const state = fresh(ctx);
   state.tab = 'form';
   const html = page.render(ctx, state);
-  // V3.50 选货区改为两行卡片式（无需横向滚动）
-  assert.ok(html.includes('class="pick-list"'), '进货选货区应为两行卡片式 pick-list');
-  assert.ok(html.includes('pick-sub'), '进货选货卡片第二行（类型/单位 + 成本）');
-  assert.strictEqual((html.match(/data-act="add-item"/g) || []).length, 15, '默认只显示前 15 条商品');
+  // V3.52 进货选货区双布局：桌面 .pick-desktop（V3.49 表格）+ 手机 .pick-mobile（V3.51 卡片）
+  assert.ok(html.includes('class="pick-desktop"'), '进货选货区桌面端包装 pick-desktop');
+  assert.ok(html.includes('class="pick-mobile"'), '进货选货区手机端包装 pick-mobile');
+  assert.ok(html.includes('class="pick-list"'), '进货选货手机端 pick-list 容器');
+  assert.ok(html.includes('pick-sub'), '进货选货手机卡片第二行（类型/单位 + 成本）');
+  // 桌面+手机各渲染一次，每页 15 条 → 总共 30 个 add-item 按钮
+  assert.strictEqual((html.match(/data-act="add-item"/g) || []).length, 30, '默认显示 15 条商品，桌面+手机各渲染一次 = 30');
   assert.ok(html.includes('data-act="pick-page"'), '进货选货分页应使用 pick-page 动作');
   assert.ok(html.includes('共 18 条'), '分页显示总条数');
 
   // 翻到第 2 页
   page.actions['pick-page'](ctx, state, { getAttribute: (k) => (k === 'data-page' ? '2' : null) });
   const html2 = page.render(ctx, state);
-  assert.strictEqual((html2.match(/data-act="add-item"/g) || []).length, 3, '第 2 页显示剩余 3 条');
+  assert.strictEqual((html2.match(/data-act="add-item"/g) || []).length, 6, '第 2 页显示剩余 3 条 ×2（桌面+手机）= 6');
   assert.ok(html2.includes('2 / 2'), '第 2 页页码');
 
   // 搜索词变化重置回第 1 页
