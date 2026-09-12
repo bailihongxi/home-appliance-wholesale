@@ -42,6 +42,13 @@
     };
   }
 
+  /** V3.55：某商品是否已在进货明细里（用于选货区「已加入」整行灰底 + 蓝色按钮） */
+  function formHas(form, productId) {
+    return (form.items || []).some(function (x) {
+      return x.productId === productId;
+    });
+  }
+
   /** 批量设置成本（原批量进价）：把 value 一次性写入全部明细行 */
   function applyBulkPrice(form, value) {
     var raw = String(value === undefined || value === null ? '' : value).trim();
@@ -157,7 +164,8 @@
 
       /** 点「加入」：该商品一行，数量 +1 */
       'add-item': function (ctx, state, el) {
-        var id = el.getAttribute('data-id');        var p = product.getById(ctx, id);
+        var id = el.getAttribute('data-id');
+        var p = product.getById(ctx, id);
         if (!p) return;
         var it = state.form.items.find(function (x) {
           return x.productId === id;
@@ -631,18 +639,23 @@
         '<th>商品</th><th class="num">档案成本</th><th class="num">库存</th><th></th>' +
         '</tr></thead><tbody>';
       pick.list.forEach(function (p) {
-        h += '<tr>' +
+        // V3.55：已在进货明细里的商品 → 整行灰底 + 蓝色「加入」按钮
+        // （按钮文案恒为「加入」，不再变「＋再加」；数量在下方明细里改）
+        var pickedD = formHas(form, p.id);
+        h += '<tr' + (pickedD ? ' class="picked"' : '') + '>' +
           '<td>' + esc(p.brand) + ' <b>' + esc(p.model) + '</b><br><span class="weak small">' + esc(p.category) + ' / ' + esc(p.unit) + '</span></td>' +
           '<td class="num">' + ui.money(p.cost) + '</td>' +
           '<td class="num">' + (p.stock || 0) + '</td>' +
-          '<td class="act"><button class="btn btn-sm btn-orange" data-act="add-item" data-id="' + esc(p.id) + '">加入</button></td>' +
+          '<td class="act"><button class="btn btn-sm ' + (pickedD ? 'btn-added' : 'btn-orange') + '" data-act="add-item" data-id="' + esc(p.id) + '">加入</button></td>' +
           '</tr>';
       });
       h += '</tbody></table></div></div>';
       // 手机端（≤599px）：V3.51 两行卡片式选货区（无需横向滚动）
       h += '<div class="pick-mobile"><div class="pick-list">';
       pick.list.forEach(function (p) {
-        h += '<div class="pick-item">' +
+        // V3.55：已在进货明细里的商品 → 整行灰底 + 蓝色「加入」按钮
+        var picked = formHas(form, p.id);
+        h += '<div class="pick-item' + (picked ? ' picked' : '') + '">' +
           '<div class="pick-main">' +
             '<div class="pick-name">' + esc(p.brand) + ' <b>' + esc(p.model) + '</b></div>' +
             '<div class="pick-sub">' +
@@ -652,7 +665,7 @@
           '</div>' +
           '<div class="pick-side">' +
             '<div class="pick-stock">' + (p.stock || 0) + '</div>' +
-            '<button class="btn btn-sm btn-orange" data-act="add-item" data-id="' + esc(p.id) + '">加入</button>' +
+            '<button class="btn btn-sm ' + (picked ? 'btn-added' : 'btn-orange') + '" data-act="add-item" data-id="' + esc(p.id) + '">加入</button>' +
           '</div>' +
         '</div>';
       });

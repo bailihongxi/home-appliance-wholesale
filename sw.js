@@ -7,7 +7,7 @@
  * 解决 GitHub Pages 静态资源 Cache-Control: max-age=600 导致部署后 10 分钟内
  * 手机端仍拿到旧 JS/CSS 的问题（服务端未变时返回 304，几乎不增加流量）。
  */
-var CACHE = 'appliance-erp-v83';
+var CACHE = 'appliance-erp-v84';
 var SHELL = [
   './',
   './index.html',
