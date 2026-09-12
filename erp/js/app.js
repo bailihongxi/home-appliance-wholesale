@@ -494,6 +494,7 @@
   // 解决「销售开单/进货单/商品档案等页面内点加入/勾选/改数量后整页重渲染跳回顶部」问题。
   var lastRoute = null;
   var savedScroll = { x: 0, y: 0 };
+  var savedHScroll = []; // V3.49：各 .table-wrap 横向滚动位置（同路由重渲染后恢复）
 
   function render() {
     if (!app.ready) return;
@@ -526,9 +527,17 @@
     lastRoute = routeName;
 
     var win = typeof window !== 'undefined' ? window : null;
+    savedHScroll = [];
     if (win && !routeChanged) {
       savedScroll.x = win.scrollX || win.pageXOffset || 0;
       savedScroll.y = win.scrollY || win.pageYOffset || 0;
+      // V3.49：同路由重渲染前记录各 .table-wrap 横向滚动位置（手机端选货区等横向滚动容器）
+      if (app.main && app.main.querySelectorAll) {
+        var wrapsBefore = app.main.querySelectorAll('.table-wrap');
+        for (var wi = 0; wi < wrapsBefore.length; wi++) {
+          savedHScroll.push(wrapsBefore[wi].scrollLeft || 0);
+        }
+      }
     }
 
     app.main.innerHTML = html;
@@ -546,6 +555,14 @@
         win.scrollTo(0, 0);
       } else {
         win.scrollTo(savedScroll.x, savedScroll.y);
+        // V3.49：恢复各横向滚动容器的 scrollLeft（仅同路由时，避免把旧页滚动带到新页）
+        if (app.main && app.main.querySelectorAll && savedHScroll.length) {
+          var wrapsAfter = app.main.querySelectorAll('.table-wrap');
+          var n = Math.min(wrapsAfter.length, savedHScroll.length);
+          for (var wj = 0; wj < n; wj++) {
+            try { wrapsAfter[wj].scrollLeft = savedHScroll[wj]; } catch (e) {}
+          }
+        }
       }
     }
   }
@@ -575,6 +592,7 @@
   app.render = render;
   app.lastRoute = function () { return lastRoute; };
   app._savedScroll = function () { return { x: savedScroll.x, y: savedScroll.y }; };
+  app._savedHScroll = function () { return savedHScroll.slice(); };
 
   /* ---------------- 实时输入判定（纯函数，可单测） ---------------- */
 

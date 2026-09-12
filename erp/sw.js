@@ -4,7 +4,7 @@
  * 更新策略（V3.34 起）：导航与静态资源全部 network-first——在线一律拿最新
  * 页面与资源（新功能一次打开即生效，杜绝「旧缓存卡版本」），离线回退缓存外壳。
  */
-var CACHE = 'appliance-erp-v76';
+var CACHE = 'appliance-erp-v77';
 var SHELL = [
   './',
   './index.html',

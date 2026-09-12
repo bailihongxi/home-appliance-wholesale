@@ -43,3 +43,24 @@ test('app 暴露 lastRoute / _savedScroll 以便运行时观测', () => {
   assert.ok(src.includes('app._savedScroll = function () { return { x: savedScroll.x, y: savedScroll.y }; }'),
     '暴露 app._savedScroll');
 });
+
+test('V3.49 render() 同路由重渲染前记录各 .table-wrap 横向滚动位置', () => {
+  const fn = renderFn();
+  assert.ok(fn.includes('var savedHScroll = []') || src.includes('var savedHScroll = []'), '存在 savedHScroll 变量');
+  assert.ok(fn.includes('querySelectorAll(\'.table-wrap\')'), 'render 查询 .table-wrap 容器');
+  assert.ok(fn.includes('savedHScroll.push(wrapsBefore[wi].scrollLeft'), '记录每个 .table-wrap 的 scrollLeft');
+  assert.ok(fn.includes('if (win && !routeChanged)'), '仅在同路由（非路由切换）时记录横向滚动');
+});
+
+test('V3.49 render() 同路由重渲染后恢复 .table-wrap 的 scrollLeft', () => {
+  const fn = renderFn();
+  assert.ok(fn.includes('var wrapsAfter = app.main.querySelectorAll(\'.table-wrap\')'), 'render 查询重渲染后的 .table-wrap');
+  assert.ok(fn.includes('wrapsAfter[wj].scrollLeft = savedHScroll[wj]'), '将保存的 scrollLeft 写回容器');
+  assert.ok(fn.includes('var n = Math.min(wrapsAfter.length, savedHScroll.length)'), '按最小数量对齐，避免越界/错位');
+  // 仅同路由时恢复：恢复逻辑位于 else 分支（routeChanged 为 false 时）
+  assert.ok(/else\s*\{\s*win\.scrollTo\(savedScroll\.x, savedScroll\.y\)/.test(fn), '恢复逻辑位于同路由分支');
+});
+
+test('app 暴露 _savedHScroll 以便运行时观测', () => {
+  assert.ok(src.includes('app._savedHScroll = function () { return savedHScroll.slice(); }'), '暴露 app._savedHScroll');
+});
