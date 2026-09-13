@@ -512,35 +512,52 @@
 
     renderNav(page);
 
-    var html = '';
-    try {
-      html = page.render(app.ctx, state) || '';
-    } catch (err) {
-      html = '<div class="card"><div class="notice notice-danger">页面渲染出错：' +
-        (err && err.message ? String(err.message) : String(err)) + '</div></div>';
-      if (typeof console !== 'undefined') console.error(err);
-    }
-    html = decorateHtml(page, html);
-
     var routeName = router().currentName ? router().currentName() : (page && page.name);
     var routeChanged = lastRoute !== routeName;
     lastRoute = routeName;
 
     var win = typeof window !== 'undefined' ? window : null;
-    savedHScroll = [];
-    if (win && !routeChanged) {
-      savedScroll.x = win.scrollX || win.pageXOffset || 0;
-      savedScroll.y = win.scrollY || win.pageYOffset || 0;
-      // V3.49：同路由重渲染前记录各 .table-wrap 横向滚动位置（手机端选货区等横向滚动容器）
-      if (app.main && app.main.querySelectorAll) {
-        var wrapsBefore = app.main.querySelectorAll('.table-wrap');
-        for (var wi = 0; wi < wrapsBefore.length; wi++) {
-          savedHScroll.push(wrapsBefore[wi].scrollLeft || 0);
-        }
+
+    // V3.56：同路由重渲染优先交给页面自带的 update(ctx, state) 做「区块级局部刷新」。
+    // 返回 true = 已局部更新：不整页重建 DOM（不闪屏），也完全不碰 scrollTo（滚动位置天然保持，不跳回顶部）。
+    // 返回 false / 抛错 = 走原来的整页渲染（含滚动位置记忆与恢复）。
+    var patched = false;
+    if (!routeChanged && typeof page.update === 'function') {
+      try {
+        patched = page.update(app.ctx, state) === true;
+      } catch (errUpd) {
+        patched = false;
+        if (typeof console !== 'undefined') console.error('局部刷新失败，回退整页渲染', errUpd);
       }
     }
 
-    app.main.innerHTML = html;
+    if (!patched) {
+      var html = '';
+      try {
+        html = page.render(app.ctx, state) || '';
+      } catch (err) {
+        html = '<div class="card"><div class="notice notice-danger">页面渲染出错：' +
+          (err && err.message ? String(err.message) : String(err)) + '</div></div>';
+        if (typeof console !== 'undefined') console.error(err);
+      }
+      html = decorateHtml(page, html);
+
+      savedHScroll = [];
+      if (win && !routeChanged) {
+        savedScroll.x = win.scrollX || win.pageXOffset || 0;
+        savedScroll.y = win.scrollY || win.pageYOffset || 0;
+        // V3.49：同路由重渲染前记录各 .table-wrap 横向滚动位置（手机端选货区等横向滚动容器）
+        if (app.main && app.main.querySelectorAll) {
+          var wrapsBefore = app.main.querySelectorAll('.table-wrap');
+          for (var wi = 0; wi < wrapsBefore.length; wi++) {
+            savedHScroll.push(wrapsBefore[wi].scrollLeft || 0);
+          }
+        }
+      }
+
+      app.main.innerHTML = html;
+    }
+
     document.title = (ERP.branding ? ERP.branding.pageTitle(app.ctx.settings, page.title) : ((app.ctx.settings.shopName || '电器店') + ' · ' + (page.title || '')));
     applyFavicon();
     if (page.mount) {
@@ -550,7 +567,7 @@
         if (typeof console !== 'undefined') console.error(err2);
       }
     }
-    if (win) {
+    if (win && !patched) {
       if (routeChanged) {
         win.scrollTo(0, 0);
       } else {
