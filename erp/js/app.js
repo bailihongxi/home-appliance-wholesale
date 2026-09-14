@@ -625,11 +625,12 @@
     return !!(el && el.getAttribute && el.getAttribute('data-live') === '1');
   };
 
-  // 底部导航只保留最高频的三个入口；其余（开单/进货/商品/记账/报表/设置）统一收进「我的 → 常用入口」
+  // V3.57：底部导航改为 首页 / 商品 / 我的 三项（第二项由「库存」改为「商品」，指向商品档案页 product）；
+  // 库存管理及开单/进货/记账/报表/设置等仍可从首页入口与「我的 → 常用入口」进入。
   function navItems() {
     return [
       { name: 'home', icon: '📊', text: '首页' },
-      { name: 'inventory', icon: '📋', text: '库存' },
+      { name: 'product', icon: '📦', text: '商品' },
       { name: 'mine', icon: '👤', text: '我的' }
     ];
   }
