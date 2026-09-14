@@ -78,9 +78,13 @@
 <!-- ============ 业务引擎（依赖 core/* + store/*，用 writeLog 兜底延迟读 ERP.repo） ============ -->
 <script src="js/core/engine.js"></script>
 
-<!-- ============ 扫码识别（界面层依赖 scan，须先加载） ============ -->
-<script src="vendor/zxing-decode.min.js" defer></script>
-<script src="vendor/xlsx.full.min.js"></script>
+<!-- ============ 扫码识别 / Excel 解析 ==========================================
+     V3.58 加载优化：vendor/zxing-decode.min.js(407KB) 与 vendor/xlsx.full.min.js(861KB)
+     合计 1.27MB，原先每次启动都下载+解析，但条码拍照与 Excel 导入均为低频功能。
+     现改为「用到时才注入脚本」（js/core/lazy.js + lazy effective 调用点），
+     首屏不再为它们付费；离线时由 Service Worker 运行时缓存兜底（首次联网加载后可用）。
+     详见 js/core/lazy.js 注释。 -->
+<script src="js/core/lazy.js"></script>
 <script src="js/core/excel.js"></script>
 
 <!-- ============ 界面层 ============ -->

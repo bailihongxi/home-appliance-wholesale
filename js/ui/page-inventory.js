@@ -34,9 +34,9 @@
 
   var esc = util.escapeHtml;
 
-  /** 每页条数：预警 200、盘点 100（每行带实盘输入框，减半以压低 DOM 规模）；
-   *  库存查询沿用 200（util.paginate(list, st.page, 200)，见 renderList） */
-  var PAGE_ALERT = 200;
+  /** 每页条数：V3.58 全系统列表统一 100 条/页。
+   *  盘点每行带实盘输入框，与其余列表同为 100（util.paginate 见 renderAlert/renderTake/renderList） */
+  var PAGE_ALERT = 100;
   var PAGE_TAKE = 100;
 
   function totalQty(ctx) {
@@ -423,7 +423,8 @@
 
   function renderList(ctx, st) {
     var list = listOf(ctx, st);
-    var pg = util.paginate(list, st.page, 200);
+    // V3.58：全系统列表统一每页 100 条（原 200），降低 DOM 规模与内存占用、提升渲染速度
+    var pg = util.paginate(list, st.page, 100);
     st.page = pg.page;
 
     if (!pg.items.length) {

@@ -136,8 +136,10 @@
   }
 
   function renderTop(ctx, state) {
-    var best = profit.topProducts(ctx, { by: state.topBy, order: 'desc', n: 5 });
-    var worst = profit.topProducts(ctx, { by: state.topBy, order: 'asc', n: 5 });
+    // V3.58 性能：畅销/滞销共用同一份聚合结果（此前两次 topProducts = 扫描全部销售单两遍）
+    var agg = profit.productAgg(ctx);
+    var best = profit.rankProducts(agg, state.topBy, 'desc', 5);
+    var worst = profit.rankProducts(agg, state.topBy, 'asc', 5);
     var h = '<div class="card"><div class="card-title">畅销 / 滞销 TOP5' +
       '<span class="more">排序：' +
       '<button class="btn btn-sm' + (state.topBy === 'profit' ? ' on' : '') + '" data-act="top-by" data-by="profit">按毛利</button> ' +

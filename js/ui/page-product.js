@@ -381,18 +381,27 @@
           ui.toast('已读取「' + file.name + '」，请确认后点「开始导入」', 'ok');
         };
       reader.onload = function () {
-        try {
-          if (isCsv) {
-            finish(String(reader.result || ''));
-          } else {
+        var result = reader.result;
+        if (isCsv) {
+          finish(String(result || ''));
+          return;
+        }
+        // V3.58：Excel 解析库（861KB）改为按需加载——首屏不再下载，选中 xlsx/xls 时才拉起。
+        // 首次使用会短暂等待（本地近乎瞬时，弱网时提示用户），之后由模块内 Promise 缓存复用。
+        ui.toast('正在加载 Excel 解析组件…', 'ok');
+        excel.ensureLoaded().then(function () {
+          try {
             // V3.22：读取全部工作表并合并（后续表的重复表头自动剥离）
-            var sheets = excel.parseAll(reader.result);
+            var sheets = excel.parseAll(result);
             var merged = product.mergeSheetRows(sheets);
             finish(excel.rowsToCsv(merged));
+          } catch (e2) {
+            ui.toast('解析文件失败：' + (e2 && e2.message ? e2.message : e2), 'err');
           }
-        } catch (e) {
-          ui.toast('解析文件失败：' + (e && e.message ? e.message : e), 'err');
-        }
+        }).catch(function (eLoad) {
+          ui.toast('Excel 解析组件加载失败，请联网后重试（或直接用 CSV 导入）：' +
+            (eLoad && eLoad.message ? eLoad.message : eLoad), 'err');
+        });
       };
         reader.onerror = function () {
           ui.toast('读取文件失败，请重试', 'err');
@@ -601,7 +610,8 @@
     list = util.sortBy(list, function (p) {
       return String(p.brand || '') + String(p.model || '');
     });
-    var pg = util.paginate(list, state.page, 200);
+    // V3.58：全系统列表统一每页 100 条（原 200），降低 DOM 规模与内存占用、提升渲染速度
+    var pg = util.paginate(list, state.page, 100);
     state.page = pg.page;
     return pg;
   }

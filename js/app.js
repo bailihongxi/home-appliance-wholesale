@@ -76,6 +76,8 @@
     var page = ERP.pages && ERP.pages.login;
     if (!page) return;
     if (!app.pageStates.login) app.pageStates.login = page.init(null, store());
+    // 登录页不属于任何业务路由：清掉增量比对基线，登录后重新建立（避免拿旧业务页快照比对）
+    app._resetPatch();
     app.main.innerHTML = page.render(null, app.pageStates.login);
   }
 
@@ -496,6 +498,100 @@
   var savedScroll = { x: 0, y: 0 };
   var savedHScroll = []; // V3.49：各 .table-wrap 横向滚动位置（同路由重渲染后恢复）
 
+  /* ---------------- V3.58 通用区块级局部刷新 ----------------
+   * 同路由重渲染时（搜索、翻页、勾选、加减商品、切换标签等操作），不再整页重建 DOM：
+   * 逐块比较新旧 HTML，**只有真正变化的区块才写入 DOM**。
+   * 带来的收益：
+   *   ① 未变化区块零 DOM 操作 → 不闪屏；
+   *   ② 不调用 scrollTo，滚动位置天然保持 → 不回跳顶部；
+   *   ③ 省掉整页重排/重绘（真机上通常是十几到几十毫秒的主要开销）。
+   * 页面上若自带 update(ctx, state)（见库存页 V3.56），仍优先使用它做更精细的局部刷新。
+   */
+
+  // 当前 main 里已写入的 HTML 快照；路由切换后失效（置 null），避免跨页误比对
+  var lastMainHtml = null;
+  // 下沉比较的最大层级：够用又不会让 outerHTML 序列化开销随深度膨胀
+  var PATCH_MAX_DEPTH = 2;
+
+  /** 同步元素属性（class 切换高亮、data-* 变化等；只写差异项） */
+  function syncAttrs(oldEl, newEl) {
+    var attrs = newEl.attributes;
+    var i;
+    for (i = 0; i < attrs.length; i++) {
+      var a = attrs[i];
+      if (oldEl.getAttribute(a.name) !== a.value) oldEl.setAttribute(a.name, a.value);
+    }
+    // 移除新节点已没有的属性
+    var oldAttrs = oldEl.attributes;
+    var remove = [];
+    for (i = 0; i < oldAttrs.length; i++) {
+      if (!newEl.hasAttribute(oldAttrs[i].name)) remove.push(oldAttrs[i].name);
+    }
+    for (i = 0; i < remove.length; i++) oldEl.removeAttribute(remove[i]);
+  }
+
+  /** 递归比对两个节点；真正发生变化时才写 DOM */
+  function patchNode(oldEl, newEl, depth) {
+    if (oldEl.outerHTML === newEl.outerHTML) return; // 完全相同 → 零写入
+    var oKids = oldEl.children;
+    var nKids = newEl.children;
+    var canDescend = depth < PATCH_MAX_DEPTH && oKids.length && oKids.length === nKids.length;
+    if (canDescend) {
+      var sameShape = true;
+      for (var i = 0; i < oKids.length; i++) {
+        if (oKids[i].tagName !== nKids[i].tagName) { sameShape = false; break; }
+      }
+      if (sameShape) {
+        for (var j = 0; j < oKids.length; j++) patchNode(oKids[j], nKids[j], depth + 1);
+        syncAttrs(oldEl, newEl);
+        return;
+      }
+    }
+    // 退化：整块替换（结构不一致或已达最大层级）
+    oldEl.outerHTML = newEl.outerHTML;
+  }
+
+  /**
+   * 逐层比对新旧两棵树的子节点，**只写真正变化的区块**。
+   * 结构不可调和（数量/标签不符）→ 返回 false，交调用方整页替换（正确性优先）。
+   * 抽成不依赖全局 document 的独立函数，便于在 Node 中用 DOM 桩直接断言。
+   */
+  function reconcileList(oldParent, newParent, depth) {
+    var oKids = (oldParent && oldParent.children) || [];
+    var nKids = (newParent && newParent.children) || [];
+    if (!nKids.length || oKids.length !== nKids.length) return false;
+    for (var i = 0; i < oKids.length; i++) {
+      if (oKids[i].tagName !== nKids[i].tagName) return false;
+    }
+    for (var j = 0; j < oKids.length; j++) patchNode(oKids[j], nKids[j], depth || 0);
+    return true;
+  }
+
+  /** 把新 HTML 增量写入 container；返回 true 表示已处理（调用方无需再整页赋值） */
+  function patchMain(container, newHtml, opts) {
+    if (lastMainHtml === newHtml) return true; // 与上次完全一致 → 完全不碰 DOM
+    var doc = (opts && opts.document) || (typeof document !== 'undefined' ? document : null);
+    if (!doc || !doc.createElement) return false;
+    var tmp = doc.createElement('div');
+    tmp.innerHTML = newHtml;
+    return reconcileList(container, tmp, 0);
+  }
+
+  /** 渲染页面 HTML（异常时降级为错误卡片，不抛出中断渲染流程） */
+  function safeRender(page, state) {
+    try {
+      return page.render(app.ctx, state) || '';
+    } catch (err) {
+      if (typeof console !== 'undefined') console.error(err);
+      return '<div class="card"><div class="notice notice-danger">页面渲染出错：' +
+        (err && err.message ? String(err.message) : String(err)) + '</div></div>';
+    }
+  }
+
+  app._patchMain = patchMain;
+  app._reconcileList = reconcileList;
+  app._resetPatch = function () { lastMainHtml = null; };
+
   function render() {
     if (!app.ready) return;
     // V3：未登录 → 只渲染登录页（不进入业务路由）
@@ -515,6 +611,8 @@
     var routeName = router().currentName ? router().currentName() : (page && page.name);
     var routeChanged = lastRoute !== routeName;
     lastRoute = routeName;
+    // 跨路由后旧快照失效（DOM 里已是新页面结构），先渲染一次建立基线
+    if (routeChanged) lastMainHtml = null;
 
     var win = typeof window !== 'undefined' ? window : null;
 
@@ -522,25 +620,33 @@
     // 返回 true = 已局部更新：不整页重建 DOM（不闪屏），也完全不碰 scrollTo（滚动位置天然保持，不跳回顶部）。
     // 返回 false / 抛错 = 走原来的整页渲染（含滚动位置记忆与恢复）。
     var patched = false;
-    if (!routeChanged && typeof page.update === 'function') {
-      try {
-        patched = page.update(app.ctx, state) === true;
-      } catch (errUpd) {
-        patched = false;
-        if (typeof console !== 'undefined') console.error('局部刷新失败，回退整页渲染', errUpd);
+    var html = '';
+
+    if (!routeChanged) {
+      if (typeof page.update === 'function') {
+        try {
+          patched = page.update(app.ctx, state) === true;
+        } catch (errUpd) {
+          patched = false;
+          if (typeof console !== 'undefined') console.error('局部刷新失败，回退整页渲染', errUpd);
+        }
+      }
+      // 页面未提供 update() 时，走通用的「区块级增量写入」（V3.58）
+      if (!patched) {
+        html = decorateHtml(page, safeRender(page, state));
+        try {
+          patched = patchMain(app.main, html);
+        } catch (errPatch) {
+          patched = false;
+          if (typeof console !== 'undefined') console.error('增量写入失败，回退整页渲染', errPatch);
+        }
+        if (patched) lastMainHtml = html;
       }
     }
 
     if (!patched) {
-      var html = '';
-      try {
-        html = page.render(app.ctx, state) || '';
-      } catch (err) {
-        html = '<div class="card"><div class="notice notice-danger">页面渲染出错：' +
-          (err && err.message ? String(err.message) : String(err)) + '</div></div>';
-        if (typeof console !== 'undefined') console.error(err);
-      }
-      html = decorateHtml(page, html);
+      if (!html) html = decorateHtml(page, safeRender(page, state));
+      lastMainHtml = html;
 
       savedHScroll = [];
       if (win && !routeChanged) {

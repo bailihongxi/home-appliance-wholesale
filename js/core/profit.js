@@ -132,11 +132,14 @@
    * @param opts {by:'profit'|'qty', n:5, order:'desc'|'asc'}
    * 返回 [{productId, brand, model, name, qty, revenue, cost, grossProfit}]
    */
-  profit.topProducts = function topProducts(ctx, opts) {
-    opts = opts || {};
-    var by = opts.by === 'qty' ? 'qty' : 'profit';
-    var n = opts.n || 5;
-    var order = opts.order === 'asc' ? 'asc' : 'desc';
+  /**
+   * V3.58 性能：一次遍历产出「按商品聚合」的完整结果。
+   * 此前 page-report 的畅销/滞销 TOP5 会调用 topProducts 两次，等于把全部销售单扫两遍；
+   * topProducts 内部还会为每个商品调用 ctx.getProduct 拉名称/型号。现在两者合流：
+   * 先聚合一次，再由调用方按需要排序切片（升序/降序共用同一份聚合结果）。
+   * @returns [{productId, brand, model, name, qty, revenue, cost, grossProfit}]
+   */
+  profit.productAgg = function productAgg(ctx) {
     var map = {};
     (ctx.data.sales || []).forEach(function (d) {
       if (d.voided) return;
@@ -158,7 +161,7 @@
         }
       });
     });
-    var list = Object.keys(map).map(function (pid) {
+    return Object.keys(map).map(function (pid) {
       var m = map[pid];
       var p = ctx.getProduct(pid);
       if (p) {
@@ -169,12 +172,29 @@
       m.grossProfit = m.revenue - m.cost;
       return m;
     });
-    list.sort(function (a, b) {
-      var va = by === 'qty' ? a.qty : a.grossProfit;
-      var vb = by === 'qty' ? b.qty : b.grossProfit;
+  };
+
+  /** 按 by 键排序并取前 n 条（asc=最小 n 条，desc=最大 n 条） */
+  function rank(list, by, order, n) {
+    var keyFn = by === 'qty' ? function (a) { return a.qty; } : function (a) { return a.grossProfit; };
+    var arr = list.slice().sort(function (a, b) {
+      var va = keyFn(a), vb = keyFn(b);
       return order === 'asc' ? va - vb : vb - va;
     });
-    return list.slice(0, n);
+    return arr.slice(0, n);
+  }
+
+  /** 对 productAgg 的结果排序切片——供页面复用同一份聚合结果取畅销/滞销 */
+  profit.rankProducts = function rankProducts(list, by, order, n) {
+    return rank(list, by, order, n || 5);
+  };
+
+  profit.topProducts = function topProducts(ctx, opts) {
+    opts = opts || {};
+    var by = opts.by === 'qty' ? 'qty' : 'profit';
+    var n = opts.n || 5;
+    var order = opts.order === 'asc' ? 'asc' : 'desc';
+    return rank(profit.productAgg(ctx), by, order, n);
   };
 
   /** 库存资金占用 = Σ(当前库存 × 最新成本) */
