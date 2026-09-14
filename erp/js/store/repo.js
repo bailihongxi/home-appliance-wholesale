@@ -29,6 +29,65 @@
   function createContext(data) {
     var dirty = Object.create(null);
 
+    /**
+     * V3.58 性能：主键查询索引（store → {arr, len, keyField, map}）。
+     *
+     * 背景（全系统卡顿的主要根因）：ctx.getProduct / getPartner 原为 Array.find 线性查找，
+     * 而 profit.topProducts 会为「每一条售出商品」调用 ctx.getProduct —— 3000 商品即 3000 次
+     * 线性扫描 × 3000 长度 ≈ 450 万次比较，直接导致报表页 ~106ms、首页 ~90ms 的白屏等待。
+     *
+     * 失效策略（不依赖 touch，避免批量导入时逐条失效退化成 O(n²)）：
+     *   1) 数组引用变化（整体替换列表）→ 重建
+     *   2) 数组长度变化（push 新增 / splice 删除）→ 重建
+     *   3) 命中记录的 key 与查询 key 不一致（理论兜底，O(1) 校验）→ 重建
+     * 字段级修改（改库存/改成本）无需失效：索引保存的是对象引用，读到的一定是最新值。
+     * 注：barcodes 属于「不改长度的原地修改」，故 getProductByCode 仍走线性扫描以确保正确。
+     */
+    var idxCache = Object.create(null);
+
+    function buildIndex(store, list, keyField) {
+      var map = Object.create(null);
+      for (var i = 0; i < list.length; i++) {
+        var rec = list[i];
+        if (!rec) continue;
+        var k = rec[keyField];
+        if (k === undefined || k === null) continue;
+        var ks = String(k);
+        // 与 Array.find 语义一致：重复 key 取「首个」
+        if (!(ks in map)) map[ks] = rec;
+      }
+      return { arr: list, len: list.length, keyField: keyField, map: map };
+    }
+
+    function ensureIndex(store) {
+      var arr = (ctx.data && ctx.data[store]) || null;
+      if (!Array.isArray(arr)) arr = [];
+      var s = schemaRef();
+      var keyField = (s && s.KEY_PATH && s.KEY_PATH[store]) || 'id';
+      var cached = idxCache[store];
+      if (!cached || cached.arr !== arr || cached.len !== arr.length || cached.keyField !== keyField) {
+        cached = buildIndex(store, arr, keyField);
+        idxCache[store] = cached;
+      }
+      return cached;
+    }
+
+    /** 按主键取记录（O(1)）；索引失效或异常时自动退化为线性查找，保证结果正确 */
+    function indexGet(store, key) {
+      if (key === undefined || key === null) return null;
+      var ks = String(key);
+      var idx = ensureIndex(store);
+      var hit = idx.map[ks];
+      if (hit) {
+        // O(1) 校验：key 对得上才可信（数组被原地替换等极端场景自动修复）
+        if (String(hit[idx.keyField]) === ks) return hit;
+        idxCache[store] = buildIndex(store, idx.arr, idx.keyField);
+        var again = idxCache[store].map[ks];
+        if (again) return again;
+      }
+      return null;
+    }
+
     var ctx = {
       data: data,
       settings: (data && data.settings) || (schemaRef() ? schemaRef().defaultSettings() : {}),
@@ -70,28 +129,28 @@
       },
 
       /* ---- 查询助手 ---- */
-      /** 按商品 id 取商品（电器版单层模型，无 SKU） */
+      /** 按商品 id 取商品（电器版单层模型，无 SKU）—— V3.58：走主键索引，O(1) */
       getProduct: function (id) {
-        return (data.products || []).find(function (p) {
-          return String(p.id) === String(id);
-        }) || null;
+        return indexGet('products', id);
       },
-      /** 按原厂条码 / 二维码内容取商品（归一化：去空白、转大写） */
+      /** 按原厂条码 / 二维码内容取商品（归一化：去空白、转大写）
+       *  注：条码可被原地修改（长度不变），索引难以及时失效，故仍走线性扫描保证结果正确；
+       *  调用频次极低（扫码/导入时单次），不影响整体性能。 */
       getProductByCode: function (code) {
         var c = String(code == null ? '' : code).trim().toUpperCase();
         if (!c) return null;
-        return (data.products || []).find(function (p) {
-          var arr = p.barcodes;
-          if (!Array.isArray(arr)) return false;
-          return arr.some(function (b) {
+        var arr = (ctx.data && ctx.data.products) || [];
+        return arr.find(function (p) {
+          var barr = p.barcodes;
+          if (!Array.isArray(barr)) return false;
+          return barr.some(function (b) {
             return String(b == null ? '' : b).trim().toUpperCase() === c;
           });
         }) || null;
       },
+      /** 按往来单位 id 取记录 —— V3.58：走主键索引，O(1) */
       getPartner: function (partnerId) {
-        return (data.partners || []).find(function (p) {
-          return p.id === partnerId;
-        }) || null;
+        return indexGet('partners', partnerId);
       },
       getDoc: function (store, no) {
         return (data[store] || []).find(function (d) {

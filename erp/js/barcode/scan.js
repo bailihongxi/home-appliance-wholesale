@@ -284,6 +284,25 @@
     return !!(window.ZXing && typeof window.ZXing.decodeCanvas === 'function');
   }
 
+  /**
+   * V3.58 加载优化：vendor/zxing-decode.min.js(407KB) 原为每次启动都下载（index.html defer 直载），
+   * 但 ZXing 只是「拍照识别兜底通道」（主通道是原生 BarcodeDetector 与自研 EAN-13/Code39）。
+   * 现在改为：进入扫码流程时**提前预热拉取**（不阻塞界面），真正解码时若尚未就绪再同步等待一次。
+   * 这样首次拍照识别几乎无感知，而常规会话完全不需要为这 407KB 付费。
+   * @returns Promise<*> ZXing 对象；无懒加载器（如 Node/旧环境）时 resolve(null)，通道自动跳过。
+   */
+  function ensureZxing() {
+    if (typeof window === 'undefined') return Promise.resolve(null);
+    if (hasZxing()) return Promise.resolve(window.ZXing);
+    var ERP = window.ERP;
+    var lazy = ERP && ERP.lazy;
+    if (!lazy || typeof lazy.load !== 'function') return Promise.resolve(null);
+    return lazy.load('zxing', 'vendor/zxing-decode.min.js', function () {
+      return hasZxing() ? window.ZXing : null;
+    }).catch(function () { return null; });
+  }
+  scan.ensureZxing = ensureZxing;
+
   /** 统一转为「适合解码的 canvas」（长边 ≤ ZXING_MAX_EDGE，只缩小不放大） */
   function toDecodeCanvas(source) {
     try {
@@ -422,8 +441,23 @@
     } catch (e) { cb(false); }
   }
 
-  /** ZXing 纯 JS 通道（干净打包版：canvas → Hybrid/Global 双二值化，覆盖二维码/Code128 等码制） */
+  /**
+   * ZXing 纯 JS 通道（干净打包版：canvas → Hybrid/Global 双二值化，覆盖二维码/Code128 等码制）
+   * V3.58：库改为按需加载——未就绪时先加载再解码（首次调用多等一小会儿，之后均为同步）。
+   * 注意：本函数是 ZXing 的唯一消费点，改这里即完成全链路接入。
+   */
   function zxingDecode(source, cb) {
+    if (!hasZxing()) {
+      ensureZxing().then(function (has) {
+        if (!has) { cb(false); return; }
+        zxingRun(source, cb);
+      });
+      return;
+    }
+    zxingRun(source, cb);
+  }
+
+  function zxingRun(source, cb) {
     try {
       var canvas = toDecodeCanvas(source);
       if (!canvas) { cb(false); return; }
@@ -473,6 +507,8 @@
   scan.start = function start(opts) {
     opts = opts || {};
     if (!hasWindow()) { if (opts.onError) opts.onError('当前环境不支持扫码'); return; }
+    // V3.58：进入扫码即刻预热 ZXing（不阻塞界面），拍照兜底通道届时已就绪
+    ensureZxing();
     if (scan.chooseMode(window.BarcodeDetector, window.isSecureContext) === 'realtime') {
       realtime(opts);
     } else {

@@ -649,7 +649,8 @@
       return d.no;
     }, true);
 
-    var pg = util.paginate(list, state.page, 300);
+    // V3.58：全系统列表统一每页 100 条（原 300），降低 DOM 规模与内存占用、提升渲染速度
+    var pg = util.paginate(list, state.page, 100);
     state.page = pg.page;
 
     var h = '<div class="page-head"><h2>销售管理</h2>' +

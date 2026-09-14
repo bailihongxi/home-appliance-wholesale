@@ -43,18 +43,18 @@ function bodyRows(html) {
   return out;
 }
 
-test('V3.56-预警分页：3000 商品单页最多 200 行且带分页器', () => {
+test('V3.58-预警分页：3000 商品单页最多 100 行且带分页器', () => {
   const ctx = bigCtx(3000);
   const st = page.init();
   st.tab = 'alert';
   const html = page.render(ctx, st);
   const rows = bodyRows(html);
-  assert.ok(Math.max.apply(null, rows) <= 200, '预警单页渲染行数 ≤ 200（实际 ' + Math.max.apply(null, rows) + '）');
+  assert.ok(Math.max.apply(null, rows) <= 100, '预警单页渲染行数 ≤ 100（实际 ' + Math.max.apply(null, rows) + '）');
   assert.ok(html.includes('class="pager"'), '预警页带分页器');
   assert.ok(/共 \d+ 条/.test(html), '分页器显示总条数');
   // 全部命中预警（stock 0/1/2）→ 3000/7 的整数分布：3000 个里 i%7<3 的共 1286 条
   const total = /共 (\d+) 条/.exec(html);
-  assert.ok(Number(total[1]) > 200, '预警总数超过单页容量，分页确实生效（共 ' + total[1] + ' 条）');
+  assert.ok(Number(total[1]) > 100, '预警总数超过单页容量，分页确实生效（共 ' + total[1] + ' 条）');
 });
 
 test('V3.56-盘点分页：3000 商品单页最多 100 行 / 100 个实盘输入框', () => {
@@ -69,14 +69,14 @@ test('V3.56-盘点分页：3000 商品单页最多 100 行 / 100 个实盘输入
   assert.ok(html.includes('class="pager"'), '盘点页带分页器');
 });
 
-test('V3.56-库存查询仍为 200/页（沿用既有分页口径）', () => {
+test('V3.58-库存查询改为 100/页（全系统统一页大小）', () => {
   const ctx = bigCtx(3000);
   const st = page.init();
   const html = page.render(ctx, st);
   const rows = bodyRows(html);
-  assert.ok(Math.max.apply(null, rows) <= 200, '库存查询单页 ≤ 200 行');
+  assert.ok(Math.max.apply(null, rows) <= 100, '库存查询单页 ≤ 100 行（实际 ' + Math.max.apply(null, rows) + '）');
   const src = fs.readFileSync(path.join(ROOT, 'js/ui/page-inventory.js'), 'utf8');
-  assert.ok(src.includes('util.paginate(list, st.page, 200)'), '库存查询保持 200/页');
+  assert.ok(src.includes('util.paginate(list, st.page, 100)'), '库存查询为 100/页');
   assert.ok(src.includes('util.paginate(alerts, st.alertPage,'), '预警使用独立页码分页');
   assert.ok(src.includes('util.paginate(list, st.takePage,'), '盘点使用独立页码分页');
 });
