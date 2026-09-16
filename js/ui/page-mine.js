@@ -42,21 +42,74 @@
     }
   }
 
-  /** V3：当前登录账号 id（同步配置按账号隔离） */
+  /** V3：当前登录账号 id（账号自身维度，仅用于「我是谁」的判断） */
   function currentAcctId() {
     return (ERP && ERP.currentAccount && ERP.currentAccount.id) || null;
   }
 
-  /** V3.4：当前登录账户的脱敏公开档案（随云快照同步：店铺名/头像/经营范围，不含密码哈希） */
-  function currentAccountPublic() {
-    if (!accounts || !ERP || !ERP.currentAccount) return null;
+  /**
+   * V3.62：云同步的「数据归属账号 id」——决定同步配置 key 与云端快照路径。
+   *
+   * 背景（新用户登录后没有任何数据的根因之一）：原实现直接用 currentAcctId()，
+   * 于是「共用本店数据」的员工账号（ownerId=admin）会去找
+   *   applianceErp.sync.config.acctN + data/acctN/erp-snapshot.json
+   * 而老板的数据实际上传在 data/admin/erp-snapshot.json，员工端必然 404
+   * 「云端还没有快照」，永远拉不到本店数据。
+   * 修正：共用本店数据时按归属账号（老板）定位，独立数据空间仍用自身 id。
+   */
+  function syncAcctId() {
+    var a = (ERP && ERP.currentAccount) || null;
+    if (!a || !a.id) return currentAcctId();
+    if (accounts && typeof accounts.dataOwnerId === 'function') {
+      return accounts.dataOwnerId(a) || a.id;
+    }
+    return a.ownerId || a.id;
+  }
+
+  /** 当前账号是否共用老板（归属账号）的本店数据 */
+  function sharesBossData() {
+    var a = (ERP && ERP.currentAccount) || null;
+    if (!a) return false;
+    if (accounts && typeof accounts.sharesBossData === 'function') return !!accounts.sharesBossData(a);
+    return !!a.ownerId;
+  }
+
+  /** 本机业务数据是否为空账本（无商品 / 无进货 / 无销售 / 无账目） */
+  function isEmptyLedger(ctx) {
+    var d = (ctx && ctx.data) || {};
+    var keys = ['products', 'purchases', 'sales', 'ledgers'];
+    for (var i = 0; i < keys.length; i++) {
+      var arr = d[keys[i]];
+      if (Array.isArray(arr) && arr.length) return false;
+    }
+    return true;
+  }
+
+  /** 取指定账号 id 的脱敏公开档案 */
+  function accountPublicById(id) {
+    if (!accounts || !id) return null;
     try {
       var list = accounts.load(store());
-      var acct = accounts.getById(list, ERP.currentAccount.id);
+      var acct = accounts.getById(list, id);
       return acct ? accounts.strip(acct) : null;
     } catch (e) {
       return null;
     }
+  }
+
+  /** V3.4：当前登录账户的脱敏公开档案（随云快照同步：店铺名/头像/经营范围，不含密码哈希） */
+  function currentAccountPublic() {
+    return accountPublicById(currentAcctId());
+  }
+
+  /**
+   * V3.62：写入快照的账户档案。
+   * 共用本店数据时应写「归属账号（老板）」的档案，否则员工上传会把自己的店名/头像
+   * 写进全店共享快照，老板再从云端恢复时店名就被员工覆盖了。
+   */
+  function syncAccountPublic() {
+    if (!ERP || !ERP.currentAccount) return null;
+    return accountPublicById(syncAcctId()) || currentAccountPublic();
   }
 
   /**
@@ -74,7 +127,7 @@
 
   /** 首次进入：读本机配置（V3 按账号），owner/repo 为空时尝试从当前网址猜 */
   function initCfg() {
-    var cfg = sync.loadConfig(store(), currentAcctId());
+    var cfg = sync.loadConfig(store(), syncAcctId());
     if (!cfg.owner || !cfg.repo) {
       var loc = typeof location !== 'undefined' ? location : null;
       var g = sync.guessFromLocation(loc);
@@ -161,7 +214,7 @@
 
       /** 保存同步设置到本机 */
       'save-sync-cfg': function (ctx, state) {
-        state.cfg = sync.saveConfig(store(), state.cfg, currentAcctId());
+        state.cfg = sync.saveConfig(store(), state.cfg, syncAcctId());
         var v = sync.validateConfig(state.cfg);
         if (!v.ok) {
           state.msg = '已保存，但还差：' + v.errors.join('；');
@@ -178,7 +231,7 @@
       /** 一键同步到云端（加密上传，覆盖历史） */
       'sync-up': function (ctx, state) {
         if (state.busy) return false;
-        state.cfg = sync.saveConfig(store(), state.cfg, currentAcctId());
+        state.cfg = sync.saveConfig(store(), state.cfg, syncAcctId());
         var v = sync.validateConfig(state.cfg);
         if (!v.ok) {
           state.syncOpen = true;
@@ -187,12 +240,21 @@
           ui.toast(v.errors[0], 'err');
           return true;
         }
+        // V3.62：共用全店数据时，禁止用空账本覆盖云端共享快照（否则全店数据被清空）
+        if (sharesBossData() && isEmptyLedger(ctx)) {
+          state.syncOpen = true;
+          state.msg = '已阻止上传：本机还是空账本，上传会把云端「全店共享数据」清空。请先点「从云端恢复」把本店数据拉到本机，再上传。';
+          state.msgType = 'err';
+          ui.toast('已阻止上传：本机是空账本', 'err');
+          return true;
+        }
+        var run = function () {
         state.busy = true;
         state.msg = '正在加密并上传…';
         state.msgType = 'ok';
         // 问题3：上传前先把脏数据落库，保证本地 IndexedDB 与云端快照内容一致（避免刷新后本地仍是旧数据）
         return flushNow(ctx).then(function () {
-          return sync.syncUp(ctx, state.cfg, undefined, currentAccountPublic()).then(function (r) {
+          return sync.syncUp(ctx, state.cfg, undefined, syncAccountPublic()).then(function (r) {
             if (!r.ok) {
               finish(state, '同步失败：' + r.error, 'err');
               return;
@@ -203,7 +265,7 @@
               return;
             }
             state.cfg.lastPushAt = r.at;
-            state.cfg = sync.saveConfig(store(), state.cfg, currentAcctId());
+            state.cfg = sync.saveConfig(store(), state.cfg, syncAcctId());
             var up = Math.max(1, Math.round((r.uploadBytes || r.bytes) / 1024));
             finish(
               state,
@@ -213,12 +275,22 @@
             );
           });
         });
+        };
+        // V3.62：共用全店数据的账号上传会覆盖「全店共享快照」，先确认再执行
+        if (sharesBossData()) {
+          if (ui.confirm) {
+            ui.confirm('同步到云端', '该账号<b>共用全店数据</b>，上传会<b>覆盖全店共享快照</b>，其他共用本店数据的账号从云端恢复时都会拿到本次上传的内容。<br>确定继续？')
+              .then(function (yes) { if (yes) run(); });
+            return false;
+          }
+        }
+        return run();
       },
 
       /** 从云端恢复（下载解密，覆盖本地） */
       'sync-down': function (ctx, state) {
         if (state.busy) return false;
-        state.cfg = sync.saveConfig(store(), state.cfg, currentAcctId());
+        state.cfg = sync.saveConfig(store(), state.cfg, syncAcctId());
         var v = sync.validateConfig(state.cfg);
         if (!v.ok) {
           state.syncOpen = true;
@@ -231,7 +303,7 @@
           state.busy = true;
           state.msg = '正在下载并解密…';
           state.msgType = 'ok';
-          sync.syncDown(ctx, state.cfg, undefined, currentAccountPublic()).then(function (r) {
+          sync.syncDown(ctx, state.cfg, undefined, syncAccountPublic()).then(function (r) {
             if (!r.ok) {
               finish(state, '恢复失败：' + r.error, 'err');
               return;
@@ -252,7 +324,7 @@
               if (r.account.avatar) ERP.currentAccount.avatar = r.account.avatar;
             }
             state.cfg.lastPullAt = util.nowISO();
-            state.cfg = sync.saveConfig(store(), state.cfg, currentAcctId());
+            state.cfg = sync.saveConfig(store(), state.cfg, syncAcctId());
             // 问题3修复：恢复的合并结果必须落库，否则刷新 / 重新登录后从旧库 loadAll → 数据回滚
             return flushNow(ctx).then(function () {
               finish(state, '⬇️ 已用云端快照覆盖本机（' + r.summaryText + '）', 'ok');
@@ -273,7 +345,7 @@
       /** 测试连接：用 checkAuth 快速诊断 Token 有效性 / 仓库可访问性 / 权限 */
       'test-sync-conn': function (ctx, state) {
         if (state.busy) return false;
-        state.cfg = sync.saveConfig(store(), state.cfg, currentAcctId());
+        state.cfg = sync.saveConfig(store(), state.cfg, syncAcctId());
         var v = sync.validateConfig(state.cfg);
         if (!v.ok) {
           state.syncOpen = true;
@@ -472,6 +544,22 @@
     return h;
   }
 
+  /**
+   * V3.62：云同步卡片上的「数据空间」说明。
+   * 共用本店数据的员工账号，其快照路径与同步配置都归属老板账号——这里显式写出来，
+   * 让「登录进来没数据」时可以一眼判断该从哪个库取数据。
+   */
+  function dataSpaceTip() {
+    var a = (ERP && ERP.currentAccount) || null;
+    if (!a) return '';
+    var ownerId = syncAcctId() || (a.id || '');
+    var dbName = schema && schema.dbNameFor ? schema.dbNameFor(ownerId) : ('applianceErp_' + ownerId);
+    if (sharesBossData()) {
+      return '数据空间：<b>共用本店数据</b>（归属 @' + esc(String(ownerId)) + '，库 ' + esc(dbName) + '）· 与老板同一本账，同步配置与快照路径也按归属账号走';
+    }
+    return '数据空间：<b>独立</b>（库 ' + esc(dbName) + '）· 与其他账号数据隔离';
+  }
+
   /** 云同步卡片（按图1布局） */
   function renderSyncCard(state, cfg) {
     var busy = !!state.busy;
@@ -495,6 +583,8 @@
       '<div class="sync-tip">' +
         '把本机账本加密上传到仓库固定路径，每次覆盖历史；换手机/电脑打开同一网址后点「从云端恢复」，输入同一同步口令即可拿到最新数据。' +
       '</div>' +
+      // V3.62：显式标出本次同步归属的数据空间，避免「员工拉不到本店数据」时无从判断
+      '<div class="sync-status">' + dataSpaceTip() + '</div>' +
       '<div class="sync-status">' +
         (lastPush ? '上次同步：<b>' + esc(lastPush) + '</b>' : '还没同步过') +
       '</div>';
@@ -566,7 +656,7 @@
       '<div class="card about-card">' +
         '<h3 class="card-title">关于</h3>' +
         '<ul class="about-list">' +
-          '<li>版本：V3.61（schema v' + schema.VERSION + '）</li>' +
+          '<li>版本：V3.62（schema v' + schema.VERSION + '）</li>' +
           '<li>数据存储于本机 IndexedDB</li>' +
           '<li>自动备份保障数据安全</li>' +
         '</ul>' +
