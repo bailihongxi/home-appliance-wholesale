@@ -693,5 +693,99 @@
       });
   };
 
+  /* ---------------- V3.60 账号云同步（跨端共用账号表） ---------------- */
+
+  /** 云端账号表固定路径（全端共用，与登录账号无关，仅管理总控可上传） */
+  sync.ACCOUNTS_PATH = 'data/admin/accounts-sync.json';
+  /** 账号表明文信封：{v, at, list} */
+  sync.accountsBody = function accountsBody(list) {
+    return { v: 1, at: util.nowISO(), list: Array.isArray(list) ? list : [] };
+  };
+
+  /** 配置是否可用（owner/repo/token/passphrase 齐全） */
+  function validSyncCfg(cfg) {
+    return !!(cfg && String(cfg.owner || '').trim() && String(cfg.repo || '').trim() &&
+      String(cfg.branch || '').trim() && String(cfg.token || '').trim() && String(cfg.passphrase || '').trim());
+  }
+
+  /**
+   * 查找本机可用的同步配置（登录页拉取账号表用，不要求登录态）：
+   * 优先管理总控配置 → 遍历本机全部按账号隔离的配置 → 全局配置。
+   * store 需支持 getItem/key/length（浏览器 localStorage 原生支持；Node 测试可注入）。
+   */
+  sync.findSyncConfig = function findSyncConfig(store) {
+    if (!store || !store.getItem) return null;
+    var candidates = [];
+    try {
+      var adminCfg = sync.loadConfig(store, 'admin');
+      if (validSyncCfg(adminCfg)) return adminCfg;
+      if (typeof store.key === 'function' && typeof store.length === 'number') {
+        for (var i = 0; i < store.length; i++) {
+          var k = store.key(i);
+          if (!k || k.indexOf(sync.CONFIG_KEY + '.') !== 0) continue;
+          try {
+            var obj = JSON.parse(store.getItem(k) || 'null');
+            if (obj && typeof obj === 'object') {
+              var merged = Object.assign(sync.defaultConfig(), obj);
+              if (validSyncCfg(merged)) candidates.push(merged);
+            }
+          } catch (e) { /* 跳过坏配置 */ }
+        }
+      }
+      var base = sync.loadConfig(store, undefined);
+      if (validSyncCfg(base)) candidates.push(base);
+    } catch (e) { /* 存储不可用 */ }
+    return candidates.length ? candidates[0] : null;
+  };
+
+  /** 管理总控上传账号表：加密 → 覆盖云端固定路径。返回 {ok, error?, at?, count?} */
+  sync.pushAccounts = function pushAccounts(store, list, fetchImpl) {
+    var cfg = sync.loadConfig(store, 'admin');
+    if (!validSyncCfg(cfg)) cfg = sync.findSyncConfig(store);
+    if (!cfg) {
+      return Promise.resolve({ ok: false, error: '未找到同步配置：请先在「我的 → 云同步」填写 GitHub Token 与同步口令' });
+    }
+    var v = sync.validateConfig(cfg);
+    if (!v.ok) return Promise.resolve({ ok: false, error: v.errors.join('；') });
+    var pathCfg = Object.assign({}, cfg, { path: sync.ACCOUNTS_PATH });
+    var text = JSON.stringify(sync.accountsBody(list));
+    return sync.encrypt(text, cfg.passphrase).then(function (env) {
+      return sync.push(pathCfg, JSON.stringify(env), fetchImpl);
+    }).then(function (r) {
+      return { ok: true, at: r.at, created: r.created, count: (list || []).length };
+    }).catch(function (err) {
+      return { ok: false, error: err && err.message ? err.message : String(err) };
+    });
+  };
+
+  /**
+   * 登录页拉取云端账号表：解密 → 返回明文账号数组。
+   * 错误分类（登录页据此决定提示）：
+   *  - NO_CFG     本地无同步配置（静默降级，保持原提示）
+   *  - NO_SNAPSHOT 云端还没有账号表（静默降级）
+   *  - 其他        网络 / 口令 / 格式错误（原样透出）
+   */
+  sync.pullAccounts = function pullAccounts(store, fetchImpl) {
+    var cfg = sync.findSyncConfig(store);
+    if (!cfg) return Promise.resolve({ ok: false, error: 'NO_CFG' });
+    var v = sync.validateConfig(cfg);
+    if (!v.ok) return Promise.resolve({ ok: false, error: 'CFG_INVALID' });
+    var pathCfg = Object.assign({}, cfg, { path: sync.ACCOUNTS_PATH });
+    return sync.pull(pathCfg, fetchImpl).then(function (env) {
+      return sync.decrypt(env, cfg.passphrase);
+    }).then(function (text) {
+      var obj = JSON.parse(text);
+      return {
+        ok: true,
+        list: obj && Array.isArray(obj.list) ? obj.list : [],
+        at: (obj && obj.at) || ''
+      };
+    }).catch(function (err) {
+      var msg = err && err.message ? err.message : String(err);
+      if (/云端还没有快照/.test(msg)) return { ok: false, error: 'NO_SNAPSHOT' };
+      return { ok: false, error: msg };
+    });
+  };
+
   return sync;
 });

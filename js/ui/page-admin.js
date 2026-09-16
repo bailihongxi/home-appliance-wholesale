@@ -140,8 +140,12 @@
       '<div class="card">' +
       '<div class="card-title">账户权限管理</div>' +
       '<div class="small muted">统一管理全部店铺账号：新建、修改、删除、各账号的经营范围（9 类商品分类）与功能权限（V3.59：16 项权限全部手动逐项勾选，管理总控固定全权限）。保存后，对应账号下次登录生效。</div>' +
-      '<div class="row mt8"><button class="btn btn-primary btn-sm" data-act="admin-new-toggle">' +
-        (state.showNew ? '收起新建表单' : '＋ 新建店铺账号') + '</button></div>' +
+      '<div class="row mt8" style="gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-primary btn-sm" data-act="admin-new-toggle">' +
+        (state.showNew ? '收起新建表单' : '＋ 新建店铺账号') + '</button>' +
+      '<button class="btn btn-sm" data-act="admin-sync-accounts">☁️ 账号表上传到云端</button>' +
+      '</div>' +
+      '<div class="small muted mt8">「账号表上传到云端」：把全部账号（登录名/权限/数据空间/密码哈希，加密后）传到云端，手机 / 本地版 / 其他浏览器登录时自动拉取同一份账号，跨端通用。修改账号或权限后需重新上传。</div>' +
       '</div>';
 
     // 新建账号表单
@@ -398,6 +402,30 @@
       state.showNew = !state.showNew;
       state.error = '';
       return true;
+    },
+    /* ===== V3.60 账号云同步：账号表加密上传云端（仅管理总控；本页本身仅管理员可见） ===== */
+    'admin-sync-accounts': function (ctx, state) {
+      var st = state.store || localStore();
+      var g = (typeof globalThis !== 'undefined' ? globalThis : null) || (typeof self !== 'undefined' ? self : null);
+      var syncMod = (g && g.ERP && g.ERP.sync) || null;
+      if (!syncMod || !syncMod.pushAccounts) {
+        state.error = '同步模块不可用，请先刷新页面重试';
+        return false;
+      }
+      var list = accounts.load(st);
+      if (!list.length) { state.error = '本地没有可上传的账号'; return false; }
+      state.msg = '正在加密上传账号表（' + list.length + ' 个账号）…';
+      state.error = '';
+      syncMod.pushAccounts(st, list).then(function (res) {
+        state.msg = '';
+        if (res.ok) {
+          state.msg = '账号表已上传到云端（' + res.count + ' 个账号），手机 / 本地版 / 其他浏览器登录时自动同步';
+        } else {
+          state.error = '账号表上传失败：' + (res.error || '未知错误');
+        }
+        rerender();
+      });
+      return false; // 异步：阻止默认 afterAction，完成后手动重渲染
     },
     'admin-new-cancel': function (ctx, state) {
       state.showNew = false;
