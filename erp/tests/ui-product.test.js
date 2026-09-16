@@ -12,6 +12,8 @@ const util = require('../js/core/util.js');
 
 function fresh() {
   const ctx = newCtx();
+  // V3.59：管理总控视角渲染（全权限），既有断言覆盖完整列表/按钮/成本列
+  ctx.currentAccount = { id: 'admin', username: 'hawsystem', role: 'admin', shopName: '管理总控' };
   const state = page.init(ctx);
   return { ctx, state };
 }
@@ -811,4 +813,35 @@ test('toggle-all-check 必须返回 false：框架 actHandler 才不会触发 af
   let afterActionCalled = false;
   if (ret !== false) afterActionCalled = true;
   assert.strictEqual(afterActionCalled, false, '框架不应触发 afterAction（否则会跳顶）');
+});
+
+test('V3.59：无「报表」权限的员工隐藏成本列；无「建档」权限隐藏操作按钮', () => {
+  const ctx = newCtx();
+  ctx.currentAccount = { id: 'cashier', role: 'user', perms: { product_read: true } }; // 只读档案
+  seed(ctx);
+  const state = page.init(ctx);
+  const html = page.render(ctx, state);
+  assert.ok(!html.includes('<th class="num">成本</th>'), '成本列表头隐藏');
+  assert.ok(!html.includes('>¥1000.00<'), '成本单元格隐藏');
+  assert.ok(!html.includes('data-act="open-new"'), '无新建商品按钮');
+  assert.ok(!html.includes('data-act="export-all"'), '无导出全部按钮');
+  assert.ok(!html.includes('data-act="open-csv"'), '无批量导入按钮');
+  assert.ok(!html.includes('data-act="edit-product"'), '无编辑按钮');
+  assert.ok(!html.includes('data-act="toggle-status"'), '无停售/上架按钮');
+  assert.ok(html.includes('批发价') && html.includes('零售价'), '批发/零售列保留');
+  assert.ok(html.includes('型号'), '只读列表正常渲染');
+});
+
+test('V3.59：有「报表」权限的员工可见成本列；有「建档」权限可见操作按钮', () => {
+  const ctx = newCtx();
+  ctx.currentAccount = { id: 'manager', role: 'user', perms: { product_read: true, product_edit: true, report: true } };
+  seed(ctx);
+  const state = page.init(ctx);
+  const html = page.render(ctx, state);
+  assert.ok(html.includes('<th class="num">成本</th>'), '成本列表头显示');
+  assert.ok(html.includes('data-act="open-new"'), '有新建商品按钮');
+  assert.ok(html.includes('data-act="edit-product"'), '有编辑按钮');
+  // 无 data_manage：导入/导出全部仍隐藏
+  assert.ok(!html.includes('data-act="export-all"'), '无数据管理权限不显示导出全部');
+  assert.ok(!html.includes('data-act="open-csv"'), '无数据管理权限不显示批量导入');
 });

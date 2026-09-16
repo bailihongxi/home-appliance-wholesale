@@ -58,8 +58,8 @@ test('系统中所有取消按钮都使用红色 btn-danger class', () => {
       if (btn.includes('btn-danger')) redCancel++;
     });
   });
-  assert.strictEqual(totalCancel, 14, '系统中共有14个取消按钮（V3.25 新增导入预演取消按钮）');
-  assert.strictEqual(redCancel, 14, '所有14个取消按钮都使用 btn-danger 红色样式');
+  assert.strictEqual(totalCancel, 15, '系统中共有15个取消按钮（V3.25 导入预演取消 + V3.59 权限分配面板取消）');
+  assert.strictEqual(redCancel, 15, '所有15个取消按钮都使用 btn-danger 红色样式');
 });
 
 test('取消按钮红色样式 btn-danger 已定义（白底红字）', () => {

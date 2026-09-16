@@ -15,6 +15,8 @@ const { newCtx } = require('./helpers/ctx.js');
 
 function fresh() {
   const ctx = newCtx();
+  // V3.59：以管理总控（全权限）视角渲染，确保同步卡片与全部常用入口可见（普通账号按权限过滤）
+  ctx.currentAccount = { id: 'admin', username: 'hawsystem', role: 'admin', shopName: '管理总控' };
   const state = page.init(ctx);
   return { ctx, state };
 }
@@ -136,7 +138,7 @@ test('测试连接-失败(401 Token 无效)：显示细分原因', async () => {
 test('关于：版本号统一为 V3.58（与 PRD / 开发计划一致）', () => {
   const { ctx, state } = fresh();
   const html = page.render(ctx, state);
-  assert.ok(html.includes('版本：V3.58'), '关于页显示 V3.58');
+  assert.ok(html.includes('版本：V3.59'), '关于页显示 V3.59');
   // V3.54：关于卡片提供「检查更新」按钮，便于旧缓存时手动强制刷新
   assert.ok(html.includes('data-act="check-update"'), '关于卡片含「检查更新」按钮');
   assert.ok(typeof page.actions['check-update'] === 'function', 'check-update 动作已注册');

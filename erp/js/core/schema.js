@@ -23,6 +23,12 @@
       return acctId ? 'applianceErp_' + acctId : 'applianceErp';
     },
 
+    /** V3.59 账号数据空间：员工账号（ownerId）共用老板库，独立账号用自身 id */
+    dbNameForAccount: function dbNameForAccount(acct) {
+      var id = (acct && (acct.ownerId || acct.id)) || (acct && acct.id) || '';
+      return S.dbNameFor(id);
+    },
+
     STORES: {
       products: 'products',
       purchases: 'purchases',

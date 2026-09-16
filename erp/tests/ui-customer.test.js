@@ -163,7 +163,8 @@ test('手机端入口：我的页常用入口含「客户」', () => {
   const mine = require('../js/ui/page-mine.js');
   const ctx = {
     settings: { shopName: '大家电店', scopeCategories: [], avatar: '' },
-    currentAccount: { id: 'acct1', username: 'appliance', role: 'user', shopName: '大家电店' }
+    // V3.59：普通账号需分配 customer 权限，常用入口才显示「客户」（未分配则按权限过滤隐藏）
+    currentAccount: { id: 'acct1', username: 'appliance', role: 'user', shopName: '大家电店', perms: { customer: true } }
   };
   const state = { cfg: null, busy: false, editShop: false, shopNameEdit: '大家电店' };
   const html = mine.render(ctx, state);
