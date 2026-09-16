@@ -128,7 +128,9 @@
     if (account.id === 'acct1') await app.migrateLegacyData();
     var data = await ERP.repo.loadAll(app.db);
     app.ctx = ERP.repo.createContext(data);
-    applyAccountToSettings(account);
+    // V3.59：共用本店数据（员工 ownerId）时 settings 属于老板所有，不得用员工账号信息覆盖店名/经营范围/头像；
+    // 仅独立数据空间（ownerId 为空）才把账号信息并入本账号 settings
+    if (!(ERP.accounts && ERP.accounts.sharesBossData(account))) applyAccountToSettings(account);
     app.pageStates = Object.create(null);
     app.main = document.getElementById('view');
     if (app.ctx.settings.lock && app.ctx.settings.lock.enabled && app.ctx.settings.lock.hash) {

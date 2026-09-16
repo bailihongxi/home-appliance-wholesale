@@ -185,6 +185,11 @@
     return (acct && acct.ownerId) || (acct && acct.id) || '';
   };
 
+  /** V3.59：是否共用老板本店数据（员工 ownerId 非空）——共用时 settings/店名/头像属于老板，不得用员工信息覆盖 */
+  api.sharesBossData = function sharesBossData(acct) {
+    return !!(acct && acct.ownerId);
+  };
+
   /** 预置账号（电器版 V3.6+）：仅保留管理总控 admin，登录名 hawsystem（默认店铺账户已移除） */
   api.PRESET = [
     { id: 'admin', username: 'hawsystem', shopName: '管理总控', role: 'admin', scopeCategories: null, password: 'admina1b22c333' }

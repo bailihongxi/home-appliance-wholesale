@@ -91,6 +91,14 @@ test('dataOwnerId：员工 ownerId 优先，独立账号用自身 id', () => {
   assert.strictEqual(accounts.dataOwnerId(null), '', '空账号返回空');
 });
 
+test('sharesBossData：员工共用本店数据时 settings 归属老板，不得覆盖', () => {
+  assert.strictEqual(accounts.sharesBossData({ id: 'acct8', ownerId: 'admin' }), true, '员工共用老板库');
+  assert.strictEqual(accounts.sharesBossData({ id: 'acct9', ownerId: null }), false, '独立数据空间');
+  assert.strictEqual(accounts.sharesBossData({ id: 'acct10' }), false, '未设 ownerId 视为独立');
+  assert.strictEqual(accounts.sharesBossData(null), false, '空账号');
+  assert.strictEqual(accounts.sharesBossData({ id: 'admin' }), false, '管理总控不共用');
+});
+
 test('create：新建账号默认权限全关，可传 ownerId（员工）与 perms', () => {
   const store = memStore();
   accounts.ensurePreset(store);
