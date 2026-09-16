@@ -697,6 +697,12 @@
 
   /** 云端账号表固定路径（全端共用，与登录账号无关，仅管理总控可上传） */
   sync.ACCOUNTS_PATH = 'data/admin/accounts-sync.json';
+  /**
+   * V3.61 账号表内置密钥：账号表只用它做传输加密（防明文裸奔），
+   * 让手机 / 本地版 / 其他浏览器「零配置」即可拉取解密 —— 不再依赖各端手动配置同步口令。
+   * 说明：账号表不含明文密码（仅密码哈希），内置密钥用于防"直接读明文"，属传输混淆层。
+   */
+  sync.ACCOUNTS_PASSPHRASE = 'appliance-erp-accounts-2026';
   /** 账号表明文信封：{v, at, list} */
   sync.accountsBody = function accountsBody(list) {
     return { v: 1, at: util.nowISO(), list: Array.isArray(list) ? list : [] };
@@ -738,23 +744,113 @@
     return candidates.length ? candidates[0] : null;
   };
 
-  /** 管理总控上传账号表：加密 → 覆盖云端固定路径。返回 {ok, error?, at?, count?} */
+  /** 管理总控上传账号表：内置密钥加密 → 覆盖云端固定路径。返回 {ok, error?, at?, count?} */
   sync.pushAccounts = function pushAccounts(store, list, fetchImpl) {
     var cfg = sync.loadConfig(store, 'admin');
     if (!validSyncCfg(cfg)) cfg = sync.findSyncConfig(store);
     if (!cfg) {
-      return Promise.resolve({ ok: false, error: '未找到同步配置：请先在「我的 → 云同步」填写 GitHub Token 与同步口令' });
+      return Promise.resolve({ ok: false, error: '未找到同步配置：请先在「我的 → 云同步」填写 GitHub Token（账号表使用内置密钥加密，无需同步口令）' });
     }
     var v = sync.validateConfig(cfg);
     if (!v.ok) return Promise.resolve({ ok: false, error: v.errors.join('；') });
     var pathCfg = Object.assign({}, cfg, { path: sync.ACCOUNTS_PATH });
     var text = JSON.stringify(sync.accountsBody(list));
-    return sync.encrypt(text, cfg.passphrase).then(function (env) {
+    // 内置密钥加密：任何端（含未配置同步的手机）都能用同一密钥解密
+    return sync.encrypt(text, sync.ACCOUNTS_PASSPHRASE).then(function (env) {
       return sync.push(pathCfg, JSON.stringify(env), fetchImpl);
     }).then(function (r) {
       return { ok: true, at: r.at, created: r.created, count: (list || []).length };
     }).catch(function (err) {
       return { ok: false, error: err && err.message ? err.message : String(err) };
+    });
+  };
+
+  /**
+   * V3.61 零配置公开拉取：推断账号表公开地址（GitHub Pages 静态文件，无需 Token / 口令 / 配置）。
+   * 地址来源优先级：① 本机任意同步配置（file:// 本地版可借 owner/repo）→ ② 在线 GitHub Pages URL 推断。
+   * @returns {string|null} null = 当前环境无法推断公开地址
+   */
+  sync.publicAccountsUrl = function publicAccountsUrl(store) {
+    var owner = '';
+    var repo = '';
+    if (store && store.getItem) {
+      try {
+        var cfg = sync.findSyncConfig(store);
+        if (cfg && cfg.owner && cfg.repo) { owner = cfg.owner; repo = cfg.repo; }
+      } catch (e) { /* 配置不可用则继续用 URL 推断 */ }
+    }
+    if (!owner || !repo) {
+      var g = (typeof globalThis !== 'undefined' ? globalThis : null);
+      var href = g && g.location && g.location.href ? String(g.location.href) : '';
+      var m = /^https?:\/\/([^/]+)\.github\.io\/([^/?#]+)/i.exec(href);
+      if (m) { owner = m[1]; repo = m[2]; }
+    }
+    if (!owner || !repo) return null;
+    return 'https://' + owner + '.github.io/' + repo + '/' + sync.ACCOUNTS_PATH;
+  };
+
+  /**
+   * V3.61 公共通道拉取账号表（零配置）：
+   *  - 地址无法推断 → {error:'NO_CFG_PUBLIC'}
+   *  - 云端 404（还没有账号表）→ {error:'NO_SNAPSHOT'}
+   *  - 网络 / 格式 / 解密失败 → 透出真实错误
+   */
+  sync.pullAccountsPublic = function pullAccountsPublic(store, fetchImpl) {
+    var url = sync.publicAccountsUrl(store);
+    if (!url) return Promise.resolve({ ok: false, error: 'NO_CFG_PUBLIC' });
+    var f = pickFetch(fetchImpl);
+    return f(url, { method: 'GET' }).then(function (res) {
+      if (res.status === 404) return { ok: false, error: 'NO_SNAPSHOT' };
+      if (!res.ok) {
+        return res.text().then(function (t) {
+          return { ok: false, error: githubError(res, t) };
+        });
+      }
+      return res.text().then(function (txt) {
+        var env = null;
+        try { env = JSON.parse(txt); } catch (e) { env = null; }
+        if (!env || typeof env !== 'object') return { ok: false, error: '账号表格式错误' };
+        return sync.decrypt(env, sync.ACCOUNTS_PASSPHRASE).then(function (text) {
+          var obj = JSON.parse(text);
+          return {
+            ok: true,
+            list: obj && Array.isArray(obj.list) ? obj.list : [],
+            at: (obj && obj.at) || '',
+            source: 'public'
+          };
+        }, function (err) {
+          return { ok: false, error: '账号表解密失败：' + (err && err.message ? err.message : String(err)) };
+        });
+      });
+    }).catch(function (err) {
+      return { ok: false, error: err && err.message ? err.message : String(err) };
+    });
+  };
+
+  /**
+   * V3.61 账号表拉取总入口：优先零配置公开通道，失败后回退本地同步配置通道。
+   * 错误分类（登录页据此显示真实原因）：
+   *  - NO_CFG      公开地址不可推断 且 本地无同步配置
+   *  - NO_SNAPSHOT 云端还没有账号表
+   *  - 其他        网络 / 解密 / 配置无效（原样透出）
+   */
+  sync.pullAccountsAny = function pullAccountsAny(store, fetchImpl) {
+    return sync.pullAccountsPublic(store, fetchImpl).then(function (pub) {
+      if (pub.ok) return pub;
+      // 公开通道不可用（file:// 无配置等）→ 回退本地同步配置
+      if (pub.error === 'NO_CFG_PUBLIC') {
+        return sync.pullAccounts(store, fetchImpl).then(function (c) {
+          if (c.ok) { c.source = 'config'; }
+          return c;
+        });
+      }
+      // 公开通道已发起但失败（NO_SNAPSHOT / 网络 / 解密）→ 本地配置兜底
+      return sync.pullAccounts(store, fetchImpl).then(function (c) {
+        if (c.ok) { c.source = 'config'; return c; }
+        if (pub.error === 'NO_SNAPSHOT' && c.error === 'NO_CFG') return { ok: false, error: 'NO_SNAPSHOT' };
+        if (c.error === 'NO_CFG') return pub; // 公开通道的真实错误（网络等）
+        return c;
+      });
     });
   };
 

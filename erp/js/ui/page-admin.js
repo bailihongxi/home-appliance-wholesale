@@ -403,7 +403,7 @@
       state.error = '';
       return true;
     },
-    /* ===== V3.60 账号云同步：账号表加密上传云端（仅管理总控；本页本身仅管理员可见） ===== */
+    /* ===== V3.60/3.61 账号云同步：账号表加密上传云端（仅管理总控；本页本身仅管理员可见） ===== */
     'admin-sync-accounts': function (ctx, state) {
       var st = state.store || localStore();
       var g = (typeof globalThis !== 'undefined' ? globalThis : null) || (typeof self !== 'undefined' ? self : null);
@@ -414,12 +414,18 @@
       }
       var list = accounts.load(st);
       if (!list.length) { state.error = '本地没有可上传的账号'; return false; }
+      // V3.61 上传前展示账号清单确认，避免"以为传了其实没传"
+      var names = list.map(function (a) { return a.username; }).join('、');
+      var go = true;
+      try { go = !!g.confirm('即将上传 ' + list.length + ' 个账号到云端：\n' + names + '\n\n手机 / 本地版 / 其他浏览器登录时将自动同步这些账号（无需任何配置）。\n确认继续？'); }
+      catch (e) { go = true; } // Node 等无 confirm 环境默认继续
+      if (!go) { state.msg = ''; return false; }
       state.msg = '正在加密上传账号表（' + list.length + ' 个账号）…';
       state.error = '';
       syncMod.pushAccounts(st, list).then(function (res) {
         state.msg = '';
         if (res.ok) {
-          state.msg = '账号表已上传到云端（' + res.count + ' 个账号），手机 / 本地版 / 其他浏览器登录时自动同步';
+          state.msg = '账号表已上传到云端（' + res.count + ' 个账号）：' + names + '。手机 / 本地版 / 其他浏览器无需任何配置，登录时将自动同步这些账号';
         } else {
           state.error = '账号表上传失败：' + (res.error || '未知错误');
         }
