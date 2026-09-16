@@ -120,6 +120,30 @@
     return { ok: true, saved: changed.length };
   };
 
+  /**
+   * V3.62：账号卡片上的「数据空间」说明（纯函数，Node 可测）。
+   *   ownerId 非空 → 共用归属账号的本店数据（同一本账，权限隔离）
+   *   ownerId 为空 → 独立数据空间（与其他账号完全隔离，新建后为空账本属正常）
+   */
+  page.dataSpaceOf = function dataSpaceOf(a) {
+    var ownerId = (a && a.ownerId) || '';
+    var id = (a && a.id) || '';
+    var used = ownerId || id;
+    return {
+      shared: !!ownerId,
+      ownerId: ownerId,
+      dbName: used ? 'applianceErp_' + used : 'applianceErp'
+    };
+  };
+
+  /** 数据空间徽标文案 */
+  function dataSpaceBadge(a) {
+    var ds = page.dataSpaceOf(a);
+    return ds.shared
+      ? '数据空间：共用本店数据（' + esc(ds.dbName) + '）'
+      : '数据空间：独立（' + esc(ds.dbName) + '）';
+  }
+
   /** 该账号某分类是否选中：edits 为空数组 = 全部分类（全部选中） */
   function catOn(edits, id, cat) {
     var arr = (edits && edits[id]) || [];
@@ -165,6 +189,8 @@
               (a.role === 'admin' ? ' <span class="badge" style="font-size:11px;color:#fff;background:var(--c-mint-600,#2aa)">管理员</span>' : '') +
             '</div>' +
             '<div class="small muted">@' + esc(a.username) + (isAdminSelf ? ' · 系统账号（不可删除，经营范围不可改）' : '') + '</div>' +
+            // V3.62：显式标出数据空间，避免「账号建好了但登录进来没数据」时无从判断
+            '<div class="small muted">' + dataSpaceBadge(a) + '</div>' +
           '</div>' +
           (isAdminSelf ? '' :
             '<button class="btn btn-sm" data-act="admin-edit-account" data-id="' + esc(a.id) + '">修改</button>' +
@@ -238,7 +264,7 @@
         '<button class="chip' + (f.dataSpace !== 'solo' ? ' on' : '') + '" data-act="admin-new-ds" data-value="shared">共用本店数据（员工）</button>' +
         '<button class="chip' + (f.dataSpace === 'solo' ? ' on' : '') + '" data-act="admin-new-ds" data-value="solo">独立数据空间</button>' +
       '</div></div>' +
-      '<div class="small muted">「共用本店数据」：员工登录后与本店老板使用同一本账（数据不隔离，权限隔离）；「独立数据空间」：数据与全店隔离。创建后默认经营范围＝全部分类、默认权限＝全部关闭，可在该账号卡片中手动分配。</div>' +
+      '<div class="small muted">「共用本店数据」：员工登录后与本店老板使用同一本账（数据不隔离，权限隔离），<b>能看到老板已有的全部商品与单据</b>（换设备首次登录需先「我的 → 云同步 → 从云端恢复」把本店数据拉到本机）；「独立数据空间」：数据与全店隔离，<b>新账号登录后是一本空账，看不到老板已有数据</b>。创建后默认经营范围＝全部分类、默认权限＝全部关闭，可在该账号卡片中手动分配。</div>' +
       '<div class="row mt8"><button class="btn btn-danger" data-act="admin-new-cancel">取消</button>' +
       '<div class="spacer"></div>' +
       '<button class="btn btn-primary" data-act="admin-create-account">创建账号</button></div></div>';
