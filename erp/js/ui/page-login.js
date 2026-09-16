@@ -10,13 +10,14 @@
   var mod = factory(
     isNode ? require('../core/accounts.js') : (root.ERP && root.ERP.accounts),
     isNode ? require('./components.js') : (root.ERP && root.ERP.ui),
-    isNode ? require('../core/util.js') : (root.ERP && root.ERP.util)
+    isNode ? require('../core/util.js') : (root.ERP && root.ERP.util),
+    isNode ? require('../core/sync.js') : (root.ERP && root.ERP.sync)
   );
   if (isNode) module.exports = mod;
   root.ERP = root.ERP || {};
   root.ERP.pages = root.ERP.pages || {};
   root.ERP.pages.login = mod;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (accounts, ui, util) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (accounts, ui, util, sync) {
   'use strict';
 
   var esc = util.escapeHtml;
@@ -84,6 +85,35 @@
     return { ok: true, account: accounts.strip(acct) };
   };
 
+  /**
+   * V3.60 账号云同步登录降级（Node 可测）：
+   * 本地无该登录名时，从云端拉取账号表 → 合并到本地 → 重新校验登录。
+   * @returns {Promise<{ok:boolean, account?, error?, cloud:boolean}>}
+   *  cloud=true 表示本次登录依赖了云端账号表（拉取成功）；
+   *  拉取失败（无配置/云端无表/网络/口令）时返回 {ok:false, cloud:false, error:原提示}，
+   *  不向用户暴露内部细节；合并后仍校验失败则返回真实校验错误。
+   */
+  page.tryCloudLogin = function tryCloudLogin(store, username, pwd, fetchImpl) {
+    // 本地已有该账号：直接本地校验成功，无需云端（云同步仅是降级通道）
+    var localOk = page.loginWithUsername(store, username, pwd);
+    if (localOk.ok) return Promise.resolve({ ok: true, account: localOk.account, cloud: false });
+    if (!sync || !sync.pullAccounts) {
+      return Promise.resolve({ ok: false, cloud: false, error: '账号不存在，请检查登录账号' });
+    }
+    return sync.pullAccounts(store, fetchImpl).then(function (res) {
+      if (!res.ok) {
+        // 无配置 / 云端无账号表：静默保持原提示（用户可能没做过云同步）
+        return { ok: false, cloud: false, error: '账号不存在，请检查登录账号' };
+      }
+      var list = accounts.load(store);
+      var merged = accounts.mergeCloud(list, res.list);
+      if (merged.changed) accounts.save(store, merged.list);
+      var r = page.loginWithUsername(store, username, pwd);
+      if (r.ok) return { ok: true, account: r.account, cloud: true };
+      return { ok: false, cloud: true, error: r.error };
+    });
+  };
+
   page.actions = {
     'username': function (ctx, state, el) {
       state.username = el.value;
@@ -92,22 +122,49 @@
     'pwd': function (ctx, state, el) {
       state.pwd = el.value;
     },
-    /** 登录：校验账号+密码。成功触发 app.onLogin 切换数据空间；失败提示 */
+    /** 登录：先本地校验；本地无此账号时自动从云端拉取账号表合并后再校验（V3.60 跨端账号同步） */
     'do-login': function (ctx, state, el, ev) {
       var r = page.loginWithUsername(state.store, state.username, state.pwd);
       if (!r.ok) {
+        // 账号不存在 → 尝试云端账号表（手机/新设备自动拉取管理总控上传的账号）
+        if (r.error && r.error.indexOf('账号不存在') >= 0) {
+          state.msg = '本地无此账号，正在从云端同步账号表…';
+          state.error = '';
+          page.rerenderIfPossible();
+          page.tryCloudLogin(state.store, state.username, state.pwd).then(function (r2) {
+            if (r2.ok) {
+              state.msg = '';
+              page._doLoginSuccess(ctx, state, r2.account);
+            } else {
+              state.msg = '';
+              state.error = r2.error || r.error;
+              page.rerenderIfPossible();
+            }
+          });
+          return false; // 异步进行中：阻止默认 afterAction
+        }
         state.error = r.error;
         return false;
       }
-      // 触发 app 登录流程（异步建库/进入）；返回 false 阻止默认 afterAction（此时 db 未就绪）
-      var g = (typeof globalThis !== 'undefined' ? globalThis : null) || (typeof self !== 'undefined' ? self : null);
-      if (g && g.ERP && g.ERP.app && g.ERP.app.onLogin) {
-        g.ERP.app.onLogin(r.account);
-      } else if (g && g.ERP) {
-        g.ERP.currentAccount = r.account;
-      }
+      page._doLoginSuccess(ctx, state, r.account);
       return false;
     }
+  };
+
+  /** 登录成功：触发 app 登录流程（异步建库/进入） */
+  page._doLoginSuccess = function _doLoginSuccess(ctx, state, account) {
+    var g = (typeof globalThis !== 'undefined' ? globalThis : null) || (typeof self !== 'undefined' ? self : null);
+    if (g && g.ERP && g.ERP.app && g.ERP.app.onLogin) {
+      g.ERP.app.onLogin(account);
+    } else if (g && g.ERP) {
+      g.ERP.currentAccount = account;
+    }
+  };
+
+  /** 尽力重渲染（浏览器环境）；Node 测试无 app 时静默跳过 */
+  page.rerenderIfPossible = function rerenderIfPossible() {
+    var g = (typeof globalThis !== 'undefined' ? globalThis : null) || (typeof self !== 'undefined' ? self : null);
+    if (g && g.ERP && g.ERP.app && g.ERP.app.render) g.ERP.app.render();
   };
 
   return page;

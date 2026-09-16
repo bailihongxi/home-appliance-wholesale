@@ -477,5 +477,91 @@
     return (list || []).map(api.strip);
   };
 
+  /**
+   * V3.60 账号云同步：导出账号表用于加密上传（手机/其他端登录时拉取共用）。
+   * 仅含密码哈希（校验所需），不含任何明文密码；perms / ownerId / 数据空间一并同步。
+   */
+  api.exportForSync = function exportForSync(list) {
+    return (list || []).map(function (a) {
+      return {
+        id: a.id,
+        username: a.username,
+        shopName: a.shopName,
+        role: a.role || 'user',
+        avatar: a.avatar || '',
+        scopeCategories: (a.scopeCategories || []).slice(),
+        perms: Object.assign({}, a.perms || {}),
+        ownerId: a.ownerId || null,
+        hash: a.hash || '',
+        createdAt: a.createdAt || ''
+      };
+    });
+  };
+
+  /**
+   * V3.60 账号云同步：合并本地与云端账号表（登录页拉取云端后调用）。
+   * 规则：
+   *  - 管理总控 admin（hawsystem）永远保留本地版本（系统级账号不受云端影响）；
+   *  - 云端账号按登录名匹配：本地已有同名 → 以云端内容为准更新（权限/数据空间以管理总控上传为准），
+   *    但保留本地 id（数据空间引用稳定，避免切库丢数据）；
+   *  - 本地独有、云端没有的普通账号 → 保留（并集，不丢账号）。
+   * @returns {{list:Array, added:number, updated:number, kept:number, changed:boolean}}
+   */
+  api.mergeCloud = function mergeCloud(local, cloud) {
+    local = Array.isArray(local) ? local : [];
+    cloud = Array.isArray(cloud) ? cloud : [];
+    var out = [];
+    var seen = {};
+    var added = 0;
+    var updated = 0;
+    var kept = 0;
+    var keyOf = function (u) { return String(u || '').trim().toLowerCase(); };
+    var localByKey = {};
+    local.forEach(function (a) {
+      if (a && a.username) localByKey[keyOf(a.username)] = a;
+    });
+    // 云端账号：同名覆盖（admin 除外），新增并入
+    cloud.forEach(function (c) {
+      if (!c || !c.username) return;
+      var key = keyOf(c.username);
+      if (!key) return;
+      var localSame = localByKey[key];
+      if (localSame && (localSame.id === 'admin' || c.id === 'admin')) {
+        // 管理总控：保留本地版本
+        out.push(localSame);
+        seen[key] = true;
+        kept++;
+        return;
+      }
+      if (localSame) {
+        var merged = Object.assign({}, localSame, c); // 云端内容覆盖本地
+        merged.id = localSame.id; // 保留本地 id：数据空间引用稳定
+        out.push(merged);
+        updated++;
+      } else {
+        out.push(c);
+        added++;
+      }
+      seen[key] = true;
+    });
+    // 本地独有账号保留（含本地 admin 兜底）
+    local.forEach(function (a) {
+      if (!a || !a.username) return;
+      var key = keyOf(a.username);
+      if (a.id === 'admin' && !seen[key]) {
+        out.push(a);
+        seen[key] = true;
+        kept++;
+        return;
+      }
+      if (!seen[key]) {
+        out.push(a);
+        seen[key] = true;
+        kept++;
+      }
+    });
+    return { list: out, added: added, updated: updated, kept: kept, changed: added > 0 || updated > 0 };
+  };
+
   return api;
 });
