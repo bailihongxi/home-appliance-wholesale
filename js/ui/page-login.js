@@ -86,24 +86,33 @@
   };
 
   /**
-   * V3.60 账号云同步登录降级（Node 可测）：
-   * 本地无该登录名时，从云端拉取账号表 → 合并到本地 → 重新校验登录。
+   * V3.60/3.61 账号云同步登录降级（Node 可测）：
+   * 本地无该登录名时，从云端拉取账号表（零配置公开通道优先，本地同步配置兜底）→ 合并到本地 → 重新校验登录。
    * @returns {Promise<{ok:boolean, account?, error?, cloud:boolean}>}
    *  cloud=true 表示本次登录依赖了云端账号表（拉取成功）；
-   *  拉取失败（无配置/云端无表/网络/口令）时返回 {ok:false, cloud:false, error:原提示}，
-   *  不向用户暴露内部细节；合并后仍校验失败则返回真实校验错误。
+   *  拉取失败时返回真实原因分类（不再一律静默成"账号不存在"）：
+   *   - NO_CFG       → 提示先配置云同步或使用在线版
+   *   - NO_SNAPSHOT  → 提示先用管理总控上传账号表
+   *   - 其他          → 网络 / 解密错误原样透出（不含任何敏感配置）
    */
   page.tryCloudLogin = function tryCloudLogin(store, username, pwd, fetchImpl) {
     // 本地已有该账号：直接本地校验成功，无需云端（云同步仅是降级通道）
     var localOk = page.loginWithUsername(store, username, pwd);
     if (localOk.ok) return Promise.resolve({ ok: true, account: localOk.account, cloud: false });
-    if (!sync || !sync.pullAccounts) {
+    if (!sync || !sync.pullAccountsAny) {
       return Promise.resolve({ ok: false, cloud: false, error: '账号不存在，请检查登录账号' });
     }
-    return sync.pullAccounts(store, fetchImpl).then(function (res) {
+    return sync.pullAccountsAny(store, fetchImpl).then(function (res) {
       if (!res.ok) {
-        // 无配置 / 云端无账号表：静默保持原提示（用户可能没做过云同步）
-        return { ok: false, cloud: false, error: '账号不存在，请检查登录账号' };
+        var msg = '账号不存在，请检查登录账号';
+        if (res.error === 'NO_CFG') {
+          msg = '当前环境无法自动同步账号表：本地无云同步配置。请先在其中任一设备「我的 → 云同步」填写 GitHub Token，或使用在线版登录';
+        } else if (res.error === 'NO_SNAPSHOT') {
+          msg = '云端还没有账号表：请先用管理总控（hawsystem）登录，在「账户权限管理」点「账号表上传到云端」';
+        } else if (typeof res.error === 'string' && /账号表|云端|fetch|Failed|Network|网络|load/i.test(res.error)) {
+          msg = '无法同步云端账号表：' + res.error;
+        }
+        return { ok: false, cloud: false, error: msg };
       }
       var list = accounts.load(store);
       var merged = accounts.mergeCloud(list, res.list);
