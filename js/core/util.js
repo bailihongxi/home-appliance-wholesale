@@ -428,6 +428,26 @@
   /* ---------------- 本地口令（仅本地锁屏，非加密级） ---------------- */
 
   /**
+   * V3.64：备份时间的人话文案（纯函数，便于单测）。
+   * 背景：首页横幅副标题原先是硬编码的「已备份 · 今天 09:12」，
+   * 全新设备（从未备份）时横幅说"已备份"、下方提醒条却说"从未备份"，自相矛盾且会误导用户
+   * 以为数据已有备份。这里统一由 ctx.data.lastBackupAt 派生。
+   * @returns {{backed:boolean, text:string}}
+   */
+  util.backupLabel = function backupLabel(lastISO, todayStr) {
+    var last = lastISO ? String(lastISO) : '';
+    if (!last) return { backed: false, text: '尚未备份 · 建议尽快导出一份账本' };
+    var day = last.slice(0, 10);
+    var today = todayStr || util.today();
+    var m = /T(\d{2}):(\d{2})/.exec(last);
+    var hm = m ? (m[1] + ':' + m[2]) : '';
+    if (day === today) return { backed: true, text: '已备份 · 今天' + (hm ? ' ' + hm : '') };
+    var days = util.diffDays(day, today);
+    if (days > 0 && days <= 30) return { backed: true, text: '已备份 · ' + days + ' 天前' };
+    return { backed: true, text: '上次备份 · ' + day };
+  };
+
+  /**
    * V3.63：是否为空账本（无商品 / 无进货 / 无销售 / 无账目）。
    * 传 ctx 或裸 data 均可。用于「新用户登录后没有任何数据」的引导与上传保护。
    */

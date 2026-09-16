@@ -93,6 +93,15 @@
     return String(Math.round(fen / 100));
   }
 
+  /**
+   * V3.64：顶部横幅的备份副标题——由 ctx.data.lastBackupAt 派生。
+   * 原实现是写死的「已备份 · 今天 09:12」，全新设备从未备份时横幅却在说"已备份"，
+   * 与下方 backupReminder 的"你已从未备份"自相矛盾，会让人误以为数据已有备份。
+   */
+  function bannerBackupText(ctx) {
+    return util.backupLabel(ctx.data && ctx.data.lastBackupAt).text;
+  }
+
   function backupReminder(ctx) {
     var last = ctx.data.lastBackupAt;
     if (last && util.diffDays(String(last).slice(0, 10), todayStr()) === 0) return '';
@@ -222,7 +231,7 @@
     return (
       '<div class="page-banner">' +
         '<div class="banner-title"><img class="banner-logo" src="' + esc(brandLogo) + '" alt="logo">' + esc(shopName) + '</div>' +
-        '<div class="banner-sub">已备份 · 今天 09:12</div>' +
+        '<div class="banner-sub">' + esc(bannerBackupText(ctx)) + '</div>' +
       '</div>' +
       '<div class="home-top">' +
         '<div class="overview-head">' +
@@ -245,7 +254,7 @@
     return (
       '<div class="page-banner">' +
         '<div class="banner-title"><img class="banner-logo" src="' + esc(brandLogo) + '" alt="logo">' + esc(shopName) + '</div>' +
-        '<div class="banner-sub">已备份 · 今天 09:12</div>' +
+        '<div class="banner-sub">' + esc(bannerBackupText(ctx)) + '</div>' +
       '</div>' +
       '<div class="home-top">' +
         '<div class="overview-head">' +
