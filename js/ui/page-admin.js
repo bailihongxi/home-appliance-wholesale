@@ -31,10 +31,12 @@
       return {
         store: store || null,
         edits: null, // { [acctId]: [分类] } 经营范围勾选态
+        permsEdits: null, // { [acctId]: { permId: bool } } 权限勾选态（V3.59）
+        permsEditId: null, // 正在分配权限的账号 id
         msg: '',
         error: '',
         showNew: false,
-        newForm: { username: '', shopName: '', password: '', password2: '', avatar: '' },
+        newForm: { username: '', shopName: '', password: '', password2: '', avatar: '', dataSpace: 'shared' },
         editId: null,
         editForm: { username: '', shopName: '', password: '', password2: '', avatar: '' },
         delId: null
@@ -85,6 +87,39 @@
     return edits;
   }
 
+  /** V3.59 初始权限编辑态：拷贝各账号当前 perms（admin 不参与分配） */
+  function initPerms(list) {
+    var edits = {};
+    (list || []).forEach(function (a) {
+      if (a.id === 'admin') return;
+      edits[a.id] = Object.assign({}, a.perms || {});
+    });
+    return edits;
+  }
+
+  /** 该账号某权限是否勾选 */
+  function permOn(state, id, permId) {
+    return !!((state.permsEdits && state.permsEdits[id] && state.permsEdits[id][permId]));
+  }
+
+  /** V3.59 纯逻辑：保存权限编辑态到账号列表（Node 可测；admin 跳过） */
+  page.savePerms = function savePerms(store, permsEdits) {
+    var list = accounts.load(store);
+    var changed = [];
+    Object.keys(permsEdits || {}).forEach(function (id) {
+      var acct = accounts.getById(list, id);
+      if (!acct || acct.id === 'admin') return;
+      var cur = Object.assign({}, acct.perms || {});
+      var next = Object.assign({}, permsEdits[id] || {});
+      if (JSON.stringify(cur) !== JSON.stringify(next)) {
+        acct.perms = next;
+        changed.push(id);
+      }
+    });
+    if (changed.length) accounts.save(store, list);
+    return { ok: true, saved: changed.length };
+  };
+
   /** 该账号某分类是否选中：edits 为空数组 = 全部分类（全部选中） */
   function catOn(edits, id, cat) {
     var arr = (edits && edits[id]) || [];
@@ -99,11 +134,12 @@
     var store = state.store || localStore();
     var list = accounts.ensurePreset(store);
     if (!state.edits) state.edits = initEdits(list);
+    if (!state.permsEdits) state.permsEdits = initPerms(list);
 
     var h = '<div class="admin-page">' +
       '<div class="card">' +
       '<div class="card-title">账户权限管理</div>' +
-      '<div class="small muted">统一管理全部店铺账号：新建、修改、删除、以及各账号的经营范围（9 类商品分类）；「全部分类」= 不限制。保存经营范围后，对应账号下次登录生效。</div>' +
+      '<div class="small muted">统一管理全部店铺账号：新建、修改、删除、各账号的经营范围（9 类商品分类）与功能权限（V3.59：16 项权限全部手动逐项勾选，管理总控固定全权限）。保存后，对应账号下次登录生效。</div>' +
       '<div class="row mt8"><button class="btn btn-primary btn-sm" data-act="admin-new-toggle">' +
         (state.showNew ? '收起新建表单' : '＋ 新建店铺账号') + '</button></div>' +
       '</div>';
@@ -142,6 +178,8 @@
           '<button class="chip admin-all' + (!(state.edits[a.id] || []).length ? ' on' : '') + '" data-act="admin-all-cats" data-id="' + esc(a.id) + '">全部分类</button>' +
           '<button class="chip admin-clear" data-act="admin-clear-cats" data-id="' + esc(a.id) + '">仅自定义</button>' +
         '</div>';
+        // V3.59 权限分配区块（手动逐项勾选；账号卡片显示已开通权限摘要）
+        h += renderPermBlock(state, a);
       } else {
         var scopeAdmin = (a.scopeCategories || []).join(' / ') || '全部分类';
         h += '<div class="small muted mt8">经营范围：' + esc(scopeAdmin) + '</div>';
@@ -191,10 +229,54 @@
       '<input class="input" type="password" data-input="admin-new.password" data-live="1" value="' + esc(f.password) + '"></div>' +
       '<div class="field"><label>确认密码</label>' +
       '<input class="input" type="password" data-input="admin-new.password2" data-live="1" value="' + esc(f.password2) + '"></div>' +
-      '<div class="small muted">创建后默认经营范围＝全部分类，可在下方该账号卡片中按需勾选。</div>' +
+      '<div class="field"><label>数据空间（V3.59）</label>' +
+      '<div class="row" style="gap:8px;flex-wrap:wrap">' +
+        '<button class="chip' + (f.dataSpace !== 'solo' ? ' on' : '') + '" data-act="admin-new-ds" data-value="shared">共用本店数据（员工）</button>' +
+        '<button class="chip' + (f.dataSpace === 'solo' ? ' on' : '') + '" data-act="admin-new-ds" data-value="solo">独立数据空间</button>' +
+      '</div></div>' +
+      '<div class="small muted">「共用本店数据」：员工登录后与本店老板使用同一本账（数据不隔离，权限隔离）；「独立数据空间」：数据与全店隔离。创建后默认经营范围＝全部分类、默认权限＝全部关闭，可在该账号卡片中手动分配。</div>' +
       '<div class="row mt8"><button class="btn btn-danger" data-act="admin-new-cancel">取消</button>' +
       '<div class="spacer"></div>' +
       '<button class="btn btn-primary" data-act="admin-create-account">创建账号</button></div></div>';
+  }
+
+  /** V3.59 权限分配区块：账号权限摘要 + 展开后的 4 组 16 项手动勾选面板（仅管理总控可见此页） */
+  function renderPermBlock(state, a) {
+    var permLabels = {};
+    accounts.PERMS.forEach(function (p) { permLabels[p.id] = p.label; });
+    var onIds = Object.keys(a.perms || {}).filter(function (k) { return a.perms[k]; });
+    var summary = onIds.length
+      ? onIds.map(function (k) { return permLabels[k] || k; }).join('、')
+      : '未开通任何权限（登录后仅可见基础页）';
+    var h = '<div class="admin-perms mt8">' +
+      '<div class="row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">' +
+        '<span class="small muted" style="flex:1;min-width:0">权限：' + esc(summary) + '</span>' +
+        (state.permsEditId === a.id
+          ? '<button class="btn btn-sm btn-danger" data-act="admin-perm-close" data-id="' + esc(a.id) + '">收起</button>'
+          : '<button class="btn btn-sm btn-primary" data-act="admin-perm-open" data-id="' + esc(a.id) + '">分配权限</button>') +
+      '</div>';
+    if (state.permsEditId === a.id) {
+      h += '<div class="perm-panel mt8">' +
+        '<div class="small muted">全部手动勾选：' + esc(a.username) + ' 登录后仅可使用勾选功能（侧栏菜单与快捷入口自动隐藏、操作拦截、成本/利润列隐藏）。</div>' +
+        '<div class="row mt8" style="gap:8px">' +
+          '<button class="btn btn-sm btn-primary" data-act="admin-perm-all" data-id="' + esc(a.id) + '">全选</button>' +
+          '<button class="btn btn-sm" data-act="admin-perm-none" data-id="' + esc(a.id) + '">清空</button>' +
+        '</div>';
+      accounts.PERM_GROUPS.forEach(function (g) {
+        h += '<div class="perm-group mt8"><div class="small" style="font-weight:700;color:#2563EB">' + esc(g.name) + '</div><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">';
+        accounts.PERMS.filter(function (p) { return p.group === g.id; }).forEach(function (p) {
+          h += '<button class="chip' + (permOn(state, a.id, p.id) ? ' on' : '') + '" data-act="admin-perm-toggle" data-id="' + esc(a.id) + '" data-perm="' + esc(p.id) + '">' + esc(p.label) + '</button>';
+        });
+        h += '</div></div>';
+      });
+      h += '<div class="row mt8" style="gap:8px">' +
+        '<button class="btn btn-danger btn-sm" data-act="admin-perm-close" data-id="' + esc(a.id) + '">取消</button>' +
+        '<div class="spacer"></div>' +
+        '<button class="btn btn-primary btn-sm" data-act="admin-perm-save" data-id="' + esc(a.id) + '">保存权限</button>' +
+      '</div></div>';
+    }
+    h += '</div>';
+    return h;
   }
 
   /** 编辑账号表单 */
@@ -252,7 +334,9 @@
       username: form.username,
       shopName: form.shopName,
       password: form.password,
-      avatar: form.avatar
+      avatar: form.avatar,
+      // V3.59：共用本店数据（默认，员工 ownerId=admin）或独立数据空间
+      ownerId: form.dataSpace === 'solo' ? null : 'admin'
     });
   };
 
@@ -337,6 +421,61 @@
     'admin-new-clear-avatar': function (ctx, state) {
       state.newForm.avatar = '';
       rerender();
+      return true;
+    },
+    /* ===== V3.59 权限分配 ===== */
+    'admin-new-ds': function (ctx, state, el) {
+      state.newForm.dataSpace = el.getAttribute('data-value') === 'solo' ? 'solo' : 'shared';
+      state.error = '';
+      return true;
+    },
+    'admin-perm-open': function (ctx, state, el) {
+      var id = el.getAttribute('data-id');
+      if (id === 'admin') return false;
+      if (!state.permsEdits || !state.permsEdits[id]) state.permsEdits = initPerms(accounts.load(state.store || localStore()));
+      state.permsEditId = id;
+      state.error = '';
+      return true;
+    },
+    'admin-perm-close': function (ctx, state) {
+      state.permsEditId = null;
+      state.error = '';
+      return true;
+    },
+    'admin-perm-toggle': function (ctx, state, el) {
+      var id = el.getAttribute('data-id');
+      if (id === 'admin') return false;
+      if (!state.permsEdits) state.permsEdits = initPerms(accounts.load(state.store || localStore()));
+      var perm = el.getAttribute('data-perm');
+      var edits = state.permsEdits[id] || (state.permsEdits[id] = {});
+      edits[perm] = !edits[perm];
+      state.error = '';
+      return true;
+    },
+    'admin-perm-all': function (ctx, state, el) {
+      var id = el.getAttribute('data-id');
+      if (id === 'admin') return false;
+      if (!state.permsEdits) state.permsEdits = initPerms(accounts.load(state.store || localStore()));
+      var edits = state.permsEdits[id] || (state.permsEdits[id] = {});
+      accounts.PERMS.forEach(function (p) { edits[p.id] = true; });
+      state.error = '';
+      return true;
+    },
+    'admin-perm-none': function (ctx, state, el) {
+      var id = el.getAttribute('data-id');
+      if (id === 'admin') return false;
+      if (!state.permsEdits) state.permsEdits = initPerms(accounts.load(state.store || localStore()));
+      state.permsEdits[id] = {};
+      state.error = '';
+      return true;
+    },
+    'admin-perm-save': function (ctx, state, el) {
+      var st = state.store || localStore();
+      if (!state.permsEdits) state.permsEdits = initPerms(accounts.load(st));
+      var r = page.savePerms(st, state.permsEdits);
+      state.msg = r.saved > 0 ? ('已保存 ' + r.saved + ' 个账号的功能权限') : '权限无变化';
+      state.error = '';
+      state.permsEditId = null;
       return true;
     },
     'admin-create-account': function (ctx, state) {

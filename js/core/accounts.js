@@ -22,12 +22,173 @@
   var DEFAULT_PASSWORD = '000000';
   var ALL_CATEGORIES = ['冰箱', '洗衣机', '空调', '电视', '厨房电器', '生活小家电', '数码影音', '配件耗材', '其他'];
 
+  /**
+   * V3.59 权限分级：16 项权限，按「零售 / 批发 / 档案库存 / 资金管理」四组。
+   * 全部手动分配（无角色模板）：管理总控（admin）固定全权限；其他账号默认全关，由管理总控逐个开通。
+   */
+  var PERM_GROUPS = [
+    { id: 'retail', name: '零售' },
+    { id: 'wholesale', name: '批发' },
+    { id: 'archive', name: '档案 · 库存' },
+    { id: 'finance', name: '资金 · 管理' }
+  ];
+  var PERMS = [
+    { id: 'sale_bill',    group: 'retail',    label: '零售开单（前台销售、含扫描）' },
+    { id: 'sale_pay',     group: 'retail',    label: '零售收款 / 找零 / 抹零' },
+    { id: 'sale_return',  group: 'retail',    label: '零售退货 / 作废零售单' },
+    { id: 'sale_price',   group: 'retail',    label: '零售改价 / 折扣' },
+    { id: 'ws_bill',      group: 'wholesale', label: '批发开单（客户挂账 / 应收）' },
+    { id: 'ws_pay',       group: 'wholesale', label: '批发收款 / 应收核销' },
+    { id: 'ws_return',    group: 'wholesale', label: '批发退货 / 作废批发单' },
+    { id: 'product_read', group: 'archive',   label: '商品档案（只读，隐藏成本/利润列）' },
+    { id: 'stock_read',   group: 'archive',   label: '库存查询（只读）' },
+    { id: 'purchase',     group: 'archive',   label: '进货入库 / 供应商' },
+    { id: 'product_edit', group: 'archive',   label: '商品建档 / 改价 / 合并 / 删除' },
+    { id: 'stock_adjust', group: 'archive',   label: '库存盘点 / 调整' },
+    { id: 'ledger',       group: 'finance',   label: '记账中心（流水 / 记一笔）' },
+    { id: 'report',       group: 'finance',   label: '报表与利润（含成本）' },
+    { id: 'customer',     group: 'finance',   label: '客户管理' },
+    { id: 'data_manage',  group: 'finance',   label: '数据管理（导入/导出/清空/备份/设置/同步）' }
+  ];
+  /** 全开权限对象（旧账号迁移默认值） */
+  function allPerms() {
+    var o = {};
+    PERMS.forEach(function (p) { o[p.id] = true; });
+    return o;
+  }
+  /** 页面 → 所需权限（任一即可进入；null = 无门槛）。admin 由 isAdmin 单独控制 */
+  var PAGE_PERM = {
+    purchase: ['purchase'],
+    sale: ['sale_bill', 'ws_bill'],
+    product: ['product_read', 'product_edit'],
+    inventory: ['stock_read', 'stock_adjust'],
+    account: ['ledger'],
+    report: ['report'],
+    exchange: ['sale_return', 'ws_return'],
+    supplier: ['purchase'],
+    customer: ['customer'],
+    setting: ['data_manage'],
+    admin: null
+  };
+
   var api = {};
 
   api.ACCOUNTS_KEY = ACCOUNTS_KEY;
   api.MAX_ACCOUNTS = MAX_ACCOUNTS;
   api.DEFAULT_PASSWORD = DEFAULT_PASSWORD;
   api.ALL_CATEGORIES = ALL_CATEGORIES;
+  api.PERM_GROUPS = PERM_GROUPS;
+  api.PERMS = PERMS;
+  api.PAGE_PERM = PAGE_PERM;
+
+  /** 是否管理总控（全权限账号） */
+  api.isAdmin = function isAdmin(a) {
+    return !!(a && (a.role === 'admin' || a.id === 'admin'));
+  };
+
+  /** 权限校验：管理总控全权限；普通账号按手动分配的 perms */
+  api.can = function can(acct, perm) {
+    if (!acct) return false;
+    if (api.isAdmin(acct)) return true;
+    return !!(acct.perms && acct.perms[perm]);
+  };
+
+  /** 任一权限即通过（管理总控全权限） */
+  api.canAny = function canAny(acct, perms) {
+    if (api.isAdmin(acct)) return true;
+    if (!perms || !perms.length) return false;
+    for (var i = 0; i < perms.length; i++) {
+      if (api.can(acct, perms[i])) return true;
+    }
+    return false;
+  };
+
+  /** 页面可见性（侧栏 / 快捷入口 / 路由守卫共用）；admin 页仅管理总控 */
+  api.canView = function canView(acct, pageName) {
+    if (pageName === 'admin') return api.isAdmin(acct);
+    var need = PAGE_PERM[pageName];
+    if (!need) return true; // 无门槛页面
+    return api.canAny(acct, need);
+  };
+
+  /** 成本 / 利润可见性：管理总控或拥有「报表与利润」权限 */
+  api.canViewCost = function canViewCost(acct) {
+    return api.can(acct, 'report');
+  };
+
+  /**
+   * V3.59 动作级拦截规则：页面 → [{ 动作名正则, 所需权限(任一) }]
+   * 未命中规则的动作默认放行（只读/导航/个人操作，如改自己密码、勾选行、分页跳转）。
+   * 库级操作（导入/导出全部/备份/清空/设置/同步）统一归 data_manage。
+   */
+  var ACTION_RULES = {
+    sale: [
+      { test: /^(do-return|do-refund|open-refund|close-refund|goto-return|void-sale|toggle-debt)$/, perm: ['sale_return', 'ws_return'] },
+      { test: /(price|discount|gift)/, perm: ['sale_price'] },
+      { test: /^(do-pay|open-pay|close-pay|quick-paid|do-settle|open-settle|close-settle|pay)$/, perm: ['sale_pay', 'ws_pay'] },
+      { test: /^(collect|select-original|back-pick)$/, perm: ['ws_bill'] },
+      { test: /^(add-item|save-sale|scan|scan-barcode|pick-product|toggle-price)$/, perm: ['sale_bill', 'ws_bill'] }
+    ],
+    purchase: [
+      { test: /^(do-pay|open-pay|close-pay|quick-paid)$/, perm: ['ws_pay', 'purchase'] },
+      { test: /^(void-purchase|update-purchase|save-purchase|open-new|add-item)$/, perm: ['purchase'] },
+      { test: /^(export-csv|export-all)$/, perm: ['purchase'] },
+      { test: /^(do-import|clear-data|download-template)$/, perm: ['data_manage'] }
+    ],
+    product: [
+      { test: /^(save-product|edit-product|del-item|del-selected|merge-selected|apply-bulk-price|apply-price-sys|save-price-sys|toggle-price|export-csv)$/, perm: ['product_edit'] },
+      { test: /^(do-import|export-all|download-template|clear-data)$/, perm: ['data_manage'] }
+    ],
+    inventory: [
+      { test: /^(do-preview|save-take|retire-uncovered|clear-stock-products)$/, perm: ['stock_adjust'] },
+      { test: /^(export-csv|export-all)$/, perm: ['stock_read'] },
+      { test: /^clear-data$/, perm: ['data_manage'] }
+    ],
+    exchange: [
+      { test: /^(do-exchange|do-return|do-refund|add-item)$/, perm: ['sale_return', 'ws_return'] }
+    ],
+    account: [
+      { test: /^(save-manual|quick-paid|save-customer|toggle-log)$/, perm: ['ledger'] },
+      { test: /^(export-csv|export-all)$/, perm: ['ledger'] },
+      { test: /^clear-data$/, perm: ['data_manage'] }
+    ],
+    supplier: [
+      { test: /^(save-supplier|edit-supplier|delete-supplier)$/, perm: ['purchase'] }
+    ],
+    customer: [
+      { test: /^(save-customer|edit-customer|delete-customer)$/, perm: ['customer'] }
+    ],
+    report: [
+      { test: /^(save-price-sys|apply-price-sys|export-csv|export-all)$/, perm: ['report'] }
+    ],
+    setting: [
+      { test: /^(save-settings|save-shop|save-price-sys|apply-price-sys|clear-data|toggle-shop-edit)$/, perm: ['data_manage'] }
+    ],
+    mine: [
+      { test: /^(sync-up|sync-down|save-sync-cfg|test-sync-conn|export-backup|clear-data)$/, perm: ['data_manage'] }
+    ]
+  };
+
+  /** 动作级权限判定（页面 + 动作名 → 权限；admin 放行；未命中规则放行） */
+  api.requireActionPerm = function requireActionPerm(acct, pageName, actName) {
+    if (!acct || api.isAdmin(acct)) return true;
+    var rules = ACTION_RULES[pageName];
+    if (!rules || !rules.length) return true;
+    for (var i = 0; i < rules.length; i++) {
+      if (rules[i].test.test(actName)) return api.canAny(acct, rules[i].perm);
+    }
+    return true;
+  };
+
+  /** 数据归属账号 id：员工账号（ownerId）共用老板库；独立账号用自身 id */
+  api.dataOwnerId = function dataOwnerId(acct) {
+    return (acct && acct.ownerId) || (acct && acct.id) || '';
+  };
+
+  /** V3.59：是否共用老板本店数据（员工 ownerId 非空）——共用时 settings/店名/头像属于老板，不得用员工信息覆盖 */
+  api.sharesBossData = function sharesBossData(acct) {
+    return !!(acct && acct.ownerId);
+  };
 
   /** 预置账号（电器版 V3.6+）：仅保留管理总控 admin，登录名 hawsystem（默认店铺账户已移除） */
   api.PRESET = [
@@ -129,6 +290,17 @@
       });
       changed = true;
     };
+    // V3.59 权限迁移：旧账号（无 perms 字段）默认补为全权限，避免突然锁死已有账号；管理总控可后续手动收紧。
+    list.forEach(function (a) {
+      if (a && a.perms === undefined) {
+        a.perms = allPerms();
+        changed = true;
+      }
+      if (a && a.ownerId === undefined) {
+        a.ownerId = null; // 独立数据空间
+        changed = true;
+      }
+    });
     if (firstInit) {
       api.PRESET.forEach(pushOne);
     }
@@ -172,7 +344,14 @@
     if (api.findByUsername(list, username)) {
       return { ok: false, error: '该登录账号已存在' };
     }
-    // 自建账号默认全部分类开放（未分配经营范围，后续可由管理员收紧）
+    // V3.59：新建账号默认全部权限关闭（perms={}），由管理总控手动逐项开通；
+    // 数据空间：ownerId 存在（如 'admin'）= 员工共用老板库；不传 = 独立数据空间（兼容旧行为）。
+    var perms = {};
+    if (input.perms && typeof input.perms === 'object') {
+      PERMS.forEach(function (p) {
+        if (input.perms[p.id]) perms[p.id] = true;
+      });
+    }
     var account = {
       id: api.nextId(list),
       username: username,
@@ -180,6 +359,8 @@
       role: 'user', // 自建账号均为普通用户；管理员仅预置 admin
       avatar: typeof input.avatar === 'string' ? input.avatar : '',
       scopeCategories: input.scopeCategories && input.scopeCategories.length ? input.scopeCategories.slice() : ALL_CATEGORIES.slice(),
+      perms: perms,
+      ownerId: typeof input.ownerId === 'string' && input.ownerId ? input.ownerId : null,
       hash: util.hashPassword(pwd),
       createdAt: new Date().toISOString().slice(0, 10)
     };
@@ -240,6 +421,19 @@
     if (patch.scopeCategories !== undefined && Array.isArray(patch.scopeCategories)) {
       acct.scopeCategories = patch.scopeCategories.slice();
     }
+    // V3.59：手动分配权限（perms 对象）与数据归属（ownerId）
+    if (patch.perms !== undefined && patch.perms && typeof patch.perms === 'object') {
+      var nextPerms = {};
+      PERMS.forEach(function (p) {
+        if (patch.perms[p.id]) nextPerms[p.id] = true;
+      });
+      acct.perms = nextPerms;
+    }
+    if (patch.ownerId !== undefined && patch.ownerId !== null) {
+      acct.ownerId = String(patch.ownerId);
+    } else if (patch.ownerId === null) {
+      acct.ownerId = null;
+    }
     api.save(store, list);
     return { ok: true, account: api.strip(acct) };
   };
@@ -271,6 +465,8 @@
       role: a.role || 'user',
       avatar: a.avatar || '',
       scopeCategories: (a.scopeCategories || []).slice(),
+      perms: Object.assign({}, a.perms || {}),
+      ownerId: a.ownerId || null,
       createdAt: a.createdAt || ''
     };
     return out;

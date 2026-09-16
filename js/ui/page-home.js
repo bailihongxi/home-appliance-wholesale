@@ -16,12 +16,13 @@
   var debt = isNode ? require('../core/debt.js') : (ERP.debt || null);
   var profit = isNode ? require('../core/profit.js') : (ERP.profit || null);
   var schema = isNode ? require('../core/schema.js') : (ERP.schema || null);
-  var mod = factory(ERP, util, ui, inventory, debt, profit, schema);
+  var accounts = isNode ? require('../core/accounts.js') : (ERP.accounts || null);
+  var mod = factory(ERP, util, ui, inventory, debt, profit, schema, accounts);
   if (isNode) module.exports = mod;
   root.ERP = root.ERP || {};
   root.ERP.pages = root.ERP.pages || {};
   root.ERP.pages.home = mod;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (ERP, util, ui, inventory, debt, profit, schema) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (ERP, util, ui, inventory, debt, profit, schema, accounts) {
   'use strict';
 
   var C = ui;
@@ -121,11 +122,14 @@
    */
   function statOverview(ctx, extraCls) {
     var s = stats(ctx);
+    // V3.59：无「报表与利润」权限的账号隐藏毛利数字（显示 —），成本/利润数据不可见
+    var acct = ctx.currentAccount || ERP.currentAccount;
+    var showProfit = !accounts || accounts.canViewCost(acct);
     return (
       '<div class="' + (extraCls || '') + ' stat-grid home-stat-2x2">' +
         statCardHtml('今日营收', '¥' + fmtNumber(s.revenue / 100), 'mint', '💰', '') +
         statCardHtml('今日单数', fmtNumber(s.count), 'gray', '📃', '') +
-        statCardHtml('今日毛利', '¥' + fmtNumber(s.grossProfit / 100), 'mint', '📈', 'profit') +
+        statCardHtml('今日毛利', showProfit ? ('¥' + fmtNumber(s.grossProfit / 100)) : '—', 'mint', '📈', 'profit') +
         statCardHtml('预警款数', fmtNumber(s.alertCount), 'pink', '⚠️', 'danger') +
         '<button class="home-sale-btn home-sale-row" data-act="go" data-page="sale" data-query="tab=new" aria-label="开单">' +
           '<span class="ico">🛒</span>' +
@@ -147,8 +151,9 @@
     '</div>';
   }
 
-  /** v2 共享 6 格圆形彩色快捷入口（进货/商品/库存/退换/记账/报表） */
-  function quickGrid(extraCls) {
+  /** v2 共享 6 格圆形彩色快捷入口（进货/商品/库存/退换/记账/报表）；V3.59 按权限过滤 */
+  function quickGrid(ctx, extraCls) {
+    var acct = (ctx && ctx.currentAccount) || ERP.currentAccount;
     var items = [
       { page: 'purchase',  icon: '🚚', text: '进货', color: 'c-green' },
       { page: 'product',   icon: '📦', text: '商品', color: 'c-blue' },
@@ -156,7 +161,10 @@
       { page: 'exchange',  icon: '🔁', text: '退换', color: 'c-peach' },
       { page: 'account',   icon: '📒', text: '记账', color: 'c-purple' },
       { page: 'report',    icon: '📈', text: '报表', color: 'c-pink' }
-    ];
+    ].filter(function (it) {
+      // V3.59：无权限入口隐藏（未分配的功能员工不可见）
+      return !accounts || accounts.canView(acct, it.page);
+    });
     var h = '<div class="' + (extraCls || '') + ' card"><h3 class="card-title">快捷入口</h3><div class="quick-circles">';
     items.forEach(function (it) {
       h += '<button class="quick-circle ' + it.color + '" data-act="go" data-page="' + esc(it.page) + '">' +
@@ -168,8 +176,8 @@
     return h;
   }
 
-  function mobileQuick() {
-    return quickGrid('mobile-only');
+  function mobileQuick(ctx) {
+    return quickGrid(ctx, 'mobile-only');
   }
 
   /** 手机端首页：banner + 经营概览 + 开单按钮 + stat + 快捷入口
@@ -192,7 +200,7 @@
         '</div>' +
         mobileStats(ctx) +
       '</div>' +
-      mobileQuick()
+      mobileQuick(ctx)
     );
   }
 
@@ -215,7 +223,7 @@
         '</div>' +
         statOverview(ctx, '') +
       '</div>' +
-      quickGrid('') +
+      quickGrid(ctx, '') +
       rem +
       desktopAnalysis(ctx)
     );

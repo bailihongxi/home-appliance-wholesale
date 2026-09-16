@@ -119,15 +119,18 @@
     await app.enterAccount(account);
   };
 
-  /** 切换/进入某账号的数据空间（独立 IndexedDB 库 applianceErp_<acctId>，与鞋服母版隔离） */
+  /** 切换/进入某账号的数据空间（独立 IndexedDB 库 applianceErp_<acctId>，与鞋服母版隔离；
+   *  V3.59：员工账号（ownerId）登录后打开老板同一本数据，权限只控制可见与操作，不隔离数据） */
   app.enterAccount = async function enterAccount(account) {
     if (!account || !account.id) return app.ctx;
-    app.db = await ERP.db.create({ name: ERP.schema.dbNameFor(account.id) });
+    app.db = await ERP.db.create({ name: ERP.schema.dbNameForAccount(account) });
     // V2 存量单账号数据 → 账号1（仅首次进入账号1 且旧库有数据时迁移）
     if (account.id === 'acct1') await app.migrateLegacyData();
     var data = await ERP.repo.loadAll(app.db);
     app.ctx = ERP.repo.createContext(data);
-    applyAccountToSettings(account);
+    // V3.59：共用本店数据（员工 ownerId）时 settings 属于老板所有，不得用员工账号信息覆盖店名/经营范围/头像；
+    // 仅独立数据空间（ownerId 为空）才把账号信息并入本账号 settings
+    if (!(ERP.accounts && ERP.accounts.sharesBossData(account))) applyAccountToSettings(account);
     app.pageStates = Object.create(null);
     app.main = document.getElementById('view');
     if (app.ctx.settings.lock && app.ctx.settings.lock.enabled && app.ctx.settings.lock.hash) {
@@ -392,6 +395,11 @@
   function dispatch(name, el, ev) {
     var page = ERP.currentAccount ? router().current() : loginPage();
     var state = stateOf(page);
+    // V3.59 动作级权限拦截（未命中规则的动作放行；管理总控放行）
+    if (ERP.currentAccount && ERP.accounts && !ERP.accounts.requireActionPerm(ERP.currentAccount, page && page.name, name)) {
+      ui().toast('无权限操作：当前账号未分配该功能权限，请联系管理总控', 'err');
+      return false;
+    }
     var fn = null;
     if (page && page.actions && page.actions[name]) fn = page.actions[name];
     else if (ui().globalActions && ui().globalActions[name]) fn = ui().globalActions[name];
@@ -601,6 +609,14 @@
     }
     var page = router().current();
     if (!page) return;
+    // V3.59 权限守卫：未分配权限的页面不渲染内容（菜单已隐藏，硬闯 URL 同样拦截）
+    if (ERP.currentAccount && ERP.accounts && !ERP.accounts.canView(ERP.currentAccount, page.name)) {
+      document.title = (ERP.branding ? ERP.branding.pageTitle(app.ctx.settings, '无权限') : ((app.ctx.settings.shopName || '电器店') + ' · 无权限'));
+      app.main.innerHTML = '<div class="card"><div class="notice notice-warn">' +
+        '无权限操作：当前账号未分配「' + (page.title || page.name) + '」权限。<br>' +
+        '如需开通，请联系管理总控在「账户权限管理」中手动分配。</div></div>';
+      return;
+    }
     var state = stateOf(page);
 
     // 供页面读取当前登录账号（role 判断：如权限管理页仅管理员可见）
@@ -806,9 +822,8 @@
         .map(function (n) { return byName[n]; })
         .filter(function (p) {
           if (!p || p.hideInNav) return false;
-          // 账户权限管理菜单：仅管理总控可见（管理总控新建的普通账户无权限看到）
-          if (p.name === 'admin' && !isAdmin()) return false;
-          return true;
+          // V3.59：侧栏按手动分配权限过滤（admin 页仅管理总控可见）
+          return ERP.accounts && ERP.accounts.canView(ERP.currentAccount, p.name);
         })
         .map(function (p) {
           var label = p.navTitle || p.title || p.name;

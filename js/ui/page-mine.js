@@ -443,26 +443,28 @@
       '</div>';
     }
 
-    // 3. 云同步卡片
-    h += renderSyncCard(state, cfg);
+    // 3. 云同步卡片（V3.59：仅拥有「数据管理」权限的账号可同步，员工账号不可覆盖老板数据）
+    var curAcct = ctx && ctx.currentAccount;
+    if (!accounts || accounts.can(curAcct, 'data_manage')) {
+      h += renderSyncCard(state, cfg);
+    }
 
     // V2.3：管理员专属「权限管理」入口（普通账号不显示）
-    var curAcct = ctx && ctx.currentAccount;
-    if (curAcct && (curAcct.role === 'admin' || curAcct.id === 'admin')) {
+    if (curAcct && accounts && accounts.isAdmin(curAcct)) {
       h += '<div class="card mt8 admin-entry" data-act="go" data-page="admin">' +
         '<div class="row" style="align-items:center;gap:10px">' +
           '<span style="font-size:20px">🔐</span>' +
           '<div style="flex:1;min-width:0">' +
             '<div class="name" style="font-weight:700">权限管理</div>' +
-            '<div class="small muted">管理全部账号的经营范围</div>' +
+            '<div class="small muted">管理账号、分配权限与经营范围</div>' +
           '</div>' +
           '<span class="arrow">›</span>' +
         '</div>' +
       '</div>';
     }
 
-    // 4. 常用入口（9 格圆形 3×3 九宫格）—— 关键字串「常用入口」保留
-    h += renderQuickGrid();
+    // 4. 常用入口（9 格圆形 3×3 九宫格）—— 关键字串「常用入口」保留；V3.59 按权限过滤
+    h += renderQuickGrid(ctx);
 
     // 5. 关于 + 版本信息（保留「关于」字串以兼容既有测试）
     h += renderAbout();
@@ -528,8 +530,9 @@
     return h;
   }
 
-  /** 8 格圆形快捷入口（2 行 4 列），图标与首页「快捷入口」统一；开单统一为手推车样式 */
-  function renderQuickGrid() {
+  /** 8 格圆形快捷入口（2 行 4 列），图标与首页「快捷入口」统一；开单统一为手推车样式；V3.59 按权限过滤 */
+  function renderQuickGrid(ctx) {
+    var acct = (ctx && ctx.currentAccount) || ERP.currentAccount;
     var items = [
       { page: 'sale',      icon: '🛒', text: '销售',     color: 'c-green' },
       { page: 'purchase',  icon: '🚚', text: '进货',     color: 'c-teal' },
@@ -541,7 +544,10 @@
       { page: 'report',    icon: '📈', text: '报表',     color: 'c-pink' },
       { page: 'exchange',  icon: '🔁', text: '退换货',   color: 'c-peach' },
       { page: 'setting',   icon: '⚙', text: '设置',     color: 'c-gray' }
-    ];
+    ].filter(function (it) {
+      // V3.59：无权限入口隐藏（未分配的功能员工不可见）
+      return !accounts || accounts.canView(acct, it.page);
+    });
     var h = '<div class="card quick-grid-card"><h3 class="card-title">常用入口</h3><div class="quick-grid mine-quick">';
     items.forEach(function (it) {
       h += '<button class="quick-circle ' + it.color + '" data-act="go" data-page="' + esc(it.page) + '"' +
@@ -560,7 +566,7 @@
       '<div class="card about-card">' +
         '<h3 class="card-title">关于</h3>' +
         '<ul class="about-list">' +
-          '<li>版本：V3.58（schema v' + schema.VERSION + '）</li>' +
+          '<li>版本：V3.59（schema v' + schema.VERSION + '）</li>' +
           '<li>数据存储于本机 IndexedDB</li>' +
           '<li>自动备份保障数据安全</li>' +
         '</ul>' +

@@ -14,13 +14,14 @@
     ERP.schema || (isNode ? require('../core/schema.js') : null),
     ERP.repo || (isNode ? require('../store/repo.js') : null),
     ERP.excel || (isNode ? require('../core/excel.js') : null),
-    ERP
+    ERP,
+    isNode ? require('../core/accounts.js') : (ERP.accounts || null)
   );
   if (isNode) module.exports = mod;
   root.ERP = root.ERP || {};
   root.ERP.pages = root.ERP.pages || {};
   root.ERP.pages.product = mod;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (product, ui, util, schema, repo, excel, ERP) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (product, ui, util, schema, repo, excel, ERP, accounts) {
   'use strict';
 
   var esc = util.escapeHtml;
@@ -621,14 +622,18 @@
 
     var h = '';
     var selCount = Object.keys(state.sel || {}).filter(function (k) { return state.sel[k]; }).length;
+    // V3.59：动作级按钮按权限显示（无权限员工看不到而非点击才报错）
+    var acct = ctx.currentAccount || ERP.currentAccount;
+    var canEdit = !accounts || accounts.can(acct, 'product_edit');
+    var canData = !accounts || accounts.can(acct, 'data_manage');
     h += '<div class="page-head"><h2>商品档案</h2>' +
       '<span class="desc">共 ' + ctx.data.products.length + ' 款商品</span>' +
       '<div class="actions">' +
-      '<button class="btn" data-act="export-all" title="导出全部商品档案（CSV），外部核实后可重新导入">📤 导出全部</button>' +
-      '<button class="btn" data-act="open-csv">📥 批量导入</button>' +
-      '<button class="btn btn-danger desktop-only" data-act="del-selected"' + (selCount ? '' : ' disabled') + '>🗑 删除选中' + (selCount ? '（' + selCount + '）' : '') + '</button>' +
-      '<button class="btn btn-orange desktop-only" data-act="merge-selected"' + (selCount >= 2 ? '' : ' disabled') + ' title="仅型号相同的商品可合并，保留库存最大者，库存/备注/条码合并">🔀 合并选中' + (selCount >= 2 ? '（' + selCount + '）' : '') + '</button>' +
-      '<button class="btn btn-primary" data-act="open-new">＋ 新建商品</button>' +
+      (canData ? '<button class="btn" data-act="export-all" title="导出全部商品档案（CSV），外部核实后可重新导入">📤 导出全部</button>' : '') +
+      (canData ? '<button class="btn" data-act="open-csv">📥 批量导入</button>' : '') +
+      (canEdit ? '<button class="btn btn-danger desktop-only" data-act="del-selected"' + (selCount ? '' : ' disabled') + '>🗑 删除选中' + (selCount ? '（' + selCount + '）' : '') + '</button>' : '') +
+      (canEdit ? '<button class="btn btn-orange desktop-only" data-act="merge-selected"' + (selCount >= 2 ? '' : ' disabled') + ' title="仅型号相同的商品可合并，保留库存最大者，库存/备注/条码合并">🔀 合并选中' + (selCount >= 2 ? '（' + selCount + '）' : '') + '</button>' : '') +
+      (canEdit ? '<button class="btn btn-primary" data-act="open-new">＋ 新建商品</button>' : '') +
       '</div></div>';
 
     h += '<div class="card">' + ui.searchBar({
@@ -655,10 +660,13 @@
     var allChecked = pg.items.length > 0 && pg.items.every(function (p) {
       return !!(state.sel || {})[String(p.id)];
     });
+    // V3.59：无「报表与利润」权限的账号隐藏成本列（成本数据不可见）
+    var showCost = !accounts || accounts.canViewCost(ctx.currentAccount || ERP.currentAccount);
     h += '<div class="card"><div class="table-wrap"><table class="tbl tbl-striped"><thead><tr>' +
       '<th class="sel desktop-only" style="width:34px"><input type="checkbox" class="row-check" data-act="toggle-all-check"' + (allChecked ? ' checked' : '') + ' title="全选本页"></th>' +
       '<th>品牌</th><th>型号</th><th>类型</th><th>单位</th>' +
-      '<th class="num">成本</th><th class="num">批发价</th><th class="num">零售价</th>' +
+      (showCost ? '<th class="num">成本</th>' : '') +
+      '<th class="num">批发价</th><th class="num">零售价</th>' +
       '<th class="num">库存</th><th>备注</th><th>状态</th><th>操作</th>' +
       '</tr></thead><tbody>';
     pg.items.forEach(function (p) {
@@ -672,16 +680,16 @@
         '<td>' + esc(p.model) + '</td>' +
         '<td>' + esc(p.category) + '</td>' +
         '<td>' + esc(p.unit) + '</td>' +
-        '<td class="num">' + ui.money(p.cost) + '</td>' +
+        (showCost ? '<td class="num">' + ui.money(p.cost) + '</td>' : '') +
         '<td class="num">' + ui.money(p.priceWholesale) + '</td>' +
         '<td class="num">' + ui.money(p.priceRetail) + '</td>' +
         '<td class="' + stockCls + '">' + stock + '</td>' +
         '<td class="small weak cell-note" title="' + esc(p.note || '') + '">' + esc(p.note || '-') + '</td>' +
         '<td>' + ui.badge(p.status === schema.STATUS.OFF ? '停售' : '在售', p.status === schema.STATUS.OFF ? 'off' : 'on') + '</td>' +
         '<td class="act">' +
-        '<button data-act="edit-product" data-id="' + esc(p.id) + '">编辑</button>' +
-        '<button data-act="toggle-status" data-id="' + esc(p.id) + '">' +
-        (p.status === schema.STATUS.OFF ? '上架' : '停售') + '</button>' +
+        (canEdit ? '<button data-act="edit-product" data-id="' + esc(p.id) + '">编辑</button>' : '') +
+        (canEdit ? '<button data-act="toggle-status" data-id="' + esc(p.id) + '">' +
+        (p.status === schema.STATUS.OFF ? '上架' : '停售') + '</button>' : '') +
         '</td></tr>';
     });
     h += '</tbody></table></div>' + ui.pager(pg.page, pg.pages, pg.total) + '</div>';
