@@ -427,6 +427,20 @@
 
   /* ---------------- 本地口令（仅本地锁屏，非加密级） ---------------- */
 
+  /**
+   * V3.63：是否为空账本（无商品 / 无进货 / 无销售 / 无账目）。
+   * 传 ctx 或裸 data 均可。用于「新用户登录后没有任何数据」的引导与上传保护。
+   */
+  util.isEmptyLedger = function isEmptyLedger(ctxOrData) {
+    var d = (ctxOrData && ctxOrData.data) || ctxOrData || {};
+    var keys = ['products', 'purchases', 'sales', 'ledgers'];
+    for (var i = 0; i < keys.length; i++) {
+      var arr = d[keys[i]];
+      if (Array.isArray(arr) && arr.length) return false;
+    }
+    return true;
+  };
+
   util.hashPassword = function hashPassword(pwd) {
     var s = 'erp|v1|' + String(pwd === null || pwd === undefined ? '' : pwd);
     var h = 2166136261 >>> 0;
