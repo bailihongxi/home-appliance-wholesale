@@ -74,15 +74,9 @@
     return !!a.ownerId;
   }
 
-  /** 本机业务数据是否为空账本（无商品 / 无进货 / 无销售 / 无账目） */
+  /** 本机业务数据是否为空账本（无商品 / 无进货 / 无销售 / 无账目）——统一走 util，避免两处逻辑漂移 */
   function isEmptyLedger(ctx) {
-    var d = (ctx && ctx.data) || {};
-    var keys = ['products', 'purchases', 'sales', 'ledgers'];
-    for (var i = 0; i < keys.length; i++) {
-      var arr = d[keys[i]];
-      if (Array.isArray(arr) && arr.length) return false;
-    }
-    return true;
+    return util.isEmptyLedger(ctx);
   }
 
   /** 取指定账号 id 的脱敏公开档案 */
@@ -656,7 +650,7 @@
       '<div class="card about-card">' +
         '<h3 class="card-title">关于</h3>' +
         '<ul class="about-list">' +
-          '<li>版本：V3.62（schema v' + schema.VERSION + '）</li>' +
+          '<li>版本：V3.63（schema v' + schema.VERSION + '）</li>' +
           '<li>数据存储于本机 IndexedDB</li>' +
           '<li>自动备份保障数据安全</li>' +
         '</ul>' +

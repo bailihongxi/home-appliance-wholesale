@@ -104,6 +104,36 @@
     );
   }
 
+  /**
+   * V3.63：本机空账本引导（「新用户登录后没有任何数据」的最后一环）。
+   *
+   * 背景：V3.62 修好了云同步的数据空间维度，员工已经「能」拉到本店数据，
+   * 但新员工在一台新设备上登录，看到的仍是一片空白、不知道该做什么。
+   * 这里按数据空间给出不同引导：
+   *  - 共用本店数据：本机还没拉到本店数据 → 教他怎么用管理总控登录并从云端恢复；
+   *  - 独立数据空间：本来就是一本新空账 → 引导去建档 / 批量导入。
+   * 未登录（无账号上下文）时不显示，避免在单测等无账号场景里凭空多出一张卡片。
+   */
+  function emptyLedgerGuide(ctx) {
+    var acct = (ctx && ctx.currentAccount) || (ERP && ERP.currentAccount) || null;
+    if (!acct) return '';
+    if (!util.isEmptyLedger(ctx)) return '';
+    var shared = !!(accounts && acct && accounts.sharesBossData && accounts.sharesBossData(acct));
+    var body = shared
+      ? '本账号与老板共用同一本账，但这台设备还没拉到数据。只需做一次：<br>' +
+        '<b>①</b> 退出，改用<b>管理总控账号</b>在这台设备登录 → 我的 → 云同步 → <b>从云端恢复</b>；<br>' +
+        '<b>②</b> 退出后再用本账号登录，即可看到同一本账（之后无需重复操作）。'
+      : '这是一本全新的空账本。可以先建档录商品，或用 Excel 批量导入已有档案。';
+    var btn = shared
+      ? '<button class="btn btn-primary btn-sm" data-act="go" data-page="mine">去云同步</button>'
+      : '<button class="btn btn-primary btn-sm" data-act="go" data-page="product">去建档 / 导入</button>';
+    return '<div class="card empty-guide">' +
+      '<div class="card-title">📭 本机还没有数据</div>' +
+      '<div class="small muted">' + body + '</div>' +
+      '<div class="row mt8">' + btn + '</div>' +
+      '</div>';
+  }
+
   function todoBar(ctx) {
     var list = debt.overdue(ctx, ctx.settings.debtOverdueDays || 15);
     if (!list.length) return '';
@@ -352,7 +382,7 @@
     },
 
     render: function (ctx, state) {
-      var rem = backupReminder(ctx) + todoBar(ctx);
+      var rem = emptyLedgerGuide(ctx) + backupReminder(ctx) + todoBar(ctx);
       // 手机端：banner 置顶，提醒条在其下；桌面端：与手机版一致的 banner + 概览 + 快捷入口 + 提醒条 + 分析看板
       return (
         '<div class="mobile-only">' + mobileHome(ctx) + rem + '</div>' +
