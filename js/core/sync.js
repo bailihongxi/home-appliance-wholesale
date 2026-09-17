@@ -384,7 +384,11 @@
    * V3.65 记录级：按经手人过滤云端明文快照。
    *  - 数据归属者/管理总控：原样返回（看全部）
    *  - 共用本店数据的员工：仅保留「交易类集合」中 createdBy === 本账号 的记录；
-   *    主数据/审计类（商品/往来/库存流水/操作日志）全员可见，不过滤。
+   *    商品/往来/库存流水等主数据全员可见，不过滤。
+   *  - V3.80：**操作日志（logs）对员工整表清空**。日志逐条记录了全店每个人的每一步
+   *    动作（谁什么时候进了什么货、收了谁多少钱、改了哪个价格、登录了几次），
+   *    是管理层面的审计数据；员工能看到等于把老板的全部经营行为摊开，
+   *    属于严重越权 → 不下发到员工本机（界面层也在 page-setting.js 一并隐藏）。
    * 解析失败时原样返回（不阻塞恢复）。
    */
   sync.filterSnapshotForAccount = function filterSnapshotForAccount(text, account) {
@@ -401,6 +405,8 @@
         return rec && String(rec.createdBy || '') === myId;
       });
     });
+    // V3.80：操作日志不下发给员工（审计数据，记录全店每个人的每一步操作）
+    if (Array.isArray(obj.logs)) obj.logs = [];
     return JSON.stringify(obj);
   };
 
