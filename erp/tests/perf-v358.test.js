@@ -349,11 +349,11 @@ test('V3.58 局部刷新：app.render 优先 update，其次 patchMain，最后�
   assert.ok(src.includes('if (routeChanged) lastMainHtml = null;'), '跨路由重置基线');
 });
 
-test('V3.75 版本号三处同步：page-mine V3.68 / sw.js v104 / ui-mine 断言', () => {
+test('V3.76 版本号三处同步：page-mine V3.68 / sw.js v105 / ui-mine 断言', () => {
   const mine = fs.readFileSync(path.join(ROOT, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   const t = fs.readFileSync(path.join(ROOT, 'tests/ui-mine.test.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.75'), '关于页应显示 V3.75');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v104';"), 'SW 缓存版本应为 v104');
-  assert.ok(t.includes('版本：V3.75'), '测试断言 V3.65');
+  assert.ok(mine.includes('版本：V3.76'), '关于页应显示 V3.76');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v105';"), 'SW 缓存版本应为 v105');
+  assert.ok(t.includes('版本：V3.76'), '测试断言 V3.65');
 });
