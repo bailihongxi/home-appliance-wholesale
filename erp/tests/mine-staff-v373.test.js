@@ -92,12 +92,12 @@ test('S7 老板视图：一切照旧（同步设置 / 上传 / 数据空间 / �
   assert.ok(html.includes('电器批发管理总控'), '老板显示自己店铺名');
 });
 
-test('S8 版本号：page-mine V3.74 / sw.js v105（三处同步，防止版本走散）', () => {
+test('S8 版本号：page-mine V3.74 / sw.js v106（三处同步，防止版本走散）', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.76'), '关于页应显示 V3.76');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v105';"), 'SW 缓存版本应为 v105');
+  assert.ok(mine.includes('版本：V3.77'), '关于页应显示 V3.77');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v106';"), 'SW 缓存版本应为 v106');
 });
 
 test('S9 V3.74 新版本自动生效：index.html 含 controllerchange 自动刷新守卫（员工无检查更新按钮，靠它换版）', () => {
@@ -107,4 +107,14 @@ test('S9 V3.74 新版本自动生效：index.html 含 controllerchange 自动刷
   assert.ok(html.includes('swRefreshing'), '须有防重复刷新标记（避免循环刷新）');
   assert.ok(html.includes('navigator.serviceWorker.controller'), '须以 controller 存在为前提（首次打开不刷新）');
   assert.ok(html.includes('location.reload()'), '接管后刷新页面加载新代码');
+});
+
+test('S10 V3.76 动作层兜底：员工调 save-shop 不得改共享店铺资料（防控制台绕过）', async () => {
+  const { ctx, state } = staffCtx();
+  state.shopNameEdit = '员工乱改';
+  state.avatarDataUrl = 'data:image/png;base64,STAFFAV';
+  const r = await page.actions['save-shop'](ctx, state);
+  assert.strictEqual(r, false, '员工保存店铺资料被拒');
+  assert.strictEqual(ctx.settings.shopName, '电器批发管理总控', '共享店名未被改掉');
+  assert.ok(!ctx.settings.avatar || ctx.settings.avatar !== 'data:image/png;base64,STAFFAV', '共享头像未被改掉');
 });

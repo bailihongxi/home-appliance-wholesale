@@ -414,8 +414,13 @@
         return false;
       },
 
-      /** 保存店铺资料（店名 + 头像）→ settings + 账号列表同步 */
+      /** 保存店铺资料（店名 + 头像）→ settings + 账号列表同步（V3.76：员工动作层兜底拦截） */
       'save-shop': function (ctx, state) {
+        var cur = ctx && ctx.currentAccount;
+        if (cur && sync.isDataOwner && !sync.isDataOwner(cur)) {
+          if (ui.toast) ui.toast('员工账号不能修改店铺资料（这是全店共享资料）', 'err');
+          return false;
+        }
         var name = String(state.shopNameEdit || '').trim();
         if (!name) {
           if (ui.toast) ui.toast('店铺名称不能为空', 'err');
@@ -704,7 +709,7 @@
       '<div class="card about-card">' +
         '<h3 class="card-title">关于</h3>' +
         '<ul class="about-list">' +
-          '<li>版本：V3.76（schema v' + schema.VERSION + '）</li>' +
+          '<li>版本：V3.77（schema v' + schema.VERSION + '）</li>' +
           '<li>数据存储于本机 IndexedDB</li>' +
           '<li>自动备份保障数据安全</li>' +
         '</ul>' +

@@ -68,9 +68,9 @@ test('I6 源码：app.js 顶栏改用 identity；applyAccountToSettings 不再�
     '员工跳过判断须在写入之前');
 });
 
-test('I7 版本号：page-mine V3.75 / sw.js v105（三处同步，防止版本走散）', () => {
+test('I7 版本号：page-mine V3.75 / sw.js v106（三处同步，防止版本走散）', () => {
   const mine = fs.readFileSync(path.join(ROOT, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.76'), '关于页应显示 V3.76');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v105';"), 'SW 缓存版本应为 v105');
+  assert.ok(mine.includes('版本：V3.77'), '关于页应显示 V3.77');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v106';"), 'SW 缓存版本应为 v106');
 });

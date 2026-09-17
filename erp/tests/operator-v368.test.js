@@ -169,10 +169,10 @@ test('员工登录：三张表单都不渲染经手人下拉（不能改派，�
   });
 });
 
-test('V3.76 版本号：page-mine V3.68 / sw.js v105', () => {
+test('V3.77 版本号：page-mine V3.68 / sw.js v106', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.76'), '关于页应显示 V3.76');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v105';"), 'SW 缓存版本应为 v105');
+  assert.ok(mine.includes('版本：V3.77'), '关于页应显示 V3.77');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v106';"), 'SW 缓存版本应为 v106');
 });
