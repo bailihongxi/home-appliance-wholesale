@@ -26,6 +26,19 @@
 
   var esc = util.escapeHtml;
 
+  /**
+   * V3.82：是否「数据归属账号」（老板 / 管理总控）。
+   * 导入 / 导出属**全店档案整体操作**，且导出的 CSV 含成本列 —— 只能对归属者开放。
+   * 旧版用 data_manage 权限判定：员工为了「从云端恢复」常被勾上 data_manage，
+   * 结果顺带能导出全店商品档案（含成本），与「成本仅老板可见」冲突。
+   * 无账号上下文（未登录 / 单测）按老板放行，避免误遮蔽。
+   */
+  function isOwnerOnly(ctx) {
+    var acct = (ctx && ctx.currentAccount) || (ERP && ERP.currentAccount) || null;
+    if (!accounts || !acct) return true;
+    return !!accounts.isDataOwner(acct);
+  }
+
   function emptyForm() {
     var cats = (ERP.app && ERP.app.ctx && ERP.app.ctx.settings)
       ? schema.categoriesFor(ERP.app.ctx.settings)
@@ -71,7 +84,9 @@
 
     render: function (ctx, state) {
       if (state.tab === 'new') return renderForm(ctx, state);
-      if (state.tab === 'csv') return renderCsv(ctx, state);
+      // V3.82：批量导入页属「全店档案整体操作」，仅数据归属者（老板/管理总控）可进；
+      // 员工即使被勾了 data_manage 也不放行（入口已隐藏，这里再兜一层防旧 state 直通）
+      if (state.tab === 'csv') return isOwnerOnly(ctx) ? renderCsv(ctx, state) : renderList(ctx, state);
       return renderList(ctx, state);
     },
 
@@ -324,6 +339,12 @@
       },
 
       'open-csv': function (ctx, state) {
+        // V3.82：批量导入是「全店档案整体操作」，员工一律禁止（入口已隐藏，这里防绕过）
+        if (!isOwnerOnly(ctx)) {
+          state.tab = 'list';
+          ui.toast('批量导入仅老板 / 管理总控可用', 'err');
+          return true;
+        }
         state.tab = 'csv';
         state.csvResult = null;
       },
@@ -434,6 +455,11 @@
 
       /** V3.45：导出全部商品档案（CSV）——外部核实后可按型号重新导入 */
       'export-all': function (ctx, state) {
+        // V3.82：导出的 CSV 含成本列 —— 员工即使有 data_manage 也禁止导出（入口已隐藏，这里防绕过）
+        if (!isOwnerOnly(ctx)) {
+          ui.toast('导出商品档案仅老板 / 管理总控可用', 'err');
+          return true;
+        }
         // 实时读取全局 ERP（模块快照的 app 可能被测试/运行期替换，读全局最稳）
         var g = (typeof globalThis !== 'undefined') ? globalThis : (typeof window !== 'undefined' ? window : null);
         var app = (g && g.ERP && g.ERP.app) || (ERP && ERP.app);
@@ -634,12 +660,13 @@
     // V3.59：动作级按钮按权限显示（无权限员工看不到而非点击才报错）
     var acct = ctx.currentAccount || ERP.currentAccount;
     var canEdit = !accounts || accounts.can(acct, 'product_edit');
-    var canData = !accounts || accounts.can(acct, 'data_manage');
+    // V3.82：导入/导出改由「数据归属者」判定（详见 isOwnerOnly 注释），不再随 data_manage 开放给员工
+    var ownerOnly = isOwnerOnly(ctx);
     h += '<div class="page-head"><h2>商品档案</h2>' +
       '<span class="desc">共 ' + ctx.data.products.length + ' 款商品</span>' +
       '<div class="actions">' +
-      (canData ? '<button class="btn" data-act="export-all" title="导出全部商品档案（CSV），外部核实后可重新导入">📤 导出全部</button>' : '') +
-      (canData ? '<button class="btn" data-act="open-csv">📥 批量导入</button>' : '') +
+      (ownerOnly ? '<button class="btn" data-act="export-all" title="导出全部商品档案（CSV），外部核实后可重新导入">📤 导出全部</button>' : '') +
+      (ownerOnly ? '<button class="btn" data-act="open-csv">📥 批量导入</button>' : '') +
       (canEdit ? '<button class="btn btn-danger desktop-only" data-act="del-selected"' + (selCount ? '' : ' disabled') + '>🗑 删除选中' + (selCount ? '（' + selCount + '）' : '') + '</button>' : '') +
       (canEdit ? '<button class="btn btn-orange desktop-only" data-act="merge-selected"' + (selCount >= 2 ? '' : ' disabled') + ' title="仅型号相同的商品可合并，保留库存最大者，库存/备注/条码合并">🔀 合并选中' + (selCount >= 2 ? '（' + selCount + '）' : '') + '</button>' : '') +
       (canEdit ? '<button class="btn btn-primary" data-act="open-new">＋ 新建商品</button>' : '') +
@@ -661,7 +688,10 @@
     }) + '</div>';
 
     if (!pg.items.length) {
-      h += '<div class="card">' + ui.empty('没有匹配的商品，点右上角「新建商品」添加') + '</div>';
+      // V3.82：员工没有「新建商品」按钮，提示语不能再引导他去点不存在的入口
+      h += '<div class="card">' + ui.empty(canEdit
+        ? '没有匹配的商品，点右上角「新建商品」添加'
+        : '没有匹配的商品，换个关键词或筛选条件再试试') + '</div>';
       return h;
     }
 
@@ -672,12 +702,16 @@
     // V3.59：无「报表与利润」权限的账号隐藏成本列（成本数据不可见）
     var _acct = ctx.currentAccount || ERP.currentAccount;
     var showCost = !accounts || !_acct || accounts.canViewCost(_acct);
+    // V3.82：勾选框只服务于「删除选中 / 合并选中」，员工没有编辑权限时整列隐藏（页面只留搜索）
+    var showSel = canEdit;
     h += '<div class="card"><div class="table-wrap"><table class="tbl tbl-striped"><thead><tr>' +
-      '<th class="sel desktop-only" style="width:34px"><input type="checkbox" class="row-check" data-act="toggle-all-check"' + (allChecked ? ' checked' : '') + ' title="全选本页"></th>' +
+      (showSel ? '<th class="sel desktop-only" style="width:34px"><input type="checkbox" class="row-check" data-act="toggle-all-check"' + (allChecked ? ' checked' : '') + ' title="全选本页"></th>' : '') +
       '<th>品牌</th><th>型号</th><th>类型</th><th>单位</th>' +
       (showCost ? '<th class="num">成本</th>' : '') +
       '<th class="num">批发价</th><th class="num">零售价</th>' +
-      '<th class="num">库存</th><th>备注</th><th>状态</th><th>操作</th>' +
+      '<th class="num">库存</th><th>备注</th><th>状态</th>' +
+      // V3.82：员工没有编辑权限时「操作」列整列隐藏（否则只剩一个空表头）
+      (canEdit ? '<th>操作</th>' : '') +
       '</tr></thead><tbody>';
     pg.items.forEach(function (p) {
       var checked = !!(state.sel || {})[String(p.id)];
@@ -685,7 +719,7 @@
       var threshold = ctx.settings.defaultThreshold == null ? 3 : ctx.settings.defaultThreshold;
       var stockCls = stock <= 0 ? ' num zero' : (stock < threshold ? ' num low' : ' num');
       h += '<tr' + (checked ? ' class="sel-on"' : '') + '>' +
-        '<td class="sel desktop-only"><input type="checkbox" class="row-check" data-act="row-check" data-id="' + esc(p.id) + '"' + (checked ? ' checked' : '') + '></td>' +
+        (showSel ? '<td class="sel desktop-only"><input type="checkbox" class="row-check" data-act="row-check" data-id="' + esc(p.id) + '"' + (checked ? ' checked' : '') + '></td>' : '') +
         '<td>' + esc(p.brand) + '</td>' +
         '<td>' + esc(p.model) + '</td>' +
         '<td>' + esc(p.category) + '</td>' +
@@ -696,11 +730,12 @@
         '<td class="' + stockCls + '">' + stock + '</td>' +
         '<td class="small weak cell-note" title="' + esc(p.note || '') + '">' + esc(p.note || '-') + '</td>' +
         '<td>' + ui.badge(p.status === schema.STATUS.OFF ? '停售' : '在售', p.status === schema.STATUS.OFF ? 'off' : 'on') + '</td>' +
-        '<td class="act">' +
-        (canEdit ? '<button data-act="edit-product" data-id="' + esc(p.id) + '">编辑</button>' : '') +
-        (canEdit ? '<button data-act="toggle-status" data-id="' + esc(p.id) + '">' +
-        (p.status === schema.STATUS.OFF ? '上架' : '停售') + '</button>' : '') +
-        '</td></tr>';
+        (canEdit ? '<td class="act">' +
+          '<button data-act="edit-product" data-id="' + esc(p.id) + '">编辑</button>' +
+          '<button data-act="toggle-status" data-id="' + esc(p.id) + '">' +
+          (p.status === schema.STATUS.OFF ? '上架' : '停售') + '</button>' +
+          '</td>' : '') +
+        '</tr>';
     });
     h += '</tbody></table></div>' + ui.pager(pg.page, pg.pages, pg.total) + '</div>';
     return h;
@@ -760,7 +795,7 @@
         '<input type="checkbox" data-input="field" data-name="staffShowRetail"' + (form.staffShowRetail !== false ? ' checked' : '') + '> 向员工显示零售价</label>' +
         '<label style="display:inline-flex;align-items:center;gap:6px">' +
         '<input type="checkbox" data-input="field" data-name="staffShowWholesale"' + (form.staffShowWholesale !== false ? ' checked' : '') + '> 向员工显示批发价</label>' +
-        '<div class="small muted mt4">关闭后对应价格对员工（非老板）账号隐藏；成本对员工一律不可见。</div></div>';
+        '<div class="small muted mt4">关闭后对应价格对该商品隐藏；同时受员工权限「价格可见」总开关控制——总开关与单条开关任一关闭，员工即看不到该价格。成本对员工一律不可见。</div></div>';
     }
     h += '<div class="field"><label>备注</label>' +
       '<input class="input" data-input="field" data-name="note" placeholder="选填，如：一级能效" value="' + esc(form.note) + '"></div>';
