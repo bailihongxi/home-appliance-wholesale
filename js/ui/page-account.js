@@ -17,16 +17,28 @@
     E.ledger || (isNode ? require('../core/ledger.js') : null),
     E.debt || (isNode ? require('../core/debt.js') : null),
     E.engine || (isNode ? require('../core/engine.js') : null),
+    E.accounts || (isNode ? require('../core/accounts.js') : null),
     E
   );
   if (isNode) module.exports = mod;
   root.ERP = root.ERP || {};
   root.ERP.pages = root.ERP.pages || {};
   root.ERP.pages.account = mod;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, ledger, debt, engine, ERP) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, ledger, debt, engine, accounts, ERP) {
   'use strict';
 
   var esc = util.escapeHtml;
+
+  /** V3.68：账号存储（浏览器 localStorage；Node 下为 null → 不渲染经手人下拉） */
+  function acctStore() {
+    try { return (typeof localStorage !== 'undefined' && localStorage) || null; } catch (e) { return null; }
+  }
+
+  /** V3.68：经手人候选 —— 仅数据归属账号（老板）可改派；员工返回空数组（不渲染下拉） */
+  function operatorChoices() {
+    if (!accounts || !accounts.operatorChoices) return [];
+    try { return accounts.operatorChoices(acctStore(), ERP.currentAccount || null) || []; } catch (e) { return []; }
+  }
   var L = schema.LEDGER;
 
   /** V3.26：列表备注最多显示 30 个汉字，超出以「...」截断，点击可查看完整记账信息 */
@@ -50,7 +62,7 @@
       viewNoteId: null, // V3.26：当前查看完整信息的流水 id
       settle: null, // {partnerId, isSupplier, name, amount, note, error}
       manualOpen: false,
-      manual: { date: util.today(), category: schema.EXPENSE_CATEGORIES[0], direction: 'out', amount: '', note: '' }
+      manual: { date: util.today(), category: schema.EXPENSE_CATEGORIES[0], direction: 'out', amount: '', note: '', operatorId: '' }
     };
   }
 
@@ -178,6 +190,8 @@
 
       'save-manual': function (ctx, state) {
         var m = state.manual;
+        // V3.68：经手人改派（空 = 当前登录账号；老板下拉可指定员工）
+        ctx.operatorOverride = m.operatorId || null;
         var r = ledger.manual(ctx, {
           date: m.date,
           category: m.category,
@@ -185,12 +199,13 @@
           amount: m.amount,
           note: m.note
         });
+        ctx.operatorOverride = null;
         if (!r.ok) {
           ui.toast(r.error, 'err');
           return false;
         }
         ui.toast('已记 ' + (m.direction === 'in' ? '收入' : '费用') + ' ' + ui.money(r.rec.amount), 'ok');
-        state.manual = { date: util.today(), category: schema.EXPENSE_CATEGORIES[0], direction: 'out', amount: '', note: '' };
+        state.manual = { date: util.today(), category: schema.EXPENSE_CATEGORIES[0], direction: 'out', amount: '', note: '', operatorId: '' };
         state.manualOpen = false;
         return true;
       }
@@ -309,6 +324,21 @@
       '<input class="input" data-input="manual-field" data-name="amount" inputmode="decimal" placeholder="0" value="' + esc(m.amount) + '"></div>' +
       '<div class="field"><label>备注</label>' +
       '<input class="input" data-input="manual-field" data-name="note" placeholder="选填" value="' + esc(m.note) + '"></div>' +
+      // V3.68：经手人 —— 决定这笔账归到谁名下（员工在新设备拉取时只取自己名下的记录）
+      (function () {
+        var ops = operatorChoices();
+        if (ops.length <= 1) return '';
+        var me = ERP.currentAccount || null;
+        var meName = (me && (me.shopName || me.username)) || '本人';
+        return '<div class="field"><label>经手人</label>' +
+          ui.select({
+            name: 'operatorId', value: m.operatorId, on: 'manual-field',
+            options: [{ value: '', text: '本人（' + esc(meName) + '）' }].concat(ops.map(function (o) {
+              return { value: o.id, text: o.name };
+            }))
+          }) +
+          '<div class="small muted mt4">默认本人；老板可改派给员工，员工在新设备拉数据时只会拉到自己名下的记录</div></div>';
+      })() +
       '<div class="row">' +
       '<button class="btn btn-danger" data-act="close-manual">取消</button>' +
       '<div class="spacer"></div>' +
