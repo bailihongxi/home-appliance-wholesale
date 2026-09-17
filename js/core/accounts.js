@@ -123,9 +123,14 @@
   };
 
   /**
-   * V3.59 动作级拦截规则：页面 → [{ 动作名正则, 所需权限(任一) }]
+   * V3.59 动作级拦截规则：页面 → [{ 动作名正则, 所需权限(任一), owner?: boolean }]
    * 未命中规则的动作默认放行（只读/导航/个人操作，如改自己密码、勾选行、分页跳转）。
    * 库级操作（导入/导出全部/备份/清空/设置/同步）统一归 data_manage。
+   *
+   * V3.83：**`owner: true` = 只看「是不是数据归属者」**，勾什么权限都不放行。
+   * 覆盖：清空全部数据 / 导出备份 / 批量导入 / 一键重算全店价格。
+   * 原因：员工为能「从云端恢复」通常都被勾上 data_manage，而界面入口虽已隐藏，
+   * 动作层若只看权限就是敞开的。独立数据空间账号（无 ownerId）自身即归属者，不受影响。
    */
   var ACTION_RULES = {
     sale: [
@@ -139,16 +144,17 @@
       { test: /^(do-pay|open-pay|close-pay|quick-paid)$/, perm: ['ws_pay', 'purchase'] },
       { test: /^(void-purchase|update-purchase|save-purchase|open-new|add-item)$/, perm: ['purchase'] },
       { test: /^(export-csv|export-all)$/, perm: ['purchase'] },
-      { test: /^(do-import|clear-data|download-template)$/, perm: ['data_manage'] }
+      // V3.83：批量导入 / 清空 / 模板属全店整体操作 → owner（详见 ACTION_RULES 上方注释）
+      { test: /^(do-import|clear-data|download-template)$/, perm: ['data_manage'], owner: true }
     ],
     product: [
       { test: /^(save-product|edit-product|del-item|del-selected|merge-selected|apply-bulk-price|apply-price-sys|save-price-sys|toggle-price|export-csv)$/, perm: ['product_edit'] },
-      { test: /^(do-import|export-all|download-template|clear-data)$/, perm: ['data_manage'] }
+      { test: /^(do-import|export-all|download-template|clear-data)$/, perm: ['data_manage'], owner: true }
     ],
     inventory: [
       { test: /^(do-preview|save-take|retire-uncovered|clear-stock-products)$/, perm: ['stock_adjust'] },
       { test: /^(export-csv|export-all)$/, perm: ['stock_read'] },
-      { test: /^clear-data$/, perm: ['data_manage'] }
+      { test: /^clear-data$/, perm: ['data_manage'], owner: true }
     ],
     exchange: [
       { test: /^(do-exchange|do-return|do-refund|add-item)$/, perm: ['sale_return', 'ws_return'] }
@@ -156,7 +162,7 @@
     account: [
       { test: /^(save-manual|quick-paid|save-customer|toggle-log)$/, perm: ['ledger'] },
       { test: /^(export-csv|export-all)$/, perm: ['ledger'] },
-      { test: /^clear-data$/, perm: ['data_manage'] }
+      { test: /^clear-data$/, perm: ['data_manage'], owner: true }
     ],
     supplier: [
       { test: /^(save-supplier|edit-supplier|delete-supplier)$/, perm: ['purchase'] }
@@ -165,13 +171,20 @@
       { test: /^(save-customer|edit-customer|delete-customer)$/, perm: ['customer'] }
     ],
     report: [
-      { test: /^(save-price-sys|apply-price-sys|export-csv|export-all)$/, perm: ['report'] }
+      // V3.83：改利润率 / 一键重算全店价格会动到整本账，只对归属者开放
+      { test: /^(save-price-sys|apply-price-sys)$/, perm: ['report'], owner: true },
+      { test: /^(export-csv|export-all)$/, perm: ['report'] }
     ],
     setting: [
-      { test: /^(save-settings|save-shop|save-price-sys|apply-price-sys|clear-data|toggle-shop-edit)$/, perm: ['data_manage'] }
+      { test: /^(save-price-sys|apply-price-sys|clear-data)$/, perm: ['data_manage'], owner: true },
+      // 打印参数 / 打开密码是本机能力，员工可自行设置（V3.76 保留）
+      { test: /^(save-settings|save-shop|toggle-shop-edit)$/, perm: ['data_manage'] }
     ],
     mine: [
-      { test: /^(sync-up|sync-down|save-sync-cfg|test-sync-conn|export-backup|clear-data)$/, perm: ['data_manage'] }
+      // V3.83：导出备份 = 打包全店数据；清空数据 = 销毁全店数据 → 均只归归属者
+      { test: /^(export-backup|clear-data)$/, perm: ['data_manage'], owner: true },
+      // 同步类保持 data_manage：员工要用 sync-down 从云端恢复（sync-up 由页面动作另行禁止）
+      { test: /^(sync-up|sync-down|save-sync-cfg|test-sync-conn)$/, perm: ['data_manage'] }
     ]
   };
 
@@ -181,7 +194,14 @@
     var rules = ACTION_RULES[pageName];
     if (!rules || !rules.length) return true;
     for (var i = 0; i < rules.length; i++) {
-      if (rules[i].test.test(actName)) return api.canAny(acct, rules[i].perm);
+      if (rules[i].test.test(actName)) {
+        // V3.83：`owner: true` 的规则属「全店整体操作」（清空全部数据 / 导出备份 /
+        // 批量导入覆盖档案 / 一键重算全店价格），**只看是不是数据归属者**——
+        // 员工为能「从云端恢复」通常都被勾上 data_manage，若仅按权限判定，
+        // 界面入口虽然隐藏了，动作层却是敞开的（纵深防御缺口）。
+        if (rules[i].owner && !api.isDataOwner(acct)) return false;
+        return api.canAny(acct, rules[i].perm);
+      }
     }
     return true;
   };
