@@ -359,12 +359,12 @@ test('C5 界面：老板本人与独立数据空间账号不需要凭证（不�
   assert.ok(html.includes('不需要（独立数据空间）'), '独立空间账号应标注不需要');
 });
 
-test('C6 版本号：page-mine V3.70 / sw.js v99（三处同步，防止版本走散）', () => {
+test('C6 版本号：page-mine V3.70 / sw.js v100（三处同步，防止版本走散）', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.70'), '关于页应显示 V3.70');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v99';"), 'SW 缓存版本应为 v99');
+  assert.ok(mine.includes('版本：V3.71'), '关于页应显示 V3.71');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v100';"), 'SW 缓存版本应为 v100');
 });
 
 /* ===== D. V3.70：未发放时给出可操作指引 ===== */

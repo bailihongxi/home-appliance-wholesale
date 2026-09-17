@@ -227,6 +227,40 @@
       '（凭证需用其明文密码加密，故只能在建号或改密码时发放）';
   }
 
+  /**
+   * V3.71：把云端账号表合并进本机（纯函数，Node 可测）。
+   * - 匹配优先级：**id 优先，其次 username**（避免两端 id 生成顺序不同导致重复建号）
+   * - **云端为准**覆盖同账号的字段（云端是跨端共享的真相源）
+   * - **本地独有的账号保留**（比如刚建好还没上传的，不会被抹掉）
+   * @returns {{list:Array, added:number, updated:number}}
+   */
+  page.mergeAccounts = function mergeAccounts(localList, cloudList) {
+    var merged = (localList || []).slice();
+    var added = 0;
+    var updated = 0;
+    (cloudList || []).forEach(function (a) {
+      if (!a || !a.id) return;
+      var idx = -1;
+      var i;
+      for (i = 0; i < merged.length; i++) {
+        if (merged[i] && merged[i].id === a.id) { idx = i; break; }
+      }
+      if (idx < 0 && a.username) {
+        for (i = 0; i < merged.length; i++) {
+          if (merged[i] && merged[i].username === a.username) { idx = i; break; }
+        }
+      }
+      if (idx < 0) {
+        merged.push(a);
+        added++;
+      } else {
+        merged[idx] = Object.assign({}, merged[idx], a);
+        updated++;
+      }
+    });
+    return { list: merged, added: added, updated: updated };
+  };
+
   page.render = function render(ctx, state) {
     if (!page.isAdmin(ctx)) {
       return '<div class="card"><div class="notice notice-warn">无权限：仅管理员账号可管理账户。</div></div>';
@@ -246,8 +280,10 @@
       '<button class="btn btn-primary btn-sm" data-act="admin-new-toggle">' +
         (state.showNew ? '收起新建表单' : '＋ 新建店铺账号') + '</button>' +
       '<button class="btn btn-sm" data-act="admin-sync-accounts">☁️ 账号表上传到云端</button>' +
+      '<button class="btn btn-sm" data-act="admin-pull-accounts">☁️ 从云端拉取账号表</button>' +
       '</div>' +
       '<div class="small muted mt8">「账号表上传到云端」：把全部账号（登录名/权限/数据空间/密码哈希，加密后）传到云端，手机 / 本地版 / 其他浏览器登录时自动拉取同一份账号，跨端通用。修改账号或权限后需重新上传。</div>' +
+      '<div class="small muted mt8">「从云端拉取账号表」（V3.71）：<b>换设备/换浏览器</b>后，本机账号表可能只有管理总控一个（登录时本地命中就不会再去拉云端），导致看不到员工账号、也改不了他们的密码。点这里可零配置拉取（走公开静态地址，<b>无需 Token / 无需口令，只读不上传</b>）：云端账号覆盖同名的本机账号，本机独有的账号保留。</div>' +
       '</div>';
 
     // 新建账号表单
@@ -546,6 +582,51 @@
         rerender();
       });
       return false; // 异步：阻止默认 afterAction，完成后手动重渲染
+    },
+    /**
+     * V3.71：从云端拉取账号表（换设备后在本机看不到员工账号时的自救入口）。
+     * 走 V3.61 的公开静态地址，无需 Token / 无需口令，**只读不上传**。
+     */
+    'admin-pull-accounts': function (ctx, state) {
+      var st = state.store || localStore();
+      var g = (typeof globalThis !== 'undefined' ? globalThis : null) || (typeof self !== 'undefined' ? self : null);
+      var syncMod = (g && g.ERP && g.ERP.sync) || null;
+      if (!syncMod || !syncMod.pullAccountsPublic) {
+        state.error = '同步模块不可用，请先刷新页面重试';
+        return true;
+      }
+      state.msg = '正在从云端拉取账号表…';
+      state.error = '';
+      syncMod.pullAccountsPublic(st).then(function (res) {
+        state.msg = '';
+        if (!res || !res.ok) {
+          var why = (res && res.error) || '未知错误';
+          if (why === 'NO_CFG_PUBLIC') why = '无法推断云端地址（请用在线版，或先在「我的 → 云同步」配置一次）';
+          else if (why === 'NO_SNAPSHOT') why = '云端还没有账号表（请先用管理总控点「账号表上传到云端」）';
+          state.error = '账号表拉取失败：' + why;
+          rerender();
+          return;
+        }
+        var cloud = res.list || [];
+        if (!cloud.length) {
+          state.error = '云端账号表为空（0 个账号），本机未做改动';
+          rerender();
+          return;
+        }
+        var before = accounts.load(st);
+        var m = page.mergeAccounts(before, cloud);
+        accounts.save(st, m.list);
+        state.msg = '已从云端拉取账号表（云端 ' + cloud.length + ' 个' +
+          (res.at ? '，更新于 ' + String(res.at).slice(0, 10) : '') + '）：新增 ' + m.added +
+          ' 个、更新 ' + m.updated + ' 个；本机现有 ' + m.list.length + ' 个账号。' +
+          (m.added ? '现在可以给员工重设密码以发放取数凭证了。' : '');
+        rerender();
+      }, function (e) {
+        state.msg = '';
+        state.error = '账号表拉取失败：' + ((e && e.message) || '网络错误');
+        rerender();
+      });
+      return false; // 异步：完成后手动重渲染
     },
     'admin-new-cancel': function (ctx, state) {
       state.showNew = false;
