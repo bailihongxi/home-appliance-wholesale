@@ -138,12 +138,15 @@
   function renderTop(ctx, state) {
     // V3.58 性能：畅销/滞销共用同一份聚合结果（此前两次 topProducts = 扫描全部销售单两遍）
     var agg = profit.productAgg(ctx);
-    var best = profit.rankProducts(agg, state.topBy, 'desc', 5);
-    var worst = profit.rankProducts(agg, state.topBy, 'asc', 5);
+    // V3.66：非老板（看不到成本）时，强制按销量排序且隐藏「按毛利」按钮，避免成本/利润外泄
+    var showCost = !(ERP.accounts && ERP.accounts.canViewCost(ERP.currentAccount));
+    var by = showCost ? state.topBy : 'qty';
+    var best = profit.rankProducts(agg, by, 'desc', 5);
+    var worst = profit.rankProducts(agg, by, 'asc', 5);
     var h = '<div class="card"><div class="card-title">畅销 / 滞销 TOP5' +
       '<span class="more">排序：' +
-      '<button class="btn btn-sm' + (state.topBy === 'profit' ? ' on' : '') + '" data-act="top-by" data-by="profit">按毛利</button> ' +
-      '<button class="btn btn-sm' + (state.topBy === 'qty' ? ' on' : '') + '" data-act="top-by" data-by="qty">按销量</button>' +
+      (showCost ? '<button class="btn btn-sm' + (state.topBy === 'profit' ? ' on' : '') + '" data-act="top-by" data-by="profit">按毛利</button> ' : '') +
+      '<button class="btn btn-sm' + (by === 'qty' ? ' on' : '') + '" data-act="top-by" data-by="qty">按销量</button>' +
       '</span></div>';
     h += '<div class="grid grid-2">';
     h += topList('🔥 畅销', best, 'ok');
@@ -153,6 +156,7 @@
   }
 
   function topList(title, list, cls) {
+    var showCost = !(ERP.accounts && ERP.accounts.canViewCost(ERP.currentAccount));
     var h = '<div><div class="small strong mb8">' + title + '</div>';
     if (!list.length) {
       h += ui.empty('暂无数据');

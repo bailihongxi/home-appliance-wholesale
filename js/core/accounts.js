@@ -46,7 +46,7 @@
     { id: 'product_edit', group: 'archive',   label: '商品建档 / 改价 / 合并 / 删除' },
     { id: 'stock_adjust', group: 'archive',   label: '库存盘点 / 调整' },
     { id: 'ledger',       group: 'finance',   label: '记账中心（流水 / 记一笔）' },
-    { id: 'report',       group: 'finance',   label: '报表与利润（含成本）' },
+    { id: 'report',       group: 'finance',   label: '报表与利润（成本仅老板可见）' },
     { id: 'customer',     group: 'finance',   label: '客户管理' },
     { id: 'data_manage',  group: 'finance',   label: '数据管理（导入/导出/清空/备份/设置/同步）' }
   ];
@@ -111,9 +111,12 @@
     return api.canAny(acct, need);
   };
 
-  /** 成本 / 利润可见性：管理总控或拥有「报表与利润」权限 */
+  /**
+   * V3.66 成本 / 利润可见性：仅「数据归属账号」（老板）可见。
+   * 所有非归属员工一律不可见（含拥有「报表与利润」权限的财务/管理型员工）。
+   */
   api.canViewCost = function canViewCost(acct) {
-    return api.can(acct, 'report');
+    return !!(acct && acct.id === (acct.ownerId || acct.id));
   };
 
   /**
@@ -361,6 +364,9 @@
       scopeCategories: input.scopeCategories && input.scopeCategories.length ? input.scopeCategories.slice() : ALL_CATEGORIES.slice(),
       perms: perms,
       ownerId: typeof input.ownerId === 'string' && input.ownerId ? input.ownerId : null,
+      // V3.65：员工「取数凭证」——用该员工登录密码加密的老板同步口令（信封对象）；
+      // 让员工在新设备上「只用自己账号登录」即可自助拉取本店数据，无需先登老板账号。
+      syncPhraseEnc: (input.syncPhraseEnc && typeof input.syncPhraseEnc === 'object') ? input.syncPhraseEnc : null,
       hash: util.hashPassword(pwd),
       createdAt: new Date().toISOString().slice(0, 10)
     };
@@ -434,6 +440,10 @@
     } else if (patch.ownerId === null) {
       acct.ownerId = null;
     }
+    // V3.65：重置密码 / 补发取数凭证时刷新（null = 明确清除）
+    if (patch.syncPhraseEnc !== undefined) {
+      acct.syncPhraseEnc = (patch.syncPhraseEnc && typeof patch.syncPhraseEnc === 'object') ? patch.syncPhraseEnc : null;
+    }
     api.save(store, list);
     return { ok: true, account: api.strip(acct) };
   };
@@ -467,6 +477,7 @@
       scopeCategories: (a.scopeCategories || []).slice(),
       perms: Object.assign({}, a.perms || {}),
       ownerId: a.ownerId || null,
+      syncPhraseEnc: a.syncPhraseEnc ? Object.assign({}, a.syncPhraseEnc) : null,
       createdAt: a.createdAt || ''
     };
     return out;
@@ -479,7 +490,8 @@
 
   /**
    * V3.60 账号云同步：导出账号表用于加密上传（手机/其他端登录时拉取共用）。
-   * 仅含密码哈希（校验所需），不含任何明文密码；perms / ownerId / 数据空间一并同步。
+   * 仅含密码哈希（校验所需），不含任何明文密码；perms / ownerId / 数据空间 /
+   * V3.65 取数凭证 syncPhraseEnc（本身是密文，需该员工明文密码才能解开）一并同步。
    */
   api.exportForSync = function exportForSync(list) {
     return (list || []).map(function (a) {
@@ -492,6 +504,7 @@
         scopeCategories: (a.scopeCategories || []).slice(),
         perms: Object.assign({}, a.perms || {}),
         ownerId: a.ownerId || null,
+        syncPhraseEnc: a.syncPhraseEnc ? Object.assign({}, a.syncPhraseEnc) : null,
         hash: a.hash || '',
         createdAt: a.createdAt || ''
       };

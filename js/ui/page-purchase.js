@@ -26,6 +26,11 @@
   'use strict';
 
   var esc = util.escapeHtml;
+  // V3.66：判断当前账号是否为数据归属账号（老板），用于成本/进货成本可见性
+  function isBoss(ctx) {
+    var a = ERP.currentAccount || (ctx && ctx.currentAccount);
+    return !!(a && a.id === (a.ownerId || a.id));
+  }
 
   function emptyForm() {
     return {
@@ -661,7 +666,7 @@
             '<div class="pick-name">' + esc(p.brand) + ' <b>' + esc(p.model) + '</b></div>' +
             '<div class="pick-sub">' +
               '<span class="weak">' + esc(p.category) + ' / ' + esc(p.unit) + '</span>' +
-              '<span class="pick-price">成本: <b>' + ui.money(p.cost) + '</b></span>' +
+              '<span class="pick-price">成本: <b>' + (product.visibleToStaff(p, ctx.currentAccount || ERP.currentAccount, 'cost') ? ui.money(p.cost) : '—') + '</b></span>' +
             '</div>' +
           '</div>' +
           '<div class="pick-side">' +
@@ -681,14 +686,16 @@
     h += '<div class="card"><div class="card-title">进货明细（' + form.items.length + ' 行）' +
       (form.items.length ? '<button class="btn btn-sm" data-act="clear-items">清空</button>' : '') + '</div>';
 
-    h += '<div class="row mb8" style="align-items:center;gap:6px;flex-wrap:wrap">' +
-      '<span class="small muted">批量成本</span>' +
-      '<input class="input" style="width:110px;text-align:right" data-input="bulk-price" data-name="bulkPrice" ' +
-      'inputmode="decimal" placeholder="如 1000" value="' + esc(form.bulkPrice || '') + '">' +
-      '<span class="small muted">元</span>' +
-      '<button class="btn btn-sm btn-primary" data-act="apply-bulk-price">应用到全部明细</button>' +
-      '<span class="small weak">填一次，下面每行都同步；单行也能再改</span>' +
-      '</div>';
+    if (isBoss(ctx)) {
+      h += '<div class="row mb8" style="align-items:center;gap:6px;flex-wrap:wrap">' +
+        '<span class="small muted">批量成本</span>' +
+        '<input class="input" style="width:110px;text-align:right" data-input="bulk-price" data-name="bulkPrice" ' +
+        'inputmode="decimal" placeholder="如 1000" value="' + esc(form.bulkPrice || '') + '">' +
+        '<span class="small muted">元</span>' +
+        '<button class="btn btn-sm btn-primary" data-act="apply-bulk-price">应用到全部明细</button>' +
+        '<span class="small weak">填一次，下面每行都同步；单行也能再改</span>' +
+        '</div>';
+    }
 
     if (!form.items.length) {
       h += ui.empty('还没有明细，点上方「加入」添加商品');

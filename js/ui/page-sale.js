@@ -30,6 +30,8 @@
   var esc = util.escapeHtml;
   var PAY = schema.PAY_METHODS;
   var PRICE = schema.PRICE_TYPE;
+  // V3.66：便捷取当前账号，用于商品字段级可见性判断
+  function curAcct() { return ERP.currentAccount || null; }
 
   function emptyForm() {
     return {
@@ -441,8 +443,8 @@
         var pickedD = !!findItem(state, p.id);
         h += '<tr' + (pickedD ? ' class="picked"' : '') + '>' +
           '<td>' + esc(p.brand) + ' <b>' + esc(p.model) + '</b><br><span class="weak small">' + esc(p.category) + ' / ' + esc(p.unit) + '</span></td>' +
-          '<td class="num">' + ui.money(p.priceWholesale) + '</td>' +
-          '<td class="num">' + ui.money(p.priceRetail) + '</td>' +
+          '<td class="num">' + (product.visibleToStaff(p, curAcct(), 'wholesale') ? ui.money(p.priceWholesale) : '—') + '</td>' +
+          '<td class="num">' + (product.visibleToStaff(p, curAcct(), 'retail') ? ui.money(p.priceRetail) : '—') + '</td>' +
           '<td class="num' + (lowD ? ' low' : '') + '">' + (p.stock || 0) + '</td>' +
           '<td class="act"><button class="btn btn-sm ' + (pickedD ? 'btn-added' : 'btn-orange') + '" data-act="pick-product" data-id="' + esc(p.id) + '">加入</button></td>' +
           '</tr>';
@@ -459,8 +461,8 @@
             '<div class="pick-name">' + esc(p.brand) + ' <b>' + esc(p.model) + '</b></div>' +
             '<div class="pick-sub">' +
               '<span class="weak">' + esc(p.category) + ' / ' + esc(p.unit) + '</span>' +
-              '<span class="pick-price">批: <b>' + ui.money(p.priceWholesale) + '</b></span>' +
-              '<span class="pick-price">零: <b>' + ui.money(p.priceRetail) + '</b></span>' +
+              '<span class="pick-price">批: <b>' + (product.visibleToStaff(p, curAcct(), 'wholesale') ? ui.money(p.priceWholesale) : '—') + '</b></span>' +
+              '<span class="pick-price">零: <b>' + (product.visibleToStaff(p, curAcct(), 'retail') ? ui.money(p.priceRetail) : '—') + '</b></span>' +
             '</div>' +
           '</div>' +
           '<div class="pick-side">' +

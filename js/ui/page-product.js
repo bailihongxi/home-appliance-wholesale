@@ -39,6 +39,8 @@
       cost: '',
       priceWholesale: '',
       priceRetail: '',
+      staffShowRetail: true,
+      staffShowWholesale: true,
       note: '',
       barcodes: '',
       openingStock: ''
@@ -115,7 +117,10 @@
 
       field: function (ctx, state, el) {
         var name = el.getAttribute('data-name');
-        if (name) state.form[name] = el.value;
+        if (!name) return;
+        // V3.66：复选框（如「对员工显示零售价/批发价」）按 checked 收集布尔值
+        if (el.type === 'checkbox') state.form[name] = !!el.checked;
+        else state.form[name] = el.value;
         // 用户手动编辑过批发/零售 → 标记为自定义，成本联动不再覆盖
         if (name === 'priceWholesale') state._priceTouchedW = true;
         if (name === 'priceRetail') state._priceTouchedR = true;
@@ -140,6 +145,8 @@
           cost: p.cost ? util.fenToYuan(p.cost) : '',
           priceWholesale: p.priceWholesale ? util.fenToYuan(p.priceWholesale) : '',
           priceRetail: p.priceRetail ? util.fenToYuan(p.priceRetail) : '',
+          staffShowRetail: p.staffShowRetail !== false,
+          staffShowWholesale: p.staffShowWholesale !== false,
           note: p.note || '',
           barcodes: Array.isArray(p.barcodes) ? p.barcodes.join('\n') : '',
           openingStock: ''
@@ -532,6 +539,8 @@
       cost: form.cost,
       priceWholesale: form.priceWholesale,
       priceRetail: form.priceRetail,
+      staffShowRetail: form.staffShowRetail,
+      staffShowWholesale: form.staffShowWholesale,
       note: form.note,
       barcodes: form.barcodes,
       openingStock: state.editing ? undefined : form.openingStock
@@ -661,7 +670,8 @@
       return !!(state.sel || {})[String(p.id)];
     });
     // V3.59：无「报表与利润」权限的账号隐藏成本列（成本数据不可见）
-    var showCost = !accounts || accounts.canViewCost(ctx.currentAccount || ERP.currentAccount);
+    var _acct = ctx.currentAccount || ERP.currentAccount;
+    var showCost = !accounts || !_acct || accounts.canViewCost(_acct);
     h += '<div class="card"><div class="table-wrap"><table class="tbl tbl-striped"><thead><tr>' +
       '<th class="sel desktop-only" style="width:34px"><input type="checkbox" class="row-check" data-act="toggle-all-check"' + (allChecked ? ' checked' : '') + ' title="全选本页"></th>' +
       '<th>品牌</th><th>型号</th><th>类型</th><th>单位</th>' +
@@ -681,8 +691,8 @@
         '<td>' + esc(p.category) + '</td>' +
         '<td>' + esc(p.unit) + '</td>' +
         (showCost ? '<td class="num">' + ui.money(p.cost) + '</td>' : '') +
-        '<td class="num">' + ui.money(p.priceWholesale) + '</td>' +
-        '<td class="num">' + ui.money(p.priceRetail) + '</td>' +
+        '<td class="num">' + (product.visibleToStaff(p, acct, 'wholesale') ? ui.money(p.priceWholesale) : '—') + '</td>' +
+        '<td class="num">' + (product.visibleToStaff(p, acct, 'retail') ? ui.money(p.priceRetail) : '—') + '</td>' +
         '<td class="' + stockCls + '">' + stock + '</td>' +
         '<td class="small weak cell-note" title="' + esc(p.note || '') + '">' + esc(p.note || '-') + '</td>' +
         '<td>' + ui.badge(p.status === schema.STATUS.OFF ? '停售' : '在售', p.status === schema.STATUS.OFF ? 'off' : 'on') + '</td>' +
@@ -703,6 +713,10 @@
   function renderForm(ctx, state) {
     var form = state.form;
     var editing = !!state.editing;
+    // V3.66：成本仅老板可见；零售/批发是否对员工可见由本商品独立开关控制
+    var _acct = ctx.currentAccount || ERP.currentAccount;
+    // 无账号上下文（未登录 / 测试）按老板可见，避免误遮蔽（与 product.visibleToStaff 的 !acct 兜底一致）
+    var showCost = !accounts || !_acct || accounts.canViewCost(_acct);
 
     var h = '<div class="page-head"><h2>' + (editing ? '编辑商品' : '新建商品') + '</h2>' +
       '<span class="desc">品牌 + 型号 唯一；库存由进货/销售/盘点单据自动变动</span></div>';
@@ -727,14 +741,27 @@
       '<input class="input" data-input="field" data-name="unit" placeholder="如：台" value="' + esc(form.unit) + '"></div>' +
       '</div>';
     h += '<div class="grid grid-3">' +
-      '<div class="field"><label>成本（元）</label>' +
-      '<input class="input" data-input="cost-field" data-name="cost" inputmode="decimal" placeholder="如 1000" value="' + esc(form.cost) + '">' +
-      '<div class="small muted mt4">只填成本，批发/零售按整体利润率自动生成</div></div>' +
+      (showCost
+        ? '<div class="field"><label>成本（元）</label>' +
+          '<input class="input" data-input="cost-field" data-name="cost" inputmode="decimal" placeholder="如 1000" value="' + esc(form.cost) + '">' +
+          '<div class="small muted mt4">只填成本，批发/零售按整体利润率自动生成</div></div>'
+        : '<div class="field"><label>成本（元）</label>' +
+          '<div class="small mt4" style="color:#b45309">当前账号无权查看成本</div></div>') +
       '<div class="field"><label>批发价（元）<span class="muted">（自动）</span></label>' +
       '<input class="input" data-input="field" data-name="priceWholesale" inputmode="decimal" placeholder="留空按利润率自动" value="' + esc(form.priceWholesale) + '"></div>' +
       '<div class="field"><label>零售价（元）<span class="muted">（自动）</span></label>' +
       '<input class="input" data-input="field" data-name="priceRetail" inputmode="decimal" placeholder="留空按利润率自动" value="' + esc(form.priceRetail) + '"></div>' +
       '</div>';
+    // V3.66：员工可见价格（零售/批发）独立开关，仅老板可配置；成本对员工一律不可见
+    if (showCost) {
+      h += '<div class="field-block mt8">' +
+        '<div class="small strong mb4">员工可见价格（可单独控制）</div>' +
+        '<label style="display:inline-flex;align-items:center;gap:6px;margin-right:18px">' +
+        '<input type="checkbox" data-input="field" data-name="staffShowRetail"' + (form.staffShowRetail !== false ? ' checked' : '') + '> 向员工显示零售价</label>' +
+        '<label style="display:inline-flex;align-items:center;gap:6px">' +
+        '<input type="checkbox" data-input="field" data-name="staffShowWholesale"' + (form.staffShowWholesale !== false ? ' checked' : '') + '> 向员工显示批发价</label>' +
+        '<div class="small muted mt4">关闭后对应价格对员工（非老板）账号隐藏；成本对员工一律不可见。</div></div>';
+    }
     h += '<div class="field"><label>备注</label>' +
       '<input class="input" data-input="field" data-name="note" placeholder="选填，如：一级能效" value="' + esc(form.note) + '"></div>';
     h += '<div class="field"><label>原厂条码 / 二维码内容（选填，可多条）' +

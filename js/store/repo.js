@@ -96,6 +96,13 @@
         if (!rec) return;
         var s = schemaRef();
         if (!s || !s.KEY_PATH || !s.KEY_PATH[store]) return; // schema 未加载或未知 store，安全 no-op（不抛错）
+        // V3.65 记录级：交易类集合（sales/purchases/ledgers/stocktakes）缺 createdBy 时打标。
+        // 默认「谁登录归谁」（ctx.currentAccount.id）；表单经手人下拉通过 ctx.operatorOverride 改派。
+        // 仅在记录首次落库（无 createdBy）时打标，已有归属的不覆盖（更新/恢复/导入均安全）。
+        if (s.isOwnedStore && s.isOwnedStore(store) && !rec.createdBy) {
+          var who = (ctx.operatorOverride) || (ctx.currentAccount && ctx.currentAccount.id) || '';
+          if (who) rec.createdBy = String(who);
+        }
         var keyPath = s.KEY_PATH[store];
         var key = rec[keyPath];
         if (key === undefined || key === null) return;

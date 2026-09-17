@@ -44,6 +44,40 @@
     }
   };
 
+  /** 同步模块（浏览器读 ERP.sync；Node 下 ERP.sync 未必已挂载，测试可用 opts.sync 注入） */
+  function syncRef() {
+    var g = (typeof globalThis !== 'undefined' ? globalThis : null) || (typeof self !== 'undefined' ? self : null);
+    return (g && g.ERP && g.ERP.sync) || null;
+  }
+
+  /**
+   * V3.65：本机（管理总控）的同步口令——用于给员工账号发放「取数凭证」。
+   * 未配置云同步时返回 ''（界面据此提示"请先在「我的 → 云同步」配置口令"）。
+   */
+  page.bossPhrase = function bossPhrase(store) {
+    var s = syncRef();
+    if (!s || !s.loadConfig) return '';
+    try {
+      var cfg = s.loadConfig(store, 'admin');
+      return String((cfg && cfg.passphrase) || '');
+    } catch (e) {
+      return '';
+    }
+  };
+
+  /**
+   * V3.65：为某员工账号生成「取数凭证」= 用该员工登录密码加密老板的同步口令。
+   * 员工在新设备上用自己的账号+密码登录即可自助拉取本店数据（无需先登老板账号）。
+   * 纯逻辑（Node 可测）：环境无 WebCrypto / 缺参数时返回 null，不抛错。
+   * @returns {Promise<object|null>}
+   */
+  page.makeCredential = function makeCredential(store, empPwd, opts) {
+    var s = (opts && opts.sync) || syncRef();
+    var phrase = (opts && opts.phrase !== undefined) ? opts.phrase : page.bossPhrase(store);
+    if (!s || !s.wrapPhrase || !empPwd || !phrase) return Promise.resolve(null);
+    return s.wrapPhrase(empPwd, phrase);
+  };
+
   /** 本机存储（localStorage）；不可用时返回 null（Node 测试可传 state.store 注入） */
   function localStore() {
     try {

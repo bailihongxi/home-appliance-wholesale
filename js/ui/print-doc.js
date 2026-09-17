@@ -140,7 +140,10 @@
             '<td>' + it.qty + '</td>' +
             '<td>' + util.fmtYuan(amount) + '</td>';
         } else {
-          h += '<td>' + util.fmtYuan(it.costPrice) + '</td>' +
+          // V3.66：非老板打印进货单时遮蔽成本列
+          var acctDoc = ctx && ctx.currentAccount;
+          var ownerDoc = !!(acctDoc && acctDoc.id === (acctDoc.ownerId || acctDoc.id));
+          h += '<td>' + (ownerDoc ? util.fmtYuan(it.costPrice) : '—') + '</td>' +
             '<td>' + it.qty + '</td>' +
             '<td>' + util.fmtYuan(it.amount) + '</td>';
         }
