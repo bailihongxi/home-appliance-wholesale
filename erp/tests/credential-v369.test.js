@@ -359,10 +359,44 @@ test('C5 界面：老板本人与独立数据空间账号不需要凭证（不�
   assert.ok(html.includes('不需要（独立数据空间）'), '独立空间账号应标注不需要');
 });
 
-test('C6 版本号：page-mine V3.69 / sw.js v98（三处同步，防止版本走散）', () => {
+test('C6 版本号：page-mine V3.70 / sw.js v99（三处同步，防止版本走散）', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.69'), '关于页应显示 V3.69');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v98';"), 'SW 缓存版本应为 v98');
+  assert.ok(mine.includes('版本：V3.70'), '关于页应显示 V3.70');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v99';"), 'SW 缓存版本应为 v99');
+});
+
+/* ===== D. V3.70：未发放时给出可操作指引 ===== */
+
+test('D1 指引：老板已配口令但员工无凭证 → 引导「重设一次密码」并指向「修改」', () => {
+  const s = seed();
+  const off = useSync(bossSyncWith('BOSS-PHRASE'));
+  try {
+    const html = adminPage.render({ currentAccount: { id: 'admin', role: 'admin' } }, { store: s });
+    assert.ok(html.includes('未发放'), '应显示未发放');
+    assert.ok(html.includes('重设一次密码'), '必须给出「重设一次密码」的可操作指引，否则老板不知道下一步做什么');
+    assert.ok(html.includes('修改'), '指引应指向「修改」入口');
+  } finally { off(); }
+});
+
+test('D2 指引：老板尚未配置云同步口令 → 先引导去「我的 → 云同步」', () => {
+  const s = seed();
+  const off = useSync(bossSyncWith('')); // 老板没配口令：此时就算重设密码也发不出凭证
+  try {
+    const html = adminPage.render({ currentAccount: { id: 'admin', role: 'admin' } }, { store: s });
+    assert.ok(html.includes('未发放'), '应显示未发放');
+    assert.ok(html.includes('云同步'), '应引导先去配置云同步');
+    assert.ok(html.includes('重设一次密码'), '仍应说明后续还要重设密码');
+  } finally { off(); }
+});
+
+test('D3 指引：老板与独立数据空间账号不显示「重设密码」指引', () => {
+  const s = seed();
+  const off = useSync(bossSyncWith('BOSS-PHRASE'));
+  try {
+    const html = adminPage.render({ currentAccount: { id: 'admin', role: 'admin' } }, { store: s });
+    assert.ok(html.includes('不需要（本机即数据源）'), '老板不需要凭证');
+    assert.ok(html.includes('不需要（独立数据空间）'), '独立空间账号不需要凭证');
+  } finally { off(); }
 });

@@ -202,12 +202,12 @@ test('员工上传时快照内账户档案用老板的（不用员工店名覆�
 
 /* ================= 5. 版本号同步 ================= */
 
-test('V3.69 版本号：page-mine V3.69 / sw.js v98', () => {
+test('V3.70 版本号：page-mine V3.69 / sw.js v99', () => {
   const fs = require('node:fs');
   const mineSrc = fs.readFileSync(path.join(ROOT, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-  assert.ok(mineSrc.includes('版本：V3.69'), '关于页应显示 V3.69');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v98';"), 'SW 缓存版本应为 v98');
+  assert.ok(mineSrc.includes('版本：V3.70'), '关于页应显示 V3.70');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v99';"), 'SW 缓存版本应为 v99');
 });
 
 /* ---------------- 内存 localStorage 桩 ---------------- */

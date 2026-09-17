@@ -206,13 +206,25 @@
     return arr.indexOf(cat) >= 0;
   }
 
-  /** V3.69：取数凭证状态文案（让老板一眼看出哪个员工「能自助取数」） */
-  function credentialBadge(a) {
+  /**
+   * V3.69：取数凭证状态文案（让老板一眼看出哪个员工「能自助取数」）
+   * V3.70：未发放时给出**可操作指引** —— 只写「未发放」老板不知道下一步该做什么。
+   * 凭证必须用员工**明文密码**加密，老板只在建号 / 改密码时掌握它，
+   * 所以**存量员工（V3.69 之前建的）必须重设一次密码**才能补发，这一点必须讲清楚。
+   * @param {string} bossPhrase 老板本机已配置的同步口令（空 = 尚未配置）
+   */
+  function credentialBadge(a, bossPhrase) {
     if (a.id === 'admin') return '🔑 取数凭证：不需要（本机即数据源）';
     if (!a.ownerId) return '🔑 取数凭证：不需要（独立数据空间）';
-    return a.syncPhraseEnc
-      ? '🔑 取数凭证：已发放（新设备用自己的账号密码登录即可自助拉数据）'
-      : '🔑 取数凭证：未发放';
+    if (a.syncPhraseEnc) {
+      return '🔑 取数凭证：已发放（新设备用自己的账号密码登录即可自助拉数据）';
+    }
+    if (!bossPhrase) {
+      return '🔑 取数凭证：未发放 —— 请先到「我的 → 云同步」配置同步口令，' +
+        '再给该员工重设一次密码即自动发放';
+    }
+    return '🔑 取数凭证：未发放 —— 点「修改」给该员工重设一次密码即自动发放' +
+      '（凭证需用其明文密码加密，故只能在建号或改密码时发放）';
   }
 
   page.render = function render(ctx, state) {
@@ -220,6 +232,8 @@
       return '<div class="card"><div class="notice notice-warn">无权限：仅管理员账号可管理账户。</div></div>';
     }
     var store = state.store || localStore();
+    // V3.70：老板本机同步口令（缓存一次，用于给「未发放」状态挑选正确的操作指引）
+    var bossPh = page.bossPhrase(store);
     var list = accounts.ensurePreset(store);
     if (!state.edits) state.edits = initEdits(list);
     if (!state.permsEdits) state.permsEdits = initPerms(list);
@@ -256,7 +270,7 @@
             // V3.62：显式标出数据空间，避免「账号建好了但登录进来没数据」时无从判断
             '<div class="small muted">' + dataSpaceBadge(a) + '</div>' +
             // V3.69：取数凭证状态（决定该员工能否在新设备自助拉数据）
-            '<div class="small muted">' + credentialBadge(a) + '</div>' +
+            '<div class="small muted">' + credentialBadge(a, bossPh) + '</div>' +
           '</div>' +
           (isAdminSelf ? '' :
             '<button class="btn btn-sm" data-act="admin-edit-account" data-id="' + esc(a.id) + '">修改</button>' +
