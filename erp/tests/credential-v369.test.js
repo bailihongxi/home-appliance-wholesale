@@ -359,12 +359,12 @@ test('C5 界面：老板本人与独立数据空间账号不需要凭证（不�
   assert.ok(html.includes('不需要（独立数据空间）'), '独立空间账号应标注不需要');
 });
 
-test('C6 版本号：page-mine V3.82 / sw.js v111（三处同步，防止版本走散）', () => {
+test('C6 版本号：page-mine V3.83 / sw.js v112（三处同步，防止版本走散）', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.82'), '关于页应显示 V3.79');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v111';"), 'SW 缓存版本应为 v106');
+  assert.ok(mine.includes('版本：V3.83'), '关于页应显示 V3.79');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v112';"), 'SW 缓存版本应为 v106');
 });
 
 /* ===== D2. V3.72：凭证写在「本机」账号表，员工换设备读的是「云端」===== */

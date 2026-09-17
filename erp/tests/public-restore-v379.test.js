@@ -307,10 +307,10 @@ test('T7c 老板「零配置 + 有口令」→ 行为不变：仍展开同步设
   }
 });
 
-test('T8 版本号三处同步：page-mine V3.82 / sw.js v111', () => {
+test('T8 版本号三处同步：page-mine V3.83 / sw.js v112', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.82'), '关于页应显示 V3.79');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v111';"), 'SW 缓存版本应为 v108');
+  assert.ok(mine.includes('版本：V3.83'), '关于页应显示 V3.79');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v112';"), 'SW 缓存版本应为 v108');
 });

@@ -125,12 +125,12 @@ test('T8 商品编辑页提示语说明两层开关的叠加关系', () => {
   assert.ok(src.includes('任一关闭'), '说明「任一关闭即隐藏」');
 });
 
-test('T9 版本号三处同步：page-mine V3.82 / sw.js v111', () => {
+test('T9 版本号三处同步：page-mine V3.83 / sw.js v112', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.82'), '关于页应显示 V3.82');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v111';"), 'SW 缓存版本应为 v111');
+  assert.ok(mine.includes('版本：V3.83'), '关于页应显示 V3.82');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v112';"), 'SW 缓存版本应为 v111');
 });
 
 /* ---------------- 测试辅助 ---------------- */
