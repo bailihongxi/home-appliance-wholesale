@@ -264,7 +264,8 @@
       '<button class="btn btn-primary btn-block" data-act="admin-save">保存全部经营范围修改</button></div>';
 
     if (state.msg) h += '<div class="notice notice-info mt8">' + esc(state.msg) + '</div>';
-    if (state.error) h += '<div class="notice notice-warn mt8">' + esc(state.error) + '</div>';
+    // V3.67：新建/修改表单内已就地显示错误，避免同一条提示在页面上重复出现两次
+    if (state.error && !state.showNew && !state.editId) h += '<div class="notice notice-warn mt8">' + esc(state.error) + '</div>';
 
     h += '</div>';
     return h;
@@ -299,6 +300,8 @@
         '<button class="chip' + (f.dataSpace === 'solo' ? ' on' : '') + '" data-act="admin-new-ds" data-value="solo">独立数据空间</button>' +
       '</div></div>' +
       '<div class="small muted">「共用本店数据」：员工登录后与本店老板使用同一本账（数据不隔离，权限隔离），<b>能看到老板已有的全部商品与单据</b>（换设备首次登录需先「我的 → 云同步 → 从云端恢复」把本店数据拉到本机）；「独立数据空间」：数据与全店隔离，<b>新账号登录后是一本空账，看不到老板已有数据</b>。创建后默认经营范围＝全部分类、默认权限＝全部关闭，可在该账号卡片中手动分配。</div>' +
+      // V3.67：错误提示就地显示在表单内（原来只在整页最底部渲染，长页面下用户根本看不到 → 表现为「点了没反应」）
+      (state.error ? '<div class="notice notice-warn mt8">' + esc(state.error) + '</div>' : '') +
       '<div class="row mt8"><button class="btn btn-danger" data-act="admin-new-cancel">取消</button>' +
       '<div class="spacer"></div>' +
       '<button class="btn btn-primary" data-act="admin-create-account">创建账号</button></div></div>';
@@ -366,6 +369,8 @@
       '<input class="input" type="password" data-input="admin-edit.password" data-live="1" placeholder="留空不修改" value="' + esc(f.password) + '"></div>' +
       '<div class="field"><label>确认新密码</label>' +
       '<input class="input" type="password" data-input="admin-edit.password2" data-live="1" value="' + esc(f.password2) + '"></div>' +
+      // V3.67：错误提示就地显示在修改表单内，避免长页面下用户在底部看不到
+      (state.error ? '<div class="notice notice-warn mt8">' + esc(state.error) + '</div>' : '') +
       '<div class="row mt8"><button class="btn btn-danger" data-act="admin-edit-cancel">取消</button>' +
       '<div class="spacer"></div>' +
       '<button class="btn btn-primary" data-act="admin-save-edit" data-id="' + esc(acct.id) + '">保存修改</button></div></div>';
@@ -473,7 +478,7 @@
         return false;
       }
       var list = accounts.load(st);
-      if (!list.length) { state.error = '本地没有可上传的账号'; return false; }
+      if (!list.length) { state.error = '本地没有可上传的账号'; return true; }
       // V3.61 上传前展示账号清单确认，避免"以为传了其实没传"
       var names = list.map(function (a) { return a.username; }).join('、');
       var go = true;
@@ -575,7 +580,7 @@
     'admin-create-account': function (ctx, state) {
       var st = state.store || localStore();
       var r = page.createAccount(st, state.newForm);
-      if (!r.ok) { state.error = r.error || '创建失败'; return false; }
+      if (!r.ok) { state.error = r.error || '创建失败'; return true; }
       var newId = r.account.id;
       // 新账号默认全部分类，纳入经营范围勾选态
       if (state.edits) state.edits[newId] = (r.account.scopeCategories || []).slice();
@@ -589,10 +594,10 @@
     /* ===== 修改账号 ===== */
     'admin-edit-account': function (ctx, state, el) {
       var id = el.getAttribute('data-id');
-      if (id === 'admin') { state.error = '管理员账号不可修改'; return false; }
+      if (id === 'admin') { state.error = '管理员账号不可修改'; return true; }
       var st = state.store || localStore();
       var acct = accounts.getById(accounts.load(st), id);
-      if (!acct) { state.error = '账号不存在'; return false; }
+      if (!acct) { state.error = '账号不存在'; return true; }
       state.editId = id;
       state.editForm = {
         username: acct.username,
@@ -632,7 +637,7 @@
       var id = el.getAttribute('data-id');
       var st = state.store || localStore();
       var r = page.updateAccount(st, id, state.editForm);
-      if (!r.ok) { state.error = r.error || '保存失败'; return false; }
+      if (!r.ok) { state.error = r.error || '保存失败'; return true; }
       state.editId = null;
       state.error = '';
       state.msg = '账号「' + r.account.shopName + '」已更新';
@@ -642,7 +647,7 @@
     /* ===== 删除账号 ===== */
     'admin-del-account': function (ctx, state, el) {
       var id = el.getAttribute('data-id');
-      if (id === 'admin') { state.error = '管理员账号不可删除'; return false; }
+      if (id === 'admin') { state.error = '管理员账号不可删除'; return true; }
       state.delId = id;
       state.error = '';
       return true;
@@ -656,7 +661,7 @@
       var id = el.getAttribute('data-id') || state.delId;
       var st = state.store || localStore();
       var r = page.removeAccount(st, id);
-      if (!r.ok) { state.error = r.error || '删除失败'; state.delId = null; return false; }
+      if (!r.ok) { state.error = r.error || '删除失败'; state.delId = null; return true; }
       // 清理该账号数据空间（浏览器环境尽力而为）
       var a = appRef();
       if (a && a.deleteAccountDb) a.deleteAccountDb(id);
