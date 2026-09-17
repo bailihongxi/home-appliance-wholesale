@@ -449,10 +449,33 @@
         return true;
       },
 
-      /** 切换账号：退出登录回登录页 */
+      /**
+       * V3.78：切换账号 —— 退出当前登录并回到登录页（本机数据 / 账号表 / 云同步设置全部保留）。
+       *
+       * 与旧实现（直接 logout）的两点差别：
+       *  1) 二次确认，避免误触就把人踢回登录页；
+       *  2) 退出前先 commit 落库 —— 旧实现 `return false` 跳过了框架的 afterAction 落库，
+       *     若手头刚录入的单据还在脏状态，退出后会丢。
+       */
       'switch-account': function (ctx, state) {
         var a = app();
-        if (a && a.logout) a.logout();
+        if (!a || !a.logout) return false;
+        var doLogout = function () {
+          var p = a.commit ? a.commit() : null;
+          if (p && typeof p.then === 'function') {
+            p.then(function () { a.logout(); }, function () { a.logout(); });
+          } else {
+            a.logout();
+          }
+        };
+        if (ui.confirm) {
+          ui.confirm('切换账号',
+            '将<b>退出当前登录</b>并回到登录页，换成另一个账号登录。<br>' +
+            '本机数据、账号表与云同步设置都不会被删除，重新登录同一账号即可继续。')
+            .then(function (yes) { if (yes) doLogout(); });
+          return false; // 异步进行中：阻止默认 afterAction 重渲染
+        }
+        doLogout();
         return false;
       }
     },
@@ -515,7 +538,9 @@
         '<div class="arrow">›</div>' +
       '</div>';
 
-      // V3：店铺资料编辑面板（店名 / 头像上传 / 切换账号）
+      // V3：店铺资料编辑面板（店名 / 头像上传）
+      // V3.78：「切换账号」移出本面板（原先藏在这个二级面板里，员工端还完全没有），
+      //         统一提到下面的独立账号卡片，一眼可见
       if (state.editShop) {
         h += '<div class="card mt8 shop-edit-box">' +
           '<div class="card-title">店铺资料</div>' +
@@ -525,13 +550,15 @@
           '<div class="row wrap"><input type="file" accept="image/*" data-change="pick-avatar" style="max-width:220px">' +
           (state.avatarDataUrl ? '<img class="avatar-preview" src="' + esc(state.avatarDataUrl) + '" alt="">' : '') +
           '</div><div class="small muted">支持 JPG/PNG，建议 500KB 以内</div></div>' +
-          '<div class="row"><button class="btn btn-primary" data-act="save-shop">保存</button>' +
-          '<div class="spacer"></div>' +
-          '<button class="btn" data-act="switch-account">切换账号</button></div>' +
+          '<div class="row"><button class="btn btn-primary" data-act="save-shop">保存</button></div>' +
         '</div>';
       }
+
+      // V3.78：账号卡片 —— 当前登录账号 + 「切换账号」入口（老板 / 独立数据账号）
+      h += renderAccountCard(curAcct);
     } else {
       // V3.73：员工视图 —— 只显示自己的账号名（无编辑箭头、无老板经营范围）
+      // V3.78：右侧补一个「切换账号」按钮（此前员工端没有任何切换入口，换账号只能清浏览器会话）
       var staffAvatar = curAcct.avatar
         ? '<img class="avatar-img" src="' + esc(curAcct.avatar) + '" alt="">'
         : '<div class="avatar">👤</div>';
@@ -540,6 +567,7 @@
         '<div class="info">' +
           '<div class="name">' + esc(curAcct.shopName || curAcct.username || '员工账号') + '</div>' +
         '</div>' +
+        '<button class="btn btn-sm" data-act="switch-account">切换账号</button>' +
       '</div>';
     }
 
@@ -585,6 +613,30 @@
       return '数据空间：<b>共用本店数据</b>（归属 @' + esc(String(ownerId)) + '，库 ' + esc(dbName) + '）· 与老板同一本账，同步配置与快照路径也按归属账号走';
     }
     return '数据空间：<b>独立</b>（库 ' + esc(dbName) + '）· 与其他账号数据隔离';
+  }
+
+  /**
+   * V3.78：账号卡片（老板 / 独立数据账号视图）—— 显示「当前登录账号」+「切换账号」按钮。
+   *
+   * 背景：此前全站唯一的切换入口藏在「店铺资料」二级编辑面板里（员工端完全没有），
+   * 换账号只能靠清浏览器会话或换浏览器。用户要求把入口放到「我的」页并显眼可见。
+   * 切换 = 退出登录回登录页（不预填账号），本机数据与账号表不受影响。
+   */
+  function renderAccountCard(curAcct) {
+    var uname = (curAcct && (curAcct.username || curAcct.name)) || '本机账号';
+    var role = '普通账号';
+    if (!curAcct) role = '本机账号';
+    else if (accounts && accounts.isAdmin && accounts.isAdmin(curAcct)) role = '管理总控';
+    return '<div class="card mt8 account-switch-card">' +
+      '<div class="row" style="align-items:center;gap:10px">' +
+        '<span style="font-size:20px">🔄</span>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div class="name" style="font-weight:700">当前登录账号</div>' +
+          '<div class="small muted">@' + esc(String(uname)) + ' · ' + esc(role) + '</div>' +
+        '</div>' +
+        '<button class="btn btn-sm" data-act="switch-account">切换账号</button>' +
+      '</div>' +
+    '</div>';
   }
 
   /** 云同步卡片（按图1布局）；V3.73：员工（只读拉取）只显示「从云端恢复」按钮，其余说明/设置/状态全部不显示 */
@@ -709,7 +761,7 @@
       '<div class="card about-card">' +
         '<h3 class="card-title">关于</h3>' +
         '<ul class="about-list">' +
-          '<li>版本：V3.77（schema v' + schema.VERSION + '）</li>' +
+          '<li>版本：V3.78（schema v' + schema.VERSION + '）</li>' +
           '<li>数据存储于本机 IndexedDB</li>' +
           '<li>自动备份保障数据安全</li>' +
         '</ul>' +
