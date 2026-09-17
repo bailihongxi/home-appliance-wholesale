@@ -25,6 +25,23 @@
 
   function app() { return ERP.app; }
 
+  /**
+   * V3.76：当前账号是否为「员工（非数据归属账号）」。
+   * 员工共用老板的全店数据，设置页里凡是写 ctx.settings 或直接改共享数据/清空数据的能力，
+   * 对员工一律关闭（界面隐藏 + 动作拦截双保险），否则员工一改就影响老板。
+   */
+  function isStaff(ctx) {
+    var acct = (ctx && ctx.currentAccount) || ERP.currentAccount || null;
+    if (ERP.branding && ERP.branding.isStaffAccount) return !!ERP.branding.isStaffAccount(acct);
+    return !!(acct && acct.ownerId && acct.ownerId !== acct.id);
+  }
+
+  /** 员工越权时的统一提示（界面已隐藏，这里是动作层兜底） */
+  function staffDenied(what) {
+    if (app() && app().toast) app().toast('员工账号不能' + what + '（会影响全店共享数据）', 'err');
+    return false;
+  }
+
   var page = {
     name: 'setting',
     title: '设置',
@@ -59,11 +76,13 @@
         return 'value="' + esc(v == null ? '' : v) + '"';
       };
 
-      /* ---- 店铺与打印设置 ---- */
+      /* ---- 店铺与打印设置（V3.76：员工隐藏「店铺名称」——改它等于改老板的共享店铺资料） ---- */
+      var staff = isStaff(ctx);
       var general =
         '<div class="card mb8"><h3 class="card-title">店铺与打印</h3>' +
+        (staff ? '' :
         '<div class="form-row"><label>店铺名称</label>' +
-        '<input class="input" data-change="field" data-name="shopName" ' + val('shopName', state.shopName) + '></div>' +
+        '<input class="input" data-change="field" data-name="shopName" ' + val('shopName', state.shopName) + '></div>') +
         '<div class="grid grid-3">' +
         '<div class="form-row"><label>标签宽(mm)</label><input class="input" inputmode="decimal" data-change="field" data-name="widthMm" ' + val('widthMm', state.widthMm) + '></div>' +
         '<div class="form-row"><label>标签高(mm)</label><input class="input" inputmode="decimal" data-change="field" data-name="heightMm" ' + val('heightMm', state.heightMm) + '></div>' +
@@ -149,7 +168,10 @@
         '<div class="small muted mt8">「一键更新」会按最新利润率把全部商品的批发价、零售价统一重算（取整到元），已有自定义价格也会被覆盖。</div>' +
         '</div>';
 
-      return general + priceCard + security + backupCard + danger + logCard;
+      // V3.76：员工不显示「价格体系」（改利润率 + 一键重算全部商品价格）、
+      // 「备份与恢复」（导入会整体覆盖全店数据）、「数据管理」（清空库存/清空全部数据）
+      return general + (staff ? '' : priceCard) + security +
+        (staff ? '' : (backupCard + danger)) + logCard;
     },
 
     actions: {
@@ -165,6 +187,7 @@
       },
 
       'save-price-sys': function (ctx, state) {
+        if (isStaff(ctx)) return staffDenied('修改价格体系');
         var pf = state.priceForm || {};
         var w = Number(pf.wholesaleMargin);
         var r = Number(pf.retailMargin);
@@ -181,6 +204,7 @@
       },
 
       'apply-price-sys': function (ctx, state) {
+        if (isStaff(ctx)) return staffDenied('一键重算全部商品价格');
         var list = ctx.data.products || [];
         if (!list.length) {
           if (app() && app().toast) app().toast('还没有商品，先新建商品再应用系统价格', 'ok');
@@ -207,7 +231,11 @@
       },
 
       'save-settings': function (ctx, state) {
-        ctx.settings.shopName = util.cleanText(state.shopName) || '我的电器店';
+        // V3.76：员工不得改「店铺名称」（那是全店共享资料，会改掉老板的店名）；
+        // 打印参数仍可保存（label 宽高/DPI 等属于本机打印设备参数）
+        if (!isStaff(ctx)) {
+          ctx.settings.shopName = util.cleanText(state.shopName) || '我的电器店';
+        }
         ctx.settings.label = Object.assign({}, ctx.settings.label, {
           widthMm: util.parseMoney(state.widthMm) / 100 || ctx.settings.label.widthMm,
           heightMm: util.parseMoney(state.heightMm) / 100 || ctx.settings.label.heightMm,
@@ -266,6 +294,8 @@
       },
 
       'import-backup': function (ctx, state, el) {
+        // V3.76：员工不得导入备份（会整体覆盖全店共享数据）
+        if (isStaff(ctx)) return staffDenied('导入备份覆盖全店数据');
         // 浏览器：el 为 file input，读取文件后恢复
         if (!el || !el.files || !el.files.length) return false;
         var file = el.files[0];
@@ -294,6 +324,7 @@
 
       /** V3.46：仅清空库存与档案（商品档案/库存流水/盘点），保留全部单据/记账/客户/日志/设置 */
       'clear-stock-products': function (ctx, state) {
+        if (isStaff(ctx)) return staffDenied('清空库存与档案');
         var doClear = async function () {
           var clearStores = ['products', 'stockLogs', 'stocktakes'];
           var db = app() && app().db;
@@ -321,6 +352,7 @@
       },
 
       'clear-data': function (ctx, state) {
+        if (isStaff(ctx)) return staffDenied('清空全部数据');
         var doClear = async function () {
           // 直接清空 IndexedDB 每张表（不能依赖 flush：空列表会被 flush 跳过，导致旧数据残留）
           var db = app() && app().db;
