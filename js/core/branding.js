@@ -37,7 +37,38 @@
     return (n && String(n).trim()) ? String(n).trim() : DEFAULT_SHOP;
   };
 
-  /** 网页标题：店名 · 页面名 */
+  /**
+   * V3.75：当前「展示身份」——顶栏 / 首页 banner 统一取值处。
+   * 员工（非数据归属账号）共用老板的 settings，若继续读 settings 就会在顶栏
+   * 显示老板的店名与头像（用户反馈「首页右上角还是总控的名字和头像」）。
+   * 故员工一律显示**自己的账号档案**（shopName || username + account.avatar）；
+   * 老板（数据归属账号）与无账号场景仍显示店铺资料。
+   */
+  api.isStaffAccount = function isStaffAccount(account) {
+    var a = account || null;
+    if (!a) return false;
+    var ERPns = (typeof ERP !== 'undefined') ? ERP : null;
+    if (ERPns && ERPns.sync && typeof ERPns.sync.isDataOwner === 'function') return !ERPns.sync.isDataOwner(a);
+    if (ERPns && ERPns.accounts && typeof ERPns.accounts.isDataOwner === 'function') return !ERPns.accounts.isDataOwner(a);
+    // 无模块可依赖时（如纯 Node 单测）退化为「带 ownerId 即员工」
+    return !!(a.ownerId && a.ownerId !== a.id);
+  };
+
+  /** 展示身份：{ name, logo, isStaff } */
+  api.identity = function identity(settings, account) {
+    var a = account || ((typeof ERP !== 'undefined' && ERP.currentAccount) || null);
+    if (api.isStaffAccount(a)) {
+      var nm = String(a.shopName || a.username || '').trim();
+      return {
+        isStaff: true,
+        name: nm || '员工账号',
+        logo: (a.avatar && String(a.avatar).trim()) ? String(a.avatar).trim() : DEFAULT_LOGO
+      };
+    }
+    return { isStaff: false, name: api.shopName(settings), logo: api.logoHref(settings) };
+  };
+
+  /** 网页标题：店名 · 页面名（V3.75：员工用自己的账号名当店名部分） */
   api.pageTitle = function pageTitle(settings, pageTitle) {
     return api.shopName(settings) + ' · ' + (pageTitle || '');
   };
