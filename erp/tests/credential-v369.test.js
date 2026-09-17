@@ -359,12 +359,31 @@ test('C5 界面：老板本人与独立数据空间账号不需要凭证（不�
   assert.ok(html.includes('不需要（独立数据空间）'), '独立空间账号应标注不需要');
 });
 
-test('C6 版本号：page-mine V3.70 / sw.js v100（三处同步，防止版本走散）', () => {
+test('C6 版本号：page-mine V3.70 / sw.js v101（三处同步，防止版本走散）', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.71'), '关于页应显示 V3.71');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v100';"), 'SW 缓存版本应为 v100');
+  assert.ok(mine.includes('版本：V3.72'), '关于页应显示 V3.72');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v101';"), 'SW 缓存版本应为 v101');
+});
+
+/* ===== D2. V3.72：凭证写在「本机」账号表，员工换设备读的是「云端」===== */
+
+test('E1 提醒：凭证已发放时，必须提示再点「账号表上传到云端」', () => {
+  const s = seed();
+  const html = adminPage.render({ currentAccount: { id: 'admin', role: 'admin' } },
+    { store: (accounts.update(s, acctOf(s, 'emp1').id, { syncPhraseEnc: { kind: 'secret' } }), s) });
+  assert.ok(html.includes('已发放'), '应显示已发放');
+  assert.ok(html.includes('账号表上传到云端'),
+    'V3.72：必须提醒上传账号表 —— 凭证在本机，员工换设备读云端，不上传等于白发');
+});
+
+test('E2 提醒：发放成功的操作提示里同样要带上传提醒（创建 / 改密码两条路径）', () => {
+  const src = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '..', 'js/ui/page-admin.js'), 'utf8');
+  // 两条成功提示都必须出现「账号表上传到云端」
+  const hits = src.split('账号表上传到云端').length - 1;
+  assert.ok(hits >= 3, '创建提示 / 改密码提示 / 卡片徽章三处都应提醒上传，实际出现 ' + hits + ' 次');
 });
 
 /* ===== D. V3.70：未发放时给出可操作指引 ===== */
