@@ -238,6 +238,73 @@ test('T7 老板（Token 齐全）仍走 Token 通道（回归：不改变原有�
   }
 });
 
+test('T7a 校验判定：缺的是不是「取数口令」（公开通道唯一必需依赖）', () => {
+  assert.strictEqual(page.needPhraseError(['请设置同步口令（用于加密，换设备恢复要用同一口令）']), true, '缺口令 → true');
+  assert.strictEqual(page.needPhraseError(['同步口令至少 6 位']), true, '口令太短也算缺');
+  assert.strictEqual(page.needPhraseError([]), false, '无错误 → false');
+  assert.strictEqual(page.needPhraseError(null), false, '空 → false');
+  assert.strictEqual(
+    page.needPhraseError([
+      '请填写 GitHub 用户名（owner）',
+      '请填写分支名（branch）',
+      '请填写 GitHub Token（仅存本机）'
+    ]),
+    false,
+    'owner/branch/token 全缺但口令在 → false（这些都不是公开通道的必需品）'
+  );
+});
+
+test('T7b 员工新设备「完全零配置」（owner/repo/branch/path/token 全缺、只有口令）→ 仍免 Token 拉取', async () => {
+  // 最真实的新手机场景：员工从没配过任何同步设置，只有登录时认领到的取数口令。
+  // 公开快照是 GitHub Pages 上的静态文件：读它不需要 Token，地址也可从在线网址推断，
+  // 所以「口令在手」就应该拉得到——这正是「不需用 GitHub Token 员工才能拉数据」的口径。
+  const text = snapshotText();
+  const stub = withSyncStubs(() => Promise.resolve({ ok: true, text, at: '2026-09-17T18:00:00+08:00' }));
+  try {
+    const { ctx, state } = staffCtx();
+    state.cfg = {
+      owner: '', repo: '', branch: '', path: '', token: '',
+      passphrase: 'test-shop-phrase'
+    };
+    const r = page.actions['sync-down'](ctx, state);
+    assert.strictEqual(r, false, '异步进行中（内部有确认框）：不触发框架 afterAction');
+    await sleep(30);
+
+    assert.strictEqual(stub.calls.public.length, 1, '零配置也必须走公开通道（不能只在「只差 Token」那一档降级）');
+    assert.strictEqual(stub.calls.down.length, 0, '不得调用需要 Token 的 syncDown');
+    assert.strictEqual(stub.calls.public[0].ownerId, 'admin', '按数据归属账号取快照');
+    assert.strictEqual(stub.calls.public[0].phrase, 'test-shop-phrase', '用本机取数口令解密');
+
+    assert.strictEqual(ctx.data.products.length, 1, '云端商品已落到本机 ctx');
+    assert.strictEqual(ctx.data.products[0].model, 'BCD-216', '恢复的是云端那份数据');
+    assert.ok(/免 Token/.test(state.msg), '提示写明是免 Token 模式');
+    assert.ok(!/请填写 GitHub Token/.test(state.msg), '员工绝不看到无从填写的 Token 提示');
+  } finally {
+    stub.restore();
+    delete globalThis.ERP.currentAccount;
+  }
+});
+
+test('T7c 老板「零配置 + 有口令」→ 行为不变：仍展开同步设置面板自助补齐（回归）', async () => {
+  const stub = withSyncStubs();
+  try {
+    const ctx = newCtx();
+    ctx.currentAccount = { id: 'admin', username: 'hawsystem', role: 'admin' };
+    globalThis.ERP.currentAccount = ctx.currentAccount;
+    const state = page.init(ctx);
+    state.cfg = { owner: '', repo: '', branch: '', path: '', token: '', passphrase: 'boss-phrase' };
+    const r = page.actions['sync-down'](ctx, state);
+    assert.strictEqual(r, true, '同步返回（走原逻辑）');
+    await sleep(20);
+    assert.strictEqual(stub.calls.public.length, 0, '老板有同步设置面板，不替他降级');
+    assert.strictEqual(state.syncOpen, true, '展开面板让他自己补齐 owner/repo');
+    assert.ok(/owner|repo|Token|分支|路径/.test(state.msg), '按原样报出缺失项');
+  } finally {
+    stub.restore();
+    delete globalThis.ERP.currentAccount;
+  }
+});
+
 test('T8 版本号三处同步：page-mine V3.79 / sw.js v108', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');

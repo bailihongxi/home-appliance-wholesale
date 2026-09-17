@@ -294,20 +294,27 @@
         state.cfg = sync.saveConfig(store(), state.cfg, syncAcctId());
         var v = sync.validateConfig(state.cfg);
         if (!v.ok) {
-          // V3.79：只缺 Token（owner/repo/口令都齐）→ 走「免 Token 公开快照通道」。
-          // 场景：员工换新手机 / 老板换新电脑——Token 只在原设备里，而云端快照本就是
-          // GitHub Pages 上的公开静态文件，读它不需要写权限。旧实现直接报「请填写
-          // GitHub Token（仅存本机）」，而员工页没有同步设置入口（V3.73），等于死路。
-          if (onlyMissingToken(v.errors)) {
-            publicDown(ctx, state);
-            return false; // publicDown 内部走确认框 + finish 重渲染
-          }
-          // 员工没有「同步设置」面板 → 把配置错误转成可执行指引，绝不显示 Token 字样
+          // V3.79：员工（本机没有「同步设置」面板，V3.73）——**只要口令在手就走免 Token 公开通道**。
+          // 场景：员工换新手机后本机配置为空（owner/repo/branch/path/token 全缺），但只要
+          // 「取数口令」在，公开快照仍可拉取：它是 GitHub Pages 上的静态文件，读它不需要
+          // Token，地址也能从在线网址自动推断。旧实现要求「错误里只缺 Token 一项」才降级，
+          // 于是零配置的新设备会被拦下，用户只得看到「请填写 GitHub Token」这类死路。
           if (!canSelfFixSync(ctx)) {
+            if (!needPhraseError(v.errors)) {
+              publicDown(ctx, state);
+              return false; // publicDown 内部走确认框 + finish 重渲染
+            }
+            // 缺口令 → 员工无论如何都拉不到（解密必需），给「找谁做什么」的指引
             state.msg = staffSyncHint(v.errors);
             state.msgType = 'err';
             ui.toast(state.msg, 'err');
             return true;
+          }
+          // 老板 / 数据归属者：行为不变——仅「只差 Token」时降级到公开通道，
+          // 其余配置缺失仍展开「同步设置」面板让他自己补齐（他本来就有这个入口）。
+          if (onlyMissingToken(v.errors)) {
+            publicDown(ctx, state);
+            return false; // publicDown 内部走确认框 + finish 重渲染
           }
           state.syncOpen = true;
           state.msg = v.errors.join('；');
@@ -654,6 +661,21 @@
     '</div>';
   }
 
+  /**
+   * V3.79：公开快照通道真正依赖的只有「取数口令」——
+   * Token 不需要（读 GitHub Pages 静态文件无需写权限）、owner/repo 不需要
+   * （`sync.publicBaseUrl` 能从在线网址 `<owner>.github.io/<repo>` 推断）、
+   * branch/path 也用不上。所以「口令在手 = 具备拉取条件」，
+   * 缺口令才是员工侧唯一无法自解的情况（此时需管理总控重发凭证）。
+   */
+  function needPhraseError(errors) {
+    var list = errors || [];
+    for (var i = 0; i < list.length; i++) {
+      if (/口令/.test(String(list[i]))) return true;
+    }
+    return false;
+  }
+
   /** V3.79：校验错误里「只差 Token」这一项（owner/repo/branch/path/口令都齐）→ 可走免 Token 公开通道 */
   function onlyMissingToken(errors) {
     var e = errors || [];
@@ -758,7 +780,7 @@
     };
     if (ui.confirm) {
       ui.confirm('从云端恢复（免 Token 模式）',
-        '本机没有 GitHub Token，将改为读取云端<b>公开快照</b>并用本机「取数口令」解密。<br>' +
+        '将读取云端<b>公开快照</b>并用本机「取数口令」解密（<b>不需要 GitHub Token</b>）。<br>' +
         '恢复会把云端数据合并到本机，本机未同步的改动可能被覆盖。确定继续？')
         .then(function (yes) { if (yes) run(); });
       return false;
@@ -910,6 +932,7 @@
 
   page.renderSync = renderSyncCard;
   // V3.79：导出两个纯函数便于单测（校验判定 + 失败文案映射）
+  page.needPhraseError = needPhraseError;
   page.onlyMissingToken = onlyMissingToken;
   page.publicDownHint = publicDownHint;
   page.staffSyncHint = staffSyncHint;
