@@ -295,9 +295,12 @@ test('账户管理-删除：admin 不可删（action 拦截）', () => {
   accounts.ensurePreset(store);
   const state = page.init(null, store);
   const ok = page.actions['admin-del-account'](ADMIN_CTX, state, { getAttribute: (k) => (k === 'data-id' ? 'admin' : '') });
-  assert.strictEqual(ok, false);
+  // V3.67：此处必须返回 true。返回 false 会跳过 afterAction 重渲染，
+  // 使「管理员账号不可删除」的提示永远刷不出来（真机表现＝点了没反应）。
+  // 拦截语义不变：仍然不进入删除确认，且账户未被删除。
+  assert.strictEqual(ok, true, '返回 true 以便重绘并展示提示');
   assert.strictEqual(state.delId, null, '不进入删除确认');
-  assert.ok(state.error.includes('管理员'));
+  assert.ok(state.error.includes('管理员'), '给出明确提示');
 });
 
 test('账户管理-取消：新建/修改/删除取消不生效', () => {
