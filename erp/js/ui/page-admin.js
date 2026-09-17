@@ -78,6 +78,27 @@
     return s.wrapPhrase(empPwd, phrase);
   };
 
+  /**
+   * V3.69：给员工账号**发放**取数凭证 —— 用员工登录密码加密老板的同步口令，
+   * 存进该账号的 `syncPhraseEnc`。员工在新设备用自己的账号密码登录即可解开、自助拉取本店数据。
+   *
+   * 为什么只能在这两个时刻发放：凭证必须用「员工明文密码」加密，而老板只在
+   * **新建账号**和**修改该员工密码**时掌握明文密码（其余时刻库里只有哈希）。
+   *
+   * @returns {Promise<{ok:boolean, reason:string, env:object|null}>}
+   *   reason: 'no-boss-phrase' = 老板尚未配置云同步口令（界面据此提示先去配置）
+   */
+  page.issueCredential = function issueCredential(store, acctId, empPwd, opts) {
+    var s = (opts && opts.sync) || syncRef();
+    if (!acctId || !empPwd) return Promise.resolve({ ok: false, reason: 'no-input', env: null });
+    if (!s || !s.wrapPhrase) return Promise.resolve({ ok: false, reason: 'no-sync', env: null });
+    return page.makeCredential(store, empPwd, opts).then(function (env) {
+      if (!env) return { ok: false, reason: 'no-boss-phrase', env: null };
+      accounts.update(store, acctId, { syncPhraseEnc: env });
+      return { ok: true, reason: 'issued', env: env };
+    }, function () { return { ok: false, reason: 'error', env: null }; });
+  };
+
   /** 本机存储（localStorage）；不可用时返回 null（Node 测试可传 state.store 注入） */
   function localStore() {
     try {
@@ -185,6 +206,15 @@
     return arr.indexOf(cat) >= 0;
   }
 
+  /** V3.69：取数凭证状态文案（让老板一眼看出哪个员工「能自助取数」） */
+  function credentialBadge(a) {
+    if (a.id === 'admin') return '🔑 取数凭证：不需要（本机即数据源）';
+    if (!a.ownerId) return '🔑 取数凭证：不需要（独立数据空间）';
+    return a.syncPhraseEnc
+      ? '🔑 取数凭证：已发放（新设备用自己的账号密码登录即可自助拉数据）'
+      : '🔑 取数凭证：未发放';
+  }
+
   page.render = function render(ctx, state) {
     if (!page.isAdmin(ctx)) {
       return '<div class="card"><div class="notice notice-warn">无权限：仅管理员账号可管理账户。</div></div>';
@@ -225,10 +255,15 @@
             '<div class="small muted">@' + esc(a.username) + (isAdminSelf ? ' · 系统账号（不可删除，经营范围不可改）' : '') + '</div>' +
             // V3.62：显式标出数据空间，避免「账号建好了但登录进来没数据」时无从判断
             '<div class="small muted">' + dataSpaceBadge(a) + '</div>' +
+            // V3.69：取数凭证状态（决定该员工能否在新设备自助拉数据）
+            '<div class="small muted">' + credentialBadge(a) + '</div>' +
           '</div>' +
           (isAdminSelf ? '' :
             '<button class="btn btn-sm" data-act="admin-edit-account" data-id="' + esc(a.id) + '">修改</button>' +
             '<button class="btn btn-sm btn-danger-outline" data-act="admin-del-account" data-id="' + esc(a.id) + '">删除</button>') +
+          (!isAdminSelf && a.ownerId && a.syncPhraseEnc
+            ? '<button class="btn btn-sm btn-danger-outline" data-act="admin-clear-cred" data-id="' + esc(a.id) + '">清除凭证</button>'
+            : '') +
         '</div>';
 
       if (isEdit) {
@@ -582,12 +617,27 @@
       var r = page.createAccount(st, state.newForm);
       if (!r.ok) { state.error = r.error || '创建失败'; return true; }
       var newId = r.account.id;
+      var shopName = r.account.shopName;
+      var newPwd = state.newForm.password; // 凭证要用明文密码加密，需在表单重置前取到
       // 新账号默认全部分类，纳入经营范围勾选态
       if (state.edits) state.edits[newId] = (r.account.scopeCategories || []).slice();
       state.showNew = false;
       state.newForm = { username: '', shopName: '', password: '', password2: '', avatar: '' };
       state.error = '';
-      state.msg = '账号「' + r.account.shopName + '」已创建';
+      state.msg = '账号「' + shopName + '」已创建';
+      // V3.69：给「共用本店数据」的员工发放取数凭证（独立数据空间自成一账，不需要）
+      if (r.account.ownerId) {
+        page.issueCredential(st, newId, newPwd).then(function (cr) {
+          if (cr.ok) {
+            state.msg = '账号「' + shopName + '」已创建，取数凭证已发放 —— 该员工在新设备用自己的账号密码登录即可自助拉数据';
+          } else if (cr.reason === 'no-boss-phrase') {
+            state.msg = '账号「' + shopName + '」已创建；未发放取数凭证 —— 请先在「我的 → 云同步」配置同步口令';
+          } else {
+            state.msg = '账号「' + shopName + '」已创建（取数凭证发放失败：' + cr.reason + '）';
+          }
+          rerender();
+        });
+      }
       return true;
     },
 
@@ -636,11 +686,22 @@
     'admin-save-edit': function (ctx, state, el) {
       var id = el.getAttribute('data-id');
       var st = state.store || localStore();
+      var newPwd = state.editForm.password; // 改了密码才需要重发凭证
       var r = page.updateAccount(st, id, state.editForm);
       if (!r.ok) { state.error = r.error || '保存失败'; return true; }
+      var shopName = r.account.shopName;
       state.editId = null;
       state.error = '';
-      state.msg = '账号「' + r.account.shopName + '」已更新';
+      state.msg = '账号「' + shopName + '」已更新';
+      // V3.69：改过密码 → 原凭证（用旧密码加密）作废，必须用新密码重新发放
+      if (newPwd && r.account.ownerId) {
+        page.issueCredential(st, id, newPwd).then(function (cr) {
+          state.msg = cr.ok
+            ? '账号「' + shopName + '」已更新，取数凭证已按新密码重新发放'
+            : '账号「' + shopName + '」已更新（取数凭证重新发放失败：' + cr.reason + '）';
+          rerender();
+        });
+      }
       return true;
     },
 
@@ -652,6 +713,19 @@
       state.error = '';
       return true;
     },
+    /* ===== V3.69 取数凭证 ===== */
+    'admin-clear-cred': function (ctx, state, el) {
+      var id = el.getAttribute('data-id');
+      if (id === 'admin') { state.error = '管理员账号无需取数凭证'; return true; }
+      var st = state.store || localStore();
+      var acct = accounts.getById(accounts.load(st), id);
+      if (!acct) { state.error = '账号不存在'; return true; }
+      accounts.update(st, id, { syncPhraseEnc: null });
+      state.error = '';
+      state.msg = '已清除「' + (acct.shopName || acct.username) + '」的取数凭证；该账号在新设备将无法自助取数（重新发放：修改该账号密码即可）';
+      return true;
+    },
+
     'admin-del-cancel': function (ctx, state) {
       state.delId = null;
       state.error = '';
