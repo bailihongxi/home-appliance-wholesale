@@ -217,7 +217,8 @@
     if (a.id === 'admin') return '🔑 取数凭证：不需要（本机即数据源）';
     if (!a.ownerId) return '🔑 取数凭证：不需要（独立数据空间）';
     if (a.syncPhraseEnc) {
-      return '🔑 取数凭证：已发放（新设备用自己的账号密码登录即可自助拉数据）';
+      // V3.72：凭证写在**本机**账号表里，而员工换设备时读的是**云端**账号表 —— 不上传等于白发
+      return '🔑 取数凭证：已发放 —— 需再点「☁️ 账号表上传到云端」，否则员工换设备时仍取不到数据';
     }
     if (!bossPhrase) {
       return '🔑 取数凭证：未发放 —— 请先到「我的 → 云同步」配置同步口令，' +
@@ -724,7 +725,8 @@
       if (r.account.ownerId) {
         page.issueCredential(st, newId, newPwd).then(function (cr) {
           if (cr.ok) {
-            state.msg = '账号「' + shopName + '」已创建，取数凭证已发放 —— 该员工在新设备用自己的账号密码登录即可自助拉数据';
+            // V3.72：凭证存在本机账号表，员工换设备读的是云端账号表 —— 必须提示上传
+            state.msg = '账号「' + shopName + '」已创建，取数凭证已发放。⚠️ 请再点「☁️ 账号表上传到云端」——员工换设备时读的是云端账号表，不上传的话凭证带不过去、仍然取不到数据';
           } else if (cr.reason === 'no-boss-phrase') {
             state.msg = '账号「' + shopName + '」已创建；未发放取数凭证 —— 请先在「我的 → 云同步」配置同步口令';
           } else {
@@ -792,7 +794,7 @@
       if (newPwd && r.account.ownerId) {
         page.issueCredential(st, id, newPwd).then(function (cr) {
           state.msg = cr.ok
-            ? '账号「' + shopName + '」已更新，取数凭证已按新密码重新发放'
+            ? '账号「' + shopName + '」已更新，取数凭证已按新密码重新发放。⚠️ 请再点「☁️ 账号表上传到云端」——员工换设备时读的是云端账号表，不上传的话凭证带不过去、仍然取不到数据'
             : '账号「' + shopName + '」已更新（取数凭证重新发放失败：' + cr.reason + '）';
           rerender();
         });
