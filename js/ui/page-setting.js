@@ -139,13 +139,17 @@
         '</div>';
 
       /* ---- 操作日志 ---- */
-      var logs = ctx.data.logs || [];
-      var logHtml = state.showLog
+      /* V3.80：日志对员工整表隐藏。
+       * 日志逐条记录全店每个人的每一步动作（进货、收款、改价、登录……），是管理层审计数据；
+       * 员工能看到等于把老板的全部经营行为摊开。core 层 filterSnapshotForAccount 已不再把
+       * logs 下发给员工，这里做界面层双保险：历史存量留在老设备本机的数据也要遮住。 */
+      var logs = staff ? [] : (ctx.data.logs || []);
+      var logHtml = state.showLog && !staff
         ? '<ul class="log-list">' + (logs.length ? logs.slice().reverse().slice(0, 50).map(function (l) {
             return '<li><span class="muted">' + esc(l.at) + '</span> · ' + esc(l.action) + ' ' + esc(l.detail || '') + '</li>';
           }).join('') : '<li class="muted">暂无操作记录</li>') + '</ul>'
         : '';
-      var logCard =
+      var logCard = staff ? '' :
         '<div class="card"><h3 class="card-title">操作日志' +
         '<button class="btn btn-sm ' + (state.showLog ? 'btn-primary' : '') + '" data-act="toggle-log" style="float:right">' +
         (state.showLog ? '收起' : '查看') + '</button></h3>' + logHtml + '</div>';
@@ -170,6 +174,7 @@
 
       // V3.76：员工不显示「价格体系」（改利润率 + 一键重算全部商品价格）、
       // 「备份与恢复」（导入会整体覆盖全店数据）、「数据管理」（清空库存/清空全部数据）
+      // V3.80：再隐藏「操作日志」（审计数据，员工不得查阅全店每个人的操作记录）
       return general + (staff ? '' : priceCard) + security +
         (staff ? '' : (backupCard + danger)) + logCard;
     },
@@ -318,6 +323,8 @@
       },
 
       'toggle-log': function (ctx, state) {
+        // V3.80：员工不得查看操作日志（界面已隐藏，这里拦住手改 DOM / 老入口触发）
+        if (isStaff(ctx)) return staffDenied('查看操作日志');
         state.showLog = !state.showLog;
         return true;
       },
