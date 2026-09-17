@@ -3,6 +3,10 @@
  * - 成本：仅「数据归属账号（老板）」可见；所有非归属员工（含报表权限）一律不可见
  * - 零售价 / 批发价：每款商品可独立开关是否对员工可见（默认可见，不覆盖存量）
  * - 判定集中在 product.visibleToStaff + accounts.canViewCost，避免散落多处
+ *
+ * V3.81 增补：零售/批发改为**两层叠加**——权限总开关（price_retail_view /
+ * price_wholesale_view）× 商品单条开关（staffShowRetail / staffShowWholesale），
+ * 任一关闭即隐藏。本文件的员工账号已把总开关勾上，以便继续验证单条开关这一层。
  */
 const test = require('node:test');
 const assert = require('node:assert');
@@ -18,7 +22,12 @@ const page = require('../js/ui/page-product.js');
 const { newCtx } = require('./helpers/ctx.js');
 
 const ADMIN = { id: 'admin', username: 'hawsystem', role: 'admin', shopName: '管理总控' };
-const STAFF = { id: 'emp1', ownerId: 'admin', role: 'user', perms: { product_read: true } };
+// V3.81：价格可见性改为「权限总开关 × 商品单条开关」两层叠加。
+// 本文件验证的是**单条开关**这一层，所以员工账号要把两个总开关勾上（否则总开关关 → 一律不可见）。
+const STAFF = {
+  id: 'emp1', ownerId: 'admin', role: 'user',
+  perms: { product_read: true, price_retail_view: true, price_wholesale_view: true }
+};
 const STAFF_REPORT = { id: 'emp2', ownerId: 'admin', role: 'user', perms: { product_read: true, report: true } };
 const SOLO = { id: 'boss2', role: 'boss', perms: {} }; // 独立数据空间（自身即归属）
 

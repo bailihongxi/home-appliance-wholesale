@@ -30,7 +30,7 @@ test('render：管理总控自身卡片不渲染「分配权限」按钮与权�
   assert.ok(!html.includes('data-act="admin-perm-toggle" data-id="admin"'), 'admin 无权限勾选');
 });
 
-test('render：普通账号卡片显示权限摘要与「分配权限」按钮；展开后含四组面板', () => {
+test('render：普通账号卡片显示权限摘要与「分配权限」按钮；展开后含五组面板', () => {
   const store = memStore();
   accounts.ensurePreset(store);
   accounts.create(store, { username: 'staff', password: '123456', shopName: '店员' });
@@ -45,7 +45,9 @@ test('render：普通账号卡片显示权限摘要与「分配权限」按钮�
   accounts.PERM_GROUPS.forEach((g) => {
     assert.ok(html2.includes('>' + g.name + '</div>'), '含分组：' + g.name);
   });
-  assert.strictEqual((html2.match(/data-act="admin-perm-toggle"/g) || []).length, 16, '16 项权限开关');
+  // V3.81：新增「价格可见」组（显示零售价 / 显示批发价）→ 16 → 18 项
+  assert.strictEqual((html2.match(/data-act="admin-perm-toggle"/g) || []).length,
+    accounts.PERMS.length, '18 项权限开关');
   assert.ok(html2.includes('data-act="admin-perm-all"'), '含全选');
   assert.ok(html2.includes('data-act="admin-perm-none"'), '含清空');
   assert.ok(html2.includes('data-act="admin-perm-save"'), '含保存权限');
@@ -64,14 +66,14 @@ test('admin-perm-toggle：点击切换单权限勾选态', () => {
   assert.strictEqual(state.permsEdits[id].sale_bill, false, '再点取消');
 });
 
-test('admin-perm-all / admin-perm-none：全选 16 项 / 一键清空', () => {
+test('admin-perm-all / admin-perm-none：全选 18 项 / 一键清空', () => {
   const store = memStore();
   accounts.ensurePreset(store);
   accounts.create(store, { username: 'staff3', password: '123456' });
   const id = accounts.findByUsername(accounts.load(store), 'staff3').id;
   const state = page.init(null, store);
   page.actions['admin-perm-all'](ADMIN_CTX, state, el({ 'data-id': id }));
-  assert.strictEqual(Object.keys(state.permsEdits[id]).length, 16, '全选 16 项');
+  assert.strictEqual(Object.keys(state.permsEdits[id]).length, accounts.PERMS.length, '全选 18 项');
   page.actions['admin-perm-none'](ADMIN_CTX, state, el({ 'data-id': id }));
   assert.deepStrictEqual(state.permsEdits[id], {}, '清空');
 });
@@ -93,7 +95,10 @@ test('admin-perm-save：保存勾选写入账号 perms，未变化的账号不�
   assert.strictEqual(accounts.can(a4, 'sale_bill'), true);
   assert.strictEqual(accounts.can(a4, 'report'), false, '未勾选不生效');
   const a5 = accounts.getById(accounts.load(store), id5);
-  assert.deepStrictEqual(a5.perms, {}, '未操作账号保持全关');
+  // V3.81：新建账号的 perms 显式带价格两项 false（「已明确关闭」），不再是空对象
+  assert.deepStrictEqual(a5.perms,
+    { price_retail_view: false, price_wholesale_view: false }, '未操作账号保持全关');
+  assert.strictEqual(accounts.can(a5, 'price_retail_view'), false, '未操作账号看不到零售价');
   assert.strictEqual(state.permsEditId, null, '保存后收起面板');
 });
 
@@ -112,7 +117,12 @@ test('createAccount：默认「共用本店数据」（员工 ownerId=admin）',
   assert.ok(r.ok);
   const acct = accounts.getById(accounts.load(store), r.account.id);
   assert.strictEqual(acct.ownerId, 'admin', '员工共用老板库');
-  assert.deepStrictEqual(acct.perms, {}, '默认权限全关');
+  // V3.81：价格两项显式 false（区别于「无 key」的老账号）
+  assert.deepStrictEqual(acct.perms,
+    { price_retail_view: false, price_wholesale_view: false }, '默认权限全关');
+  accounts.PERMS.forEach((p) => {
+    assert.strictEqual(accounts.can(acct, p.id), false, '默认全关：' + p.id);
+  });
 });
 
 test('createAccount：选择「独立数据空间」→ ownerId=null', () => {

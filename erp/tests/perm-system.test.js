@@ -20,9 +20,10 @@ function memStore(init) {
 const ADMIN = { id: 'admin', username: 'hawsystem', role: 'admin', shopName: '管理总控' };
 const USER = { id: 'acct1', username: 'staff', role: 'user', shopName: '店员', perms: {} };
 
-test('权限清单：16 项，4 组，id 唯一，每项含 label', () => {
-  assert.strictEqual(accounts.PERMS.length, 16, '共 16 项权限');
-  assert.strictEqual(accounts.PERM_GROUPS.length, 4, '4 个分组');
+// V3.81：新增「价格可见」组（显示零售价 / 显示批发价）→ 18 项、5 组
+test('权限清单：18 项，5 组，id 唯一，每项含 label', () => {
+  assert.strictEqual(accounts.PERMS.length, 18, '共 18 项权限');
+  assert.strictEqual(accounts.PERM_GROUPS.length, 5, '5 个分组');
   const ids = new Set();
   accounts.PERMS.forEach((p) => {
     assert.ok(p.id, '有 id');
@@ -108,7 +109,13 @@ test('create：新建账号默认权限全关，可传 ownerId（员工）与 pe
   const r = accounts.create(store, { username: 'cashier', password: '123456', shopName: '收银员', ownerId: 'admin' });
   assert.ok(r.ok, '创建成功');
   const acct = accounts.getById(accounts.load(store), r.account.id);
-  assert.deepStrictEqual(acct.perms, {}, '默认权限全关');
+  // V3.81：价格可见两项由 create() **显式写 false**（而非缺省无 key）——
+  // 「无 key」被 load 迁移视为老账号并补 true，显式 false 才能维持「新账号默认全关」。
+  assert.strictEqual(acct.perms.price_retail_view, false, '默认不显示零售价');
+  assert.strictEqual(acct.perms.price_wholesale_view, false, '默认不显示批发价');
+  accounts.PERMS.forEach((p) => {
+    assert.strictEqual(accounts.can(acct, p.id), false, '默认无任何权限：' + p.id);
+  });
   assert.strictEqual(acct.ownerId, 'admin', '员工共用本店数据');
   assert.strictEqual(accounts.can(acct, 'sale_bill'), false, '默认无任何权限');
 });
@@ -202,7 +209,9 @@ test('strip：公开视图含 perms/ownerId，不含 hash', () => {
   assert.ok('perms' in view, '含 perms');
   assert.ok('ownerId' in view, '含 ownerId');
   assert.ok(!('hash' in view), '不含 hash');
-  assert.deepStrictEqual(view.perms, {}, '公开视图 perms');
+  // V3.81：新建账号的 perms 显式携带价格两项 false（表示「已明确关闭」），不再是空对象
+  assert.deepStrictEqual(view.perms,
+    { price_retail_view: false, price_wholesale_view: false }, '公开视图 perms');
 });
 
 test('admin 账号 strip 后 isAdmin 与全权限保持', () => {

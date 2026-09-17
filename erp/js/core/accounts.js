@@ -30,7 +30,8 @@
     { id: 'retail', name: '零售' },
     { id: 'wholesale', name: '批发' },
     { id: 'archive', name: '档案 · 库存' },
-    { id: 'finance', name: '资金 · 管理' }
+    { id: 'finance', name: '资金 · 管理' },
+    { id: 'price', name: '价格可见' }
   ];
   var PERMS = [
     { id: 'sale_bill',    group: 'retail',    label: '零售开单（前台销售、含扫描）' },
@@ -48,7 +49,9 @@
     { id: 'ledger',       group: 'finance',   label: '记账中心（流水 / 记一笔）' },
     { id: 'report',       group: 'finance',   label: '报表与利润（成本仅老板可见）' },
     { id: 'customer',     group: 'finance',   label: '客户管理' },
-    { id: 'data_manage',  group: 'finance',   label: '数据管理（导入/导出/清空/备份/设置/同步）' }
+    { id: 'data_manage',  group: 'finance',   label: '数据管理（导入/导出/清空/备份/设置/同步）' },
+    { id: 'price_retail_view',    group: 'price', label: '显示零售价（全部商品的总开关）' },
+    { id: 'price_wholesale_view', group: 'price', label: '显示批发价（全部商品的总开关）' }
   ];
   /** 全开权限对象（旧账号迁移默认值） */
   function allPerms() {
@@ -253,7 +256,27 @@
     if (!raw) return [];
     try {
       var list = JSON.parse(raw);
-      return Array.isArray(list) ? list : [];
+      if (!Array.isArray(list)) return [];
+      // V3.81 价格可见总开关迁移（**读表即规范化**，任何读取路径都不会漏）：
+      // V3.81 之前创建的账号 perms 里没有 price_retail_view / price_wholesale_view，
+      // 而当时的行为是「单条默认可见」→ 补 true，保持升级前后一致（不突变）。
+      // 新建账号由 create() 显式写入 false（key 已存在），不会触发本迁移，仍默认全关。
+      // 放在 load 而非只放 ensurePreset：账号表也可能由云端拉取写入，
+      // 若只有启动时才迁移，拉取后的表在规范化前被读到会让员工「突然看不到价格」。
+      // 注意 perms 必须**非空**才补：V3.59 起 `perms={}` 表示「新建账号全关」，
+      // 若对空 perms 也补 true，等于把老板明确全关的账号升级后突然放开价格。
+      var changed = false;
+      list.forEach(function (a) {
+        if (a && a.perms && Object.keys(a.perms).length > 0 &&
+            a.perms.price_retail_view === undefined &&
+            a.perms.price_wholesale_view === undefined) {
+          a.perms.price_retail_view = true;
+          a.perms.price_wholesale_view = true;
+          changed = true;
+        }
+      });
+      if (changed) api.save(store, list);
+      return list;
     } catch (e2) {
       return [];
     }
@@ -320,6 +343,17 @@
         a.perms = allPerms();
         changed = true;
       }
+      // V3.81 价格可见总开关迁移：V3.81 之前创建的账号 perms 里没有这两个 key，
+      // 而当时的行为是「单条默认可见」→ 迁移补 true，保持升级前后一致（不突变）。
+      // 新建账号由 create() 显式写入 false（key 存在），不会触发本迁移，仍默认全关。
+      // perms 非空才补：`perms={}` 是「全关」的既有表示，不能把它补成可见（与 load 同口径）。
+      if (a && a.perms && Object.keys(a.perms).length > 0 &&
+          a.perms.price_retail_view === undefined &&
+          a.perms.price_wholesale_view === undefined) {
+        a.perms.price_retail_view = true;
+        a.perms.price_wholesale_view = true;
+        changed = true;
+      }
       if (a && a.ownerId === undefined) {
         a.ownerId = null; // 独立数据空间
         changed = true;
@@ -370,7 +404,12 @@
     }
     // V3.59：新建账号默认全部权限关闭（perms={}），由管理总控手动逐项开通；
     // 数据空间：ownerId 存在（如 'admin'）= 员工共用老板库；不传 = 独立数据空间（兼容旧行为）。
-    var perms = {};
+    // V3.81：价格可见两项**显式写 false**（而不是缺省无 key）——load 迁移把「无 key」
+    // 视为老账号并补 true（保持历史可见），新建账号带 key 就不会被误补。
+    var perms = {
+      price_retail_view: false,
+      price_wholesale_view: false
+    };
     if (input.perms && typeof input.perms === 'object') {
       PERMS.forEach(function (p) {
         if (input.perms[p.id]) perms[p.id] = true;
