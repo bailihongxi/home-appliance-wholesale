@@ -464,8 +464,13 @@
 
   function desktopMine(ctx, state) {
     var s = ctx.settings || {};
+    // V3.73：员工显示自己的账号名，不显示老板店铺名
+    var cur = ctx && ctx.currentAccount;
+    var headName = (!cur || sync.isDataOwner(cur))
+      ? (s.shopName || '我的电器店')
+      : (cur.shopName || cur.username || '员工账号');
     var h = '<div class="page-head"><h2>我的</h2>' +
-      '<span class="desc">' + esc(s.shopName || '我的电器店') + ' · 进销存记账</span></div>';
+      '<span class="desc">' + esc(headName) + ' · 进销存记账</span></div>';
     h += '<div class="mine-desktop">' + mobileMine(ctx, state, true) + '</div>';
     return h;
   }
@@ -486,38 +491,54 @@
     }
 
     // 2. 店铺信息卡片（头像 + 店名 + 经营范围 + 右箭头）—— V3：显示账号头像，可编辑
-    var scopeText = (ctx.settings.scopeCategories && ctx.settings.scopeCategories.length)
-      ? (ctx.settings.scopeCategories.join(' / ')) : '全部分类';
-    var avatarHtml = s.avatar
-      ? '<img class="avatar-img" src="' + esc(s.avatar) + '" alt="">'
-      : '<div class="avatar">⚡</div>';
-    h += '<div class="shop-info-card" data-act="toggle-shop-edit">' +
-      avatarHtml +
-      '<div class="info">' +
-        '<div class="name">' + esc(s.shopName || '我的电器店') + '</div>' +
-        '<div class="sub">经营：' + esc(scopeText) + '</div>' +
-      '</div>' +
-      '<div class="arrow">›</div>' +
-    '</div>';
+    //    V3.73：员工（非数据归属账号）只读展示自己的账号名，不再显示老板的店铺资料、
+    //    也不提供编辑入口（员工点编辑会把店名/头像写进全店共享快照，V3.55 已堵写回，入口也一并收起）
+    var curAcct = ctx && ctx.currentAccount;
+    var isOwnerView = !curAcct || (sync.isDataOwner ? sync.isDataOwner(curAcct) : true);
+    if (isOwnerView) {
+      var scopeText = (ctx.settings.scopeCategories && ctx.settings.scopeCategories.length)
+        ? (ctx.settings.scopeCategories.join(' / ')) : '全部分类';
+      var avatarHtml = s.avatar
+        ? '<img class="avatar-img" src="' + esc(s.avatar) + '" alt="">'
+        : '<div class="avatar">⚡</div>';
+      h += '<div class="shop-info-card" data-act="toggle-shop-edit">' +
+        avatarHtml +
+        '<div class="info">' +
+          '<div class="name">' + esc(s.shopName || '我的电器店') + '</div>' +
+          '<div class="sub">经营：' + esc(scopeText) + '</div>' +
+        '</div>' +
+        '<div class="arrow">›</div>' +
+      '</div>';
 
-    // V3：店铺资料编辑面板（店名 / 头像上传 / 切换账号）
-    if (state.editShop) {
-      h += '<div class="card mt8 shop-edit-box">' +
-        '<div class="card-title">店铺资料</div>' +
-        '<div class="field"><label>店铺名称</label>' +
-        '<input class="input" data-input="shop-name-edit" data-live="1" value="' + esc(state.shopNameEdit) + '" placeholder="如 我的电器店"></div>' +
-        '<div class="field"><label>店铺头像</label>' +
-        '<div class="row wrap"><input type="file" accept="image/*" data-change="pick-avatar" style="max-width:220px">' +
-        (state.avatarDataUrl ? '<img class="avatar-preview" src="' + esc(state.avatarDataUrl) + '" alt="">' : '') +
-        '</div><div class="small muted">支持 JPG/PNG，建议 500KB 以内</div></div>' +
-        '<div class="row"><button class="btn btn-primary" data-act="save-shop">保存</button>' +
-        '<div class="spacer"></div>' +
-        '<button class="btn" data-act="switch-account">切换账号</button></div>' +
+      // V3：店铺资料编辑面板（店名 / 头像上传 / 切换账号）
+      if (state.editShop) {
+        h += '<div class="card mt8 shop-edit-box">' +
+          '<div class="card-title">店铺资料</div>' +
+          '<div class="field"><label>店铺名称</label>' +
+          '<input class="input" data-input="shop-name-edit" data-live="1" value="' + esc(state.shopNameEdit) + '" placeholder="如 我的电器店"></div>' +
+          '<div class="field"><label>店铺头像</label>' +
+          '<div class="row wrap"><input type="file" accept="image/*" data-change="pick-avatar" style="max-width:220px">' +
+          (state.avatarDataUrl ? '<img class="avatar-preview" src="' + esc(state.avatarDataUrl) + '" alt="">' : '') +
+          '</div><div class="small muted">支持 JPG/PNG，建议 500KB 以内</div></div>' +
+          '<div class="row"><button class="btn btn-primary" data-act="save-shop">保存</button>' +
+          '<div class="spacer"></div>' +
+          '<button class="btn" data-act="switch-account">切换账号</button></div>' +
+        '</div>';
+      }
+    } else {
+      // V3.73：员工视图 —— 只显示自己的账号名（无编辑箭头、无老板经营范围）
+      var staffAvatar = curAcct.avatar
+        ? '<img class="avatar-img" src="' + esc(curAcct.avatar) + '" alt="">'
+        : '<div class="avatar">👤</div>';
+      h += '<div class="shop-info-card">' +
+        staffAvatar +
+        '<div class="info">' +
+          '<div class="name">' + esc(curAcct.shopName || curAcct.username || '员工账号') + '</div>' +
+        '</div>' +
       '</div>';
     }
 
     // 3. 云同步卡片（V3.59：拥有「数据管理」权限、或共用本店数据的员工均可看到——员工用于「从云端恢复」拉取）
-    var curAcct = ctx && ctx.currentAccount;
     if (!accounts || accounts.can(curAcct, 'data_manage') || sharesBossData()) {
       h += renderSyncCard(state, cfg, curAcct);
     }
@@ -539,8 +560,8 @@
     // 4. 常用入口（9 格圆形 3×3 九宫格）—— 关键字串「常用入口」保留；V3.59 按权限过滤
     h += renderQuickGrid(ctx);
 
-    // 5. 关于 + 版本信息（保留「关于」字串以兼容既有测试）
-    h += renderAbout();
+    // 5. 关于 + 版本信息（V3.73：员工视图不显示——按需求员工页只留权限模块与「从云端恢复」）
+    if (isOwnerView) h += renderAbout();
 
     return h;
   }
@@ -561,12 +582,27 @@
     return '数据空间：<b>独立</b>（库 ' + esc(dbName) + '）· 与其他账号数据隔离';
   }
 
-  /** 云同步卡片（按图1布局） */
+  /** 云同步卡片（按图1布局）；V3.73：员工（只读拉取）只显示「从云端恢复」按钮，其余说明/设置/状态全部不显示 */
   function renderSyncCard(state, cfg, curAcct) {
     var busy = !!state.busy;
     var lastPush = cfg.lastPushAt ? (util.fmtDateTime ? util.fmtDateTime(cfg.lastPushAt) : cfg.lastPushAt) : '';
     // V3.65：共用本店数据的员工为「只读拉取」，不能上传到云端（避免冲掉全店共享快照）
     var canUpload = !curAcct || sync.isDataOwner(curAcct);
+
+    if (!canUpload) {
+      var hs = '<div class="card sync-card"><div class="sync-actions">' +
+        '<button class="sync-btn cloud-down" data-act="sync-down"' + (busy ? ' disabled' : '') + '>' +
+          '<span class="ico">⬇</span>' +
+          '<span class="t">' + (busy ? '恢复中…' : '从云端恢复') + '</span>' +
+        '</button>' +
+      '</div>';
+      if (state.msg) {
+        hs += '<div class="notice ' + (state.msgType === 'err' ? 'notice-danger' : 'notice-info') + ' mt8">' +
+          esc(state.msg) + '</div>';
+      }
+      hs += '</div>';
+      return hs;
+    }
 
     var h = '<div class="card sync-card">' +
       '<div class="sync-head">' +
@@ -668,7 +704,7 @@
       '<div class="card about-card">' +
         '<h3 class="card-title">关于</h3>' +
         '<ul class="about-list">' +
-          '<li>版本：V3.72（schema v' + schema.VERSION + '）</li>' +
+          '<li>版本：V3.73（schema v' + schema.VERSION + '）</li>' +
           '<li>数据存储于本机 IndexedDB</li>' +
           '<li>自动备份保障数据安全</li>' +
         '</ul>' +

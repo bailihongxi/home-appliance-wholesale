@@ -111,14 +111,18 @@ test('独立数据空间账号的同步配置路径仍是自己的', () => {
   assert.strictEqual(state.cfg.path, 'data/acct2/erp-snapshot.json');
 });
 
-test('云同步卡片显示当前账号的数据空间归属（员工可见自己共用哪本账）', () => {
+test('V3.73 改版：员工云同步卡片不再显示数据空间说明（用户要求精简，只留「从云端恢复」）', () => {
   asAccount(acct('acct1', 'admin', { username: 'pifa' }));
   const ctx = newCtx();
   ctx.currentAccount = globalThis.ERP.currentAccount;
   const state = mine.init(ctx);
   const html = mine.render(ctx, state);
-  assert.ok(html.includes('共用本店数据'), '卡片标出共用本店数据');
-  assert.ok(html.includes('applianceErp_admin'), '卡片标出归属库名');
+  // V3.62 曾要求卡片标出「共用本店数据 / applianceErp_admin」；V3.73 按用户反馈
+  // 员工页只留权限模块与「从云端恢复」按钮，数据空间等说明全部隐藏（见 mine-staff-v373.test.js S4）。
+  // 员工拉取走数据归属账号的库由代码保证（syncAcctId），无需界面说明。
+  assert.ok(!html.includes('数据空间'), '员工卡片不显示数据空间说明');
+  assert.ok(!html.includes('共用本店数据'), '不显示共用说明文案');
+  assert.ok(html.includes('data-act="sync-down"'), '员工保留「从云端恢复」按钮');
 });
 
 /* ================= 3. 空库不得覆盖全店共享快照 ================= */
@@ -202,12 +206,12 @@ test('员工上传时快照内账户档案用老板的（不用员工店名覆�
 
 /* ================= 5. 版本号同步 ================= */
 
-test('V3.72 版本号：page-mine V3.69 / sw.js v101', () => {
+test('V3.73 版本号：page-mine V3.69 / sw.js v102', () => {
   const fs = require('node:fs');
   const mineSrc = fs.readFileSync(path.join(ROOT, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-  assert.ok(mineSrc.includes('版本：V3.72'), '关于页应显示 V3.72');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v101';"), 'SW 缓存版本应为 v101');
+  assert.ok(mineSrc.includes('版本：V3.73'), '关于页应显示 V3.73');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v102';"), 'SW 缓存版本应为 v102');
 });
 
 /* ---------------- 内存 localStorage 桩 ---------------- */
