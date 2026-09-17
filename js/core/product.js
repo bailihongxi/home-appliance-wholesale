@@ -131,10 +131,23 @@
     return !!(acct && acct.id === (acct.ownerId || acct.id));
   };
 
+  /**
+   * 价格对当前账号是否可见。
+   * V3.66：成本对员工一律不可见；零售/批发按商品单条开关（staffShowRetail/staffShowWholesale）。
+   * V3.81：叠加**权限总开关**——员工权限里没勾「显示零售价 / 显示批发价」→ 全部商品该价格隐藏。
+   * 两层取「与」：总开关管全局，单条开关管单个商品，任一关闭即不可见。
+   * 老板 / 数据归属者不受任何一层影响（全可见）。
+   */
   api.visibleToStaff = function visibleToStaff(p, acct, kind) {
     if (!acct) return true; // 未设账号上下文（测试 / 边缘场景）按老板可见，避免误遮蔽
     if (api.isDataOwner(acct)) return true;
     if (kind === 'cost') return false;
+    // V3.81 总开关：accounts 模块经 ERP 全局取（product.js 不直接依赖它）；
+    // 取不到 accounts（极端环境）时退回单条开关行为，不误遮蔽。
+    var accts = (typeof globalThis !== 'undefined' && globalThis.ERP && globalThis.ERP.accounts) || null;
+    var permKey = kind === 'retail' ? 'price_retail_view'
+      : (kind === 'wholesale' ? 'price_wholesale_view' : null);
+    if (permKey && accts && typeof accts.can === 'function' && !accts.can(acct, permKey)) return false;
     if (kind === 'retail') return !p || p.staffShowRetail !== false;
     if (kind === 'wholesale') return !p || p.staffShowWholesale !== false;
     return true;
