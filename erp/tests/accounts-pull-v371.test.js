@@ -132,10 +132,10 @@ test('9 接线：同步模块不可用时给出提示且不抛错（return true 
   }
 });
 
-test('10 版本号：page-mine V3.71 / sw.js v106（三处同步，防止版本走散）', () => {
+test('10 版本号：page-mine V3.78 / sw.js v107（三处同步，防止版本走散）', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.77'), '关于页应显示 V3.77');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v106';"), 'SW 缓存版本应为 v106');
+  assert.ok(mine.includes('版本：V3.78'), '关于页应显示 V3.78');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v107';"), 'SW 缓存版本应为 v106');
 });
