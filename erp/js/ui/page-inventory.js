@@ -23,14 +23,26 @@
     E.engine || (isNode ? require('../core/engine.js') : null),
     E.product || (isNode ? require('../core/product.js') : null),
     E.repo || (isNode ? require('../store/repo.js') : null),
+    E.accounts || (isNode ? require('../core/accounts.js') : null),
     E
   );
   if (isNode) module.exports = mod;
   root.ERP = root.ERP || {};
   root.ERP.pages = root.ERP.pages || {};
   root.ERP.pages.inventory = mod;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, inv, engine, product, repo, ERP) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, inv, engine, product, repo, accounts, ERP) {
   'use strict';
+
+  /** V3.68：账号存储（浏览器 localStorage；Node 下为 null → 不渲染经手人下拉） */
+  function acctStore() {
+    try { return (typeof localStorage !== 'undefined' && localStorage) || null; } catch (e) { return null; }
+  }
+
+  /** V3.68：经手人候选 —— 仅数据归属账号（老板）可改派；员工返回空数组（不渲染下拉） */
+  function operatorChoices() {
+    if (!accounts || !accounts.operatorChoices) return [];
+    try { return accounts.operatorChoices(acctStore(), ERP.currentAccount || null) || []; } catch (e) { return []; }
+  }
 
   var esc = util.escapeHtml;
 
@@ -91,7 +103,8 @@
         takePage: 1,  // V3.56：盘点独立页码
         expanded: '',
         logsProduct: '',
-        take: { counts: {}, keyword: '' },
+        // V3.68：operatorId = 经手人（空 = 当前登录账号；老板可在下拉里改派给员工）
+        take: { counts: {}, keyword: '', operatorId: '' },
         takenResult: null
       };
     },
@@ -234,6 +247,11 @@
         st.take.counts[id] = isNaN(v) ? '' : v;
       },
 
+      /** V3.68：经手人下拉选择 */
+      'take-operator': function (ctx, st, el) {
+        st.take.operatorId = el.value;
+      },
+
       'save-take': function (ctx, st) {
         var counts = {};
         Object.keys(st.take.counts).forEach(function (k) {
@@ -241,11 +259,14 @@
             counts[k] = parseInt(st.take.counts[k], 10);
           }
         });
+        // V3.68：经手人改派（空 = 当前登录账号；老板下拉可指定员工）
+        ctx.operatorOverride = st.take.operatorId || null;
         var res = engine.saveStocktake(ctx, {
           date: util.today(),
           counts: counts,
           note: ''
         });
+        ctx.operatorOverride = null;
         if (!res.ok) {
           ui.toast(res.error, 'err');
           return false;
@@ -558,6 +579,21 @@
           '</tr>';
       });
       h += '</tbody></table></div>' + ui.pager(pg.page, pg.pages, pg.total) +
+        // V3.68：经手人 —— 决定这张盘点单归到谁名下（员工在新设备拉取时只取自己名下的单）
+        (function () {
+          var ops = operatorChoices();
+          if (ops.length <= 1) return '';
+          var me = ERP.currentAccount || null;
+          var meName = (me && (me.shopName || me.username)) || '本人';
+          return '<div class="field mt8"><label>经手人</label>' +
+            ui.select({
+              name: 'operatorId', value: st.take.operatorId, on: 'take-operator',
+              options: [{ value: '', text: '本人（' + esc(meName) + '）' }].concat(ops.map(function (o) {
+                return { value: o.id, text: o.name };
+              }))
+            }) +
+            '<div class="small muted mt4">默认本人；老板可改派给员工，员工在新设备拉数据时只会拉到自己名下的单</div></div>';
+        })() +
         '<div class="row mt8"><button class="btn btn-primary btn-block" data-act="save-take">保存盘点单</button></div></div>';
     }
 

@@ -16,13 +16,14 @@
     E.product || (isNode ? require('../core/product.js') : null),
     E.repo || (isNode ? require('../store/repo.js') : null),
     E.printDoc || (isNode ? require('./print-doc.js') : null),
+    E.accounts || (isNode ? require('../core/accounts.js') : null),
     E
   );
   if (isNode) module.exports = mod;
   root.ERP = root.ERP || {};
   root.ERP.pages = root.ERP.pages || {};
   root.ERP.pages.purchase = mod;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, engine, debt, product, repo, printDoc, ERP) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (util, ui, schema, engine, debt, product, repo, printDoc, accounts, ERP) {
   'use strict';
 
   var esc = util.escapeHtml;
@@ -30,6 +31,17 @@
   function isBoss(ctx) {
     var a = ERP.currentAccount || (ctx && ctx.currentAccount);
     return !!(a && a.id === (a.ownerId || a.id));
+  }
+
+  /** V3.68：账号存储（浏览器 localStorage；Node 下为 null → 不渲染经手人下拉） */
+  function acctStore() {
+    try { return (typeof localStorage !== 'undefined' && localStorage) || null; } catch (e) { return null; }
+  }
+
+  /** V3.68：经手人候选 —— 仅数据归属账号（老板）可改派；员工返回空数组（不渲染下拉） */
+  function operatorChoices() {
+    if (!accounts || !accounts.operatorChoices) return [];
+    try { return accounts.operatorChoices(acctStore(), ERP.currentAccount || null) || []; } catch (e) { return []; }
   }
 
   function emptyForm() {
@@ -43,7 +55,9 @@
       keyword: '',
       pickPage: 1,
       bulkPrice: '',
-      editNo: null
+      editNo: null,
+      // V3.68：经手人（空 = 当前登录账号；老板可在下拉里改派给员工）
+      operatorId: ''
     };
   }
 
@@ -240,6 +254,8 @@
 
       'save-purchase': function (ctx, state) {
         var form = state.form;
+        // V3.68：经手人改派（空 = 当前登录账号；老板下拉可指定员工）
+        ctx.operatorOverride = form.operatorId || null;
         var res = engine.savePurchase(ctx, {
           date: form.date,
           partnerId: form.partnerId,
@@ -248,6 +264,7 @@
           paid: form.paid,
           note: form.note
         });
+        ctx.operatorOverride = null;
         if (!res.ok) {
           ui.toast(res.error, 'err');
           return false;
@@ -725,6 +742,21 @@
       '<span class="strong" style="color:' + (t - paid > 0 ? '#dc2626' : '#16a34a') + '">' + ui.money(t - paid) + '</span></div>' +
       '<div class="field mt8"><label>备注</label>' +
       '<input class="input" data-input="field" data-name="note" placeholder="选填" value="' + esc(form.note) + '"></div>' +
+      // V3.68：经手人 —— 决定这张单归到谁名下（员工在新设备拉取时只取自己名下的单）
+      (function () {
+        var ops = operatorChoices();
+        if (ops.length <= 1) return '';
+        var me = ERP.currentAccount || null;
+        var meName = (me && (me.shopName || me.username)) || '本人';
+        return '<div class="field mt8"><label>经手人</label>' +
+          ui.select({
+            name: 'operatorId', value: form.operatorId, on: 'field',
+            options: [{ value: '', text: '本人（' + esc(meName) + '）' }].concat(ops.map(function (o) {
+              return { value: o.id, text: o.name };
+            }))
+          }) +
+          '<div class="small muted mt4">默认本人；老板可改派给员工，员工在新设备拉数据时只会拉到自己名下的单</div></div>';
+      })() +
       '</div>';
 
     h += '<div class="row">' +

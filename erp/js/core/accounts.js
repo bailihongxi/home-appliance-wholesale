@@ -188,6 +188,27 @@
     return (acct && acct.ownerId) || (acct && acct.id) || '';
   };
 
+  /** V3.68：是否「数据归属账号」（老板）—— 与 sync.isDataOwner / product.isDataOwner 同语义 */
+  api.isDataOwner = function isDataOwner(acct) {
+    return !!(acct && acct.id === (acct.ownerId || acct.id));
+  };
+
+  /**
+   * V3.68：经手人候选列表（销售 / 进货 / 记账 / 盘点表单的「经手人」下拉用）。
+   * - 数据归属账号（老板）：返回 **老板本人 + 共用本店数据的员工**，可为他人代开单并改派归属；
+   * - 员工（非归属账号）：返回空数组 —— 界面据此**不渲染下拉**，记录固定记在自己名下，
+   *   避免员工把单挂到别人名下、也避免他看到全店人员名单。
+   * 独立数据空间的账号自成一本账，不会被算进别人的候选里。
+   */
+  api.operatorChoices = function operatorChoices(store, cur) {
+    if (!api.isDataOwner(cur)) return [];
+    var owner = api.dataOwnerId(cur);
+    if (!owner) return [];
+    return api.load(store)
+      .filter(function (a) { return api.dataOwnerId(a) === owner; })
+      .map(function (a) { return { id: a.id, name: a.shopName || a.username || a.id }; });
+  };
+
   /** V3.59：是否共用老板本店数据（员工 ownerId 非空）——共用时 settings/店名/头像属于老板，不得用员工信息覆盖 */
   api.sharesBossData = function sharesBossData(acct) {
     return !!(acct && acct.ownerId);

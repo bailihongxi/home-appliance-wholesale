@@ -87,10 +87,10 @@ test('util.isEmptyLedger：空 / 有商品 / 有销售 判定', () => {
   assert.strictEqual(util.isEmptyLedger(withLedger), false, '有账目即非空');
 });
 
-test('V3.67 版本号：page-mine V3.67 / sw.js v96', () => {
+test('V3.68 版本号：page-mine V3.68 / sw.js v97', () => {
   const fs = require('node:fs');
   const mineSrc = fs.readFileSync(path.join(ROOT, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-  assert.ok(mineSrc.includes('版本：V3.67'), '关于页 V3.65');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v96';"), 'SW 缓存版本 v94');
+  assert.ok(mineSrc.includes('版本：V3.68'), '关于页 V3.65');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v97';"), 'SW 缓存版本 v94');
 });
