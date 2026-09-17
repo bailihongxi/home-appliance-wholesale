@@ -732,6 +732,42 @@
   }
 
   /**
+   * V3.80：当前账号是不是「员工（共用老板本店数据、只读拉取）」。
+   *
+   * 员工的本机数据永远是云端的一个**残缺副本**（恢复时按 createdBy 只取自己名下的单，
+   * 且操作日志整表不下发）。这类账号从云端恢复时若继续用「记录级合并」，
+   * 本机残留的旧草稿、改过的商品价格、被老板删掉的单据会一直混在里面，
+   * 员工看到的数据与云端不一致却毫无察觉 —— 所以员工走**全量替换**。
+   * 老板/管理总控是数据归属者，本机可能还有待上传的新单，必须保持合并，绝不能全量覆盖。
+   */
+  function isStaffAcct() {
+    var a = (ERP && ERP.currentAccount) || null;
+    if (!a || !a.id) return false;
+    if (sync && typeof sync.isDataOwner === 'function') return !sync.isDataOwner(a);
+    return !!(a.ownerId && String(a.ownerId) !== String(a.id));
+  }
+
+  /**
+   * V3.80：物理清空本机 IndexedDB 的全部业务表。
+   *
+   * **为什么不能只改内存**：`repo.flush()` 只对脏记录做 `bulkPut`（upsert），
+   * **不会删除**数据库里存在、而当前列表里没有的记录。只在 ctx.data 上替换，
+   * 员工当下看不到旧数据，刷新页面 `loadAll` 一读库，旧数据又全回来了。
+   * （`page-setting.js` 的 clear-data 动作同样踩过这个坑，注释里已写明。）
+   */
+  function clearLocalStores() {
+    var a = app();
+    var db = a && a.db;
+    if (!db || typeof db.clear !== 'function') return Promise.resolve(null);
+    var names = (schema && schema.DATA_STORES) || [];
+    return names.reduce(function (p, name) {
+      return p.then(function () {
+        return Promise.resolve(db.clear(name))['catch'](function () { return null; });
+      });
+    }, Promise.resolve(null));
+  }
+
+  /**
    * V3.79：免 Token 的「公开快照通道」恢复。
    *
    * **断链修复**：`sync.pullSnapshotPublic()`（V3.65 写好，注释明确写着「员工端没有 Token
@@ -744,9 +780,13 @@
    * 口令用登录时 V3.69 自动认领的「取数口令」；按权限过滤（只取本账号名下的单）在 core 层完成。
    */
   function publicDown(ctx, state) {
+    // V3.80：员工 = 全量替换（先清空本机再整体下载）；老板 = 记录级合并（保本机待上传数据）
+    var staffMode = isStaffAcct();
     var run = function () {
       state.busy = true;
-      state.msg = '正在从云端公开快照恢复（免 Token 模式）…';
+      state.msg = staffMode
+        ? '正在清空本机数据并重新下载云端数据…'
+        : '正在从云端公开快照恢复（免 Token 模式）…';
       state.msgType = 'ok';
       return sync.pullSnapshotPublic(
         store(), syncAcctId(), state.cfg.passphrase, undefined,
@@ -756,7 +796,9 @@
           finish(state, publicDownHint(r.error), 'err');
           return;
         }
-        var applied = sync.applySnapshotText(ctx, r.text, { merge: true });
+        // V3.80：员工走 merge:false（全量覆盖 = 云端数据整体替换本机残副本）；
+        // 老板仍走 merge:true，本机待上传的新单不会被覆盖掉。
+        var applied = sync.applySnapshotText(ctx, r.text, { merge: !staffMode });
         if (!applied.ok) {
           finish(state, '恢复失败：' + applied.error, 'err');
           return;
@@ -773,16 +815,30 @@
         }
         state.cfg.lastPullAt = util.nowISO();
         state.cfg = sync.saveConfig(store(), state.cfg, syncAcctId());
-        return flushNow(ctx).then(function () {
-          finish(state, '⬇️ 已从云端恢复（免 Token 模式 · 按权限只取本账号名下的单）：' + applied.summaryText, 'ok');
-        });
+        // V3.80：员工先把本机旧数据从 IndexedDB 里物理清掉，再落库云端数据；
+        // 否则 flush 只做 upsert，旧记录会残留，刷新页面后又复活。
+        return Promise.resolve(staffMode ? clearLocalStores() : null)
+          .then(function () { return flushNow(ctx); })
+          .then(function () {
+            finish(state, staffMode
+              ? '⬇️ 已清空本机数据并从云端重新拉取完成（本机数据与云端完全一致）：' + applied.summaryText
+              : '⬇️ 已从云端恢复（免 Token 模式 · 按权限只取本账号名下的单）：' + applied.summaryText, 'ok');
+          });
       });
     };
     if (ui.confirm) {
-      ui.confirm('从云端恢复（免 Token 模式）',
-        '将读取云端<b>公开快照</b>并用本机「取数口令」解密（<b>不需要 GitHub Token</b>）。<br>' +
-        '恢复会把云端数据合并到本机，本机未同步的改动可能被覆盖。确定继续？')
-        .then(function (yes) { if (yes) run(); });
+      if (staffMode) {
+        ui.confirm('从云端恢复（清空本机后重新拉取）',
+          '将<b>先删除本机全部数据</b>（商品、单据、库存、记账等），再从云端<b>整体下载</b>最新数据。<br>' +
+          '<b>本机未同步到云端的改动会全部丢失</b>，恢复后本机与云端完全一致。<br>' +
+          '（不需要 GitHub Token）确定继续？')
+          .then(function (yes) { if (yes) run(); });
+      } else {
+        ui.confirm('从云端恢复（免 Token 模式）',
+          '将读取云端<b>公开快照</b>并用本机「取数口令」解密（<b>不需要 GitHub Token</b>）。<br>' +
+          '恢复会把云端数据合并到本机，本机未同步的改动可能被覆盖。确定继续？')
+          .then(function (yes) { if (yes) run(); });
+      }
       return false;
     }
     run();
@@ -911,7 +967,7 @@
       '<div class="card about-card">' +
         '<h3 class="card-title">关于</h3>' +
         '<ul class="about-list">' +
-          '<li>版本：V3.79（schema v' + schema.VERSION + '）</li>' +
+          '<li>版本：V3.82（schema v' + schema.VERSION + '）</li>' +
           '<li>数据存储于本机 IndexedDB</li>' +
           '<li>自动备份保障数据安全</li>' +
         '</ul>' +
@@ -936,6 +992,8 @@
   page.onlyMissingToken = onlyMissingToken;
   page.publicDownHint = publicDownHint;
   page.staffSyncHint = staffSyncHint;
+  // V3.80：导出「是否员工账号」判定，供员工/老板两条恢复路径的回归断言使用
+  page.isStaffAcct = isStaffAcct;
 
   return page;
 });
