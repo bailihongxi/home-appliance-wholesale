@@ -111,10 +111,10 @@ test('P6 无账号上下文（历史/单测场景）：按老板处理，不误�
   assert.ok(html.includes('数据管理'), '无账号时保留数据管理');
 });
 
-test('P7 版本号：page-mine V3.78 / sw.js v107（三处同步，防止版本走散）', () => {
+test('P7 版本号：page-mine V3.79 / sw.js v108（三处同步，防止版本走散）', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.78'), '关于页应显示 V3.78');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v107';"), 'SW 缓存版本应为 v106');
+  assert.ok(mine.includes('版本：V3.79'), '关于页应显示 V3.79');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v108';"), 'SW 缓存版本应为 v106');
 });

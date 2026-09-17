@@ -1,5 +1,5 @@
 /**
- * V3.78 切换账号入口（用户反馈：「新设备只能登录一个号码吗？有没有切换的入口」）
+ * V3.79 切换账号入口（用户反馈：「新设备只能登录一个号码吗？有没有切换的入口」）
  *
  * 背景：此前全站唯一的「切换账号」入口藏在「我的 → 店铺资料」二级编辑面板里，
  * 员工账号的「我的」页被 V3.73 精简后连该面板都没有 → 换账号只能清浏览器会话 / 换浏览器。
@@ -168,10 +168,10 @@ test('T8 登录页：切换后不预填任何账号（用户口径：只退出�
   assert.ok(!html.includes('hawsystem') && !html.includes('pifa'), '登录页不展示账号列表 / 上次账号');
 });
 
-test('T9 版本号三处同步：page-mine V3.78 / sw.js v107', () => {
+test('T9 版本号三处同步：page-mine V3.79 / sw.js v108', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.78'), '关于页应显示 V3.78');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v107';"), 'SW 缓存版本应为 v107');
+  assert.ok(mine.includes('版本：V3.79'), '关于页应显示 V3.79');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v108';"), 'SW 缓存版本应为 v107');
 });

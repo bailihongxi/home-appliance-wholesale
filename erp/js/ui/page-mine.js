@@ -294,6 +294,21 @@
         state.cfg = sync.saveConfig(store(), state.cfg, syncAcctId());
         var v = sync.validateConfig(state.cfg);
         if (!v.ok) {
+          // V3.79：只缺 Token（owner/repo/口令都齐）→ 走「免 Token 公开快照通道」。
+          // 场景：员工换新手机 / 老板换新电脑——Token 只在原设备里，而云端快照本就是
+          // GitHub Pages 上的公开静态文件，读它不需要写权限。旧实现直接报「请填写
+          // GitHub Token（仅存本机）」，而员工页没有同步设置入口（V3.73），等于死路。
+          if (onlyMissingToken(v.errors)) {
+            publicDown(ctx, state);
+            return false; // publicDown 内部走确认框 + finish 重渲染
+          }
+          // 员工没有「同步设置」面板 → 把配置错误转成可执行指引，绝不显示 Token 字样
+          if (!canSelfFixSync(ctx)) {
+            state.msg = staffSyncHint(v.errors);
+            state.msgType = 'err';
+            ui.toast(state.msg, 'err');
+            return true;
+          }
           state.syncOpen = true;
           state.msg = v.errors.join('；');
           state.msgType = 'err';
@@ -639,6 +654,119 @@
     '</div>';
   }
 
+  /** V3.79：校验错误里「只差 Token」这一项（owner/repo/branch/path/口令都齐）→ 可走免 Token 公开通道 */
+  function onlyMissingToken(errors) {
+    var e = errors || [];
+    if (!e || !e.length) return false;
+    for (var i = 0; i < e.length; i++) {
+      if (!/Token/.test(String(e[i]))) return false;
+    }
+    return true;
+  }
+
+  /**
+   * V3.79：公开通道失败的提示 —— 必须转成「找谁做什么」的可执行动作。
+   * 员工页按需求（V3.73）没有同步设置入口，只给技术错误码等于死路。
+   */
+  function publicDownHint(err) {
+    var e = String(err == null ? '' : err);
+    if (e === 'NO_PHRASE') {
+      return '本机还没有「取数口令」，无法解密云端数据：请让管理总控在「账户权限管理」里重新保存一次你的密码（会重新发放取数凭证），然后你在本机重新登录一次即可自动获得。';
+    }
+    if (e === 'NO_CFG_PUBLIC') {
+      return '无法推断云端地址：请用 GitHub Pages 在线地址打开本页（本地 file:// 双击打开时无法推断）。';
+    }
+    if (e === 'NO_SNAPSHOT') {
+      return '云端还没有快照：请先让管理总控在「我的 → 云同步」点一次「同步到云端」。';
+    }
+    if (e === 'BAD_PHRASE') {
+      return '取数口令不正确，解不开云端数据：请让管理总控重新保存一次你的密码，以重新发放取数凭证。';
+    }
+    return '从云端恢复失败：' + e;
+  }
+
+  /**
+   * V3.79：员工（只读拉取、页面无同步设置入口）遇到配置不完整时**不能**再显示
+   * 「请填写 GitHub Token（仅存本机）」这类本机无法自解的错误——那是一条死路。
+   * 一律转成「找谁做什么」的指引。
+   */
+  function staffSyncHint(errors) {
+    var list = errors || [];
+    var needPhrase = false;
+    for (var i = 0; i < list.length; i++) {
+      if (/口令/.test(String(list[i]))) needPhrase = true;
+    }
+    if (needPhrase) return publicDownHint('NO_PHRASE');
+    return '本机无法确定云端取数地址或口令：请用 GitHub Pages 在线地址打开本页；' +
+      '若仍不行，请让管理总控在「账户权限管理」里重新保存一次你的密码（会重新发放取数凭证），然后你在本机重新登录一次即可。';
+  }
+
+  /** 当前账号能否自己修好同步配置（数据归属账号有「同步设置」面板；员工没有） */
+  function canSelfFixSync(ctx) {
+    var a = (ctx && ctx.currentAccount) || (ERP && ERP.currentAccount) || null;
+    if (!a) return true; // 无账号上下文（单测/异常场景）按原逻辑走
+    if (sync.isDataOwner) return !!sync.isDataOwner(a);
+    return !a.ownerId;
+  }
+
+  /**
+   * V3.79：免 Token 的「公开快照通道」恢复。
+   *
+   * **断链修复**：`sync.pullSnapshotPublic()`（V3.65 写好，注释明确写着「员工端没有 Token
+   * 也能取数」）**从未被任何代码调用**；而 `sync.syncDown()` 在 validateConfig 里强制要求
+   * Token。于是员工换新手机 / 老板换新电脑后，本机没有 Token → 点「从云端恢复」直接报
+   * 「请填写 GitHub Token（仅存本机）」，而员工的「我的」页按 V3.73 需求没有同步设置入口
+   * —— 用户被卡死在最后一步（V3.69 的「零配置自助取数」因此没有真正闭环）。
+   *
+   * 修复：只缺 Token 时改读 GitHub Pages 上的**公开静态快照**（读公开文件不需要写权限），
+   * 口令用登录时 V3.69 自动认领的「取数口令」；按权限过滤（只取本账号名下的单）在 core 层完成。
+   */
+  function publicDown(ctx, state) {
+    var run = function () {
+      state.busy = true;
+      state.msg = '正在从云端公开快照恢复（免 Token 模式）…';
+      state.msgType = 'ok';
+      return sync.pullSnapshotPublic(
+        store(), syncAcctId(), state.cfg.passphrase, undefined,
+        (ERP && ERP.currentAccount) || null
+      ).then(function (r) {
+        if (!r.ok) {
+          finish(state, publicDownHint(r.error), 'err');
+          return;
+        }
+        var applied = sync.applySnapshotText(ctx, r.text, { merge: true });
+        if (!applied.ok) {
+          finish(state, '恢复失败：' + applied.error, 'err');
+          return;
+        }
+        // 与 Token 通道一致：写回云端账户档案（店铺名/头像/经营范围，不含密码哈希）
+        if (applied.account && accounts && ERP.currentAccount) {
+          accounts.update(store(), ERP.currentAccount.id, {
+            shopName: applied.account.shopName,
+            avatar: applied.account.avatar,
+            scopeCategories: applied.account.scopeCategories
+          });
+          if (applied.account.shopName) ERP.currentAccount.shopName = applied.account.shopName;
+          if (applied.account.avatar) ERP.currentAccount.avatar = applied.account.avatar;
+        }
+        state.cfg.lastPullAt = util.nowISO();
+        state.cfg = sync.saveConfig(store(), state.cfg, syncAcctId());
+        return flushNow(ctx).then(function () {
+          finish(state, '⬇️ 已从云端恢复（免 Token 模式 · 按权限只取本账号名下的单）：' + applied.summaryText, 'ok');
+        });
+      });
+    };
+    if (ui.confirm) {
+      ui.confirm('从云端恢复（免 Token 模式）',
+        '本机没有 GitHub Token，将改为读取云端<b>公开快照</b>并用本机「取数口令」解密。<br>' +
+        '恢复会把云端数据合并到本机，本机未同步的改动可能被覆盖。确定继续？')
+        .then(function (yes) { if (yes) run(); });
+      return false;
+    }
+    run();
+    return true;
+  }
+
   /** 云同步卡片（按图1布局）；V3.73：员工（只读拉取）只显示「从云端恢复」按钮，其余说明/设置/状态全部不显示 */
   function renderSyncCard(state, cfg, curAcct) {
     var busy = !!state.busy;
@@ -761,7 +889,7 @@
       '<div class="card about-card">' +
         '<h3 class="card-title">关于</h3>' +
         '<ul class="about-list">' +
-          '<li>版本：V3.78（schema v' + schema.VERSION + '）</li>' +
+          '<li>版本：V3.79（schema v' + schema.VERSION + '）</li>' +
           '<li>数据存储于本机 IndexedDB</li>' +
           '<li>自动备份保障数据安全</li>' +
         '</ul>' +
@@ -781,6 +909,10 @@
   }
 
   page.renderSync = renderSyncCard;
+  // V3.79：导出两个纯函数便于单测（校验判定 + 失败文案映射）
+  page.onlyMissingToken = onlyMissingToken;
+  page.publicDownHint = publicDownHint;
+  page.staffSyncHint = staffSyncHint;
 
   return page;
 });

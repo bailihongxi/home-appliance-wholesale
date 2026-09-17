@@ -67,10 +67,10 @@ test('首页横幅与提醒条不再自相矛盾（未备份场景）', () => {
   assert.ok(!(bannerSaysBacked && reminderSaysNever), '横幅与提醒条不得一个说已备份一个说从未备份');
 });
 
-test('V3.78 版本号：page-mine V3.78 / sw.js v107', () => {
+test('V3.79 版本号：page-mine V3.79 / sw.js v108', () => {
   const fs = require('node:fs');
   const mineSrc = fs.readFileSync(path.join(ROOT, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-  assert.ok(mineSrc.includes('版本：V3.78'), '关于页应显示 V3.78');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v107';"), 'SW 缓存版本应为 v106');
+  assert.ok(mineSrc.includes('版本：V3.79'), '关于页应显示 V3.79');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v108';"), 'SW 缓存版本应为 v106');
 });
