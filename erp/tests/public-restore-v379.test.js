@@ -139,7 +139,9 @@ test('T3 员工新设备（无 Token、有口令）点「从云端恢复」→ �
 
     assert.strictEqual(ctx.data.products.length, 1, '云端商品已落到本机 ctx');
     assert.strictEqual(ctx.data.products[0].model, 'BCD-216', '恢复的是云端那份数据');
-    assert.ok(/免 Token/.test(state.msg), '提示写明是免 Token 模式');
+    // V3.80：员工恢复口径改为「清空本机 → 整体拉取」，成功提示随之改述（仍是免 Token 的公开通道）
+    assert.ok(/清空本机数据并从云端重新拉取/.test(state.msg), '员工成功提示写明「清空后重新拉取」');
+    assert.ok(!/请填写 GitHub Token/.test(state.msg), '全程不需要 Token');
     assert.ok(/⬇️/.test(state.msg), '成功提示带恢复图标');
   } finally {
     stub.restore();
@@ -277,7 +279,7 @@ test('T7b 员工新设备「完全零配置」（owner/repo/branch/path/token �
 
     assert.strictEqual(ctx.data.products.length, 1, '云端商品已落到本机 ctx');
     assert.strictEqual(ctx.data.products[0].model, 'BCD-216', '恢复的是云端那份数据');
-    assert.ok(/免 Token/.test(state.msg), '提示写明是免 Token 模式');
+    assert.ok(/清空本机数据并从云端重新拉取/.test(state.msg), '员工走「清空本机后整体拉取」');
     assert.ok(!/请填写 GitHub Token/.test(state.msg), '员工绝不看到无从填写的 Token 提示');
   } finally {
     stub.restore();
@@ -305,10 +307,10 @@ test('T7c 老板「零配置 + 有口令」→ 行为不变：仍展开同步设
   }
 });
 
-test('T8 版本号三处同步：page-mine V3.79 / sw.js v108', () => {
+test('T8 版本号三处同步：page-mine V3.82 / sw.js v111', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.79'), '关于页应显示 V3.79');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v108';"), 'SW 缓存版本应为 v108');
+  assert.ok(mine.includes('版本：V3.82'), '关于页应显示 V3.79');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v111';"), 'SW 缓存版本应为 v108');
 });

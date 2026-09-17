@@ -60,7 +60,18 @@ test('P3 员工：打印设置与打开密码保留（本机能力）', () => {
   const html = page.render(ctx, page.init(ctx));
   assert.ok(html.includes('data-act="save-settings"'), '打印参数可保存');
   assert.ok(html.includes('打开密码'), '打开密码保留');
-  assert.ok(html.includes('操作日志'), '操作日志保留（只读）');
+});
+
+/**
+ * V3.80：操作日志对员工关闭。
+ * 旧口径（V3.76）把它当作「只读信息」留给了员工，实际日志逐条记录全店每个人的
+ * 进货、收款、改价、登录动作，属于管理审计数据；core 层也已停止向员工下发 logs。
+ */
+test('P3b 员工：操作日志不可见（V3.80 由「只读展示」改为「整表不下发」）', () => {
+  const ctx = ctxAs(STAFF);
+  const html = page.render(ctx, page.init(ctx));
+  assert.ok(!html.includes('操作日志'), '不显示操作日志标题');
+  assert.ok(!html.includes('data-act="toggle-log"'), '没有展开日志的按钮');
 });
 
 test('P4 员工：动作层兜底——改店铺名 / 价格体系 / 清空 / 导入 全部被拒', async () => {
@@ -111,10 +122,10 @@ test('P6 无账号上下文（历史/单测场景）：按老板处理，不误�
   assert.ok(html.includes('数据管理'), '无账号时保留数据管理');
 });
 
-test('P7 版本号：page-mine V3.79 / sw.js v108（三处同步，防止版本走散）', () => {
+test('P7 版本号：page-mine V3.82 / sw.js v111（三处同步，防止版本走散）', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.79'), '关于页应显示 V3.79');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v108';"), 'SW 缓存版本应为 v106');
+  assert.ok(mine.includes('版本：V3.82'), '关于页应显示 V3.79');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v111';"), 'SW 缓存版本应为 v106');
 });

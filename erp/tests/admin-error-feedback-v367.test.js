@@ -145,10 +145,10 @@ test('V3.67：合法账号仍能正常创建并给出成功提示', () => {
     '账号已写入账号表');
 });
 
-test('V3.79 版本号：page-mine V3.79 / sw.js v108', () => {
+test('V3.79 版本号：page-mine V3.82 / sw.js v111', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.79'), '关于页应显示 V3.79');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v108';"), 'SW 缓存版本应为 v106');
+  assert.ok(mine.includes('版本：V3.82'), '关于页应显示 V3.79');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v111';"), 'SW 缓存版本应为 v106');
 });
