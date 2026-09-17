@@ -225,6 +225,13 @@
       /** 一键同步到云端（加密上传，覆盖历史） */
       'sync-up': function (ctx, state) {
         if (state.busy) return false;
+        // V3.65：只读拉取账号（共用本店数据的员工）禁止上传，避免冲掉全店共享快照
+        if (ctx.currentAccount && !sync.isDataOwner(ctx.currentAccount)) {
+          state.msg = '本账号为只读拉取，不能上传到云端（仅归属账号 / 管理总控可上传）';
+          state.msgType = 'err';
+          ui.toast('本账号不能上传', 'err');
+          return true;
+        }
         state.cfg = sync.saveConfig(store(), state.cfg, syncAcctId());
         var v = sync.validateConfig(state.cfg);
         if (!v.ok) {
@@ -509,10 +516,10 @@
       '</div>';
     }
 
-    // 3. 云同步卡片（V3.59：仅拥有「数据管理」权限的账号可同步，员工账号不可覆盖老板数据）
+    // 3. 云同步卡片（V3.59：拥有「数据管理」权限、或共用本店数据的员工均可看到——员工用于「从云端恢复」拉取）
     var curAcct = ctx && ctx.currentAccount;
-    if (!accounts || accounts.can(curAcct, 'data_manage')) {
-      h += renderSyncCard(state, cfg);
+    if (!accounts || accounts.can(curAcct, 'data_manage') || sharesBossData()) {
+      h += renderSyncCard(state, cfg, curAcct);
     }
 
     // V2.3：管理员专属「权限管理」入口（普通账号不显示）
@@ -555,9 +562,11 @@
   }
 
   /** 云同步卡片（按图1布局） */
-  function renderSyncCard(state, cfg) {
+  function renderSyncCard(state, cfg, curAcct) {
     var busy = !!state.busy;
     var lastPush = cfg.lastPushAt ? (util.fmtDateTime ? util.fmtDateTime(cfg.lastPushAt) : cfg.lastPushAt) : '';
+    // V3.65：共用本店数据的员工为「只读拉取」，不能上传到云端（避免冲掉全店共享快照）
+    var canUpload = !curAcct || sync.isDataOwner(curAcct);
 
     var h = '<div class="card sync-card">' +
       '<div class="sync-head">' +
@@ -565,18 +574,27 @@
         '<button class="sync-setting-btn" data-act="toggle-sync-cfg">同步设置</button>' +
       '</div>' +
       '<div class="sync-actions">' +
-        '<button class="sync-btn cloud-up" data-act="sync-up"' + (busy ? ' disabled' : '') + '>' +
-          '<span class="ico">☁</span>' +
-          '<span class="t">' + (busy ? '同步中…' : '同步到云端') + '</span>' +
-        '</button>' +
+        (canUpload
+          ? '<button class="sync-btn cloud-up" data-act="sync-up"' + (busy ? ' disabled' : '') + '>' +
+              '<span class="ico">☁</span>' +
+              '<span class="t">' + (busy ? '同步中…' : '同步到云端') + '</span>' +
+            '</button>'
+          : '<button class="sync-btn cloud-up" disabled title="只读拉取账号不能上传">' +
+              '<span class="ico">☁</span>' +
+              '<span class="t">同步到云端（只读）</span>' +
+            '</button>') +
         '<button class="sync-btn cloud-down" data-act="sync-down"' + (busy ? ' disabled' : '') + '>' +
           '<span class="ico">⬇</span>' +
           '<span class="t">从云端恢复</span>' +
         '</button>' +
       '</div>' +
-      '<div class="sync-tip">' +
-        '把本机账本加密上传到仓库固定路径，每次覆盖历史；换手机/电脑打开同一网址后点「从云端恢复」，输入同一同步口令即可拿到最新数据。' +
-      '</div>' +
+      (canUpload
+        ? '<div class="sync-tip">' +
+            '把本机账本加密上传到仓库固定路径，每次覆盖历史；换手机/电脑打开同一网址后点「从云端恢复」，输入同一同步口令即可拿到最新数据。' +
+          '</div>'
+        : '<div class="sync-tip">' +
+            '本账号为<b>只读拉取</b>：只能从云端恢复本店数据（且按权限只取自己名下的单），<b>不能上传</b>，以免冲掉全店共享快照。' +
+          '</div>') +
       // V3.62：显式标出本次同步归属的数据空间，避免「员工拉不到本店数据」时无从判断
       '<div class="sync-status">' + dataSpaceTip() + '</div>' +
       '<div class="sync-status">' +
@@ -650,7 +668,7 @@
       '<div class="card about-card">' +
         '<h3 class="card-title">关于</h3>' +
         '<ul class="about-list">' +
-          '<li>版本：V3.64（schema v' + schema.VERSION + '）</li>' +
+          '<li>版本：V3.66（schema v' + schema.VERSION + '）</li>' +
           '<li>数据存储于本机 IndexedDB</li>' +
           '<li>自动备份保障数据安全</li>' +
         '</ul>' +

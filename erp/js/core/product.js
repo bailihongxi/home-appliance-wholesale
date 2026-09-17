@@ -127,6 +127,19 @@
     return { priceWholesale: calc(w), priceRetail: calc(r) };
   };
 
+  api.isDataOwner = function isDataOwner(acct) {
+    return !!(acct && acct.id === (acct.ownerId || acct.id));
+  };
+
+  api.visibleToStaff = function visibleToStaff(p, acct, kind) {
+    if (!acct) return true; // 未设账号上下文（测试 / 边缘场景）按老板可见，避免误遮蔽
+    if (api.isDataOwner(acct)) return true;
+    if (kind === 'cost') return false;
+    if (kind === 'retail') return !p || p.staffShowRetail !== false;
+    if (kind === 'wholesale') return !p || p.staffShowWholesale !== false;
+    return true;
+  };
+
   api.save = function save(ctx, input) {
     input = input || {};
     var brand = util.cleanText(input.brand);
@@ -174,7 +187,10 @@
           typeof input.barcodes === 'string' ? [input.barcodes] : (input.barcodes || [])
         ),
         status: input.status === schema.STATUS.OFF ? schema.STATUS.OFF : schema.STATUS.ON,
-        createdAt: util.nowISO()
+        createdAt: util.nowISO(),
+        // V3.66 字段级可见性（缺省可见，导入/未传时保持默认 true）
+        staffShowRetail: input.staffShowRetail === undefined ? true : !!input.staffShowRetail,
+        staffShowWholesale: input.staffShowWholesale === undefined ? true : !!input.staffShowWholesale
       };
       ctx.data.products = ctx.data.products || [];
       ctx.data.products.push(rec);
@@ -188,6 +204,9 @@
       rec.cost = cost;
       rec.priceWholesale = priceWholesale;
       rec.priceRetail = priceRetail;
+      // V3.66 编辑也持久化员工可见开关（非老板编辑时表单不传，故用 undefined 守卫避免误覆盖）
+      if (input.staffShowRetail !== undefined) rec.staffShowRetail = !!input.staffShowRetail;
+      if (input.staffShowWholesale !== undefined) rec.staffShowWholesale = !!input.staffShowWholesale;
       if (input.note !== undefined) rec.note = util.cleanText(input.note || '');
       if (input.barcodes !== undefined && input.barcodes !== null) {
         rec.barcodes = api.normBarcodes(

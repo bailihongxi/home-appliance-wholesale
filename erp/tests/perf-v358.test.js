@@ -152,8 +152,8 @@ test('V3.58 利润：报表页畅销/滞销只聚合一次（源码不再两次 
   const calls = (src.match(/topProducts\(/g) || []).length;
   assert.strictEqual(calls, 0, '报表页不应再直接调用 topProducts（改为 productAgg + rankProducts）');
   assert.ok(src.includes('profit.productAgg(ctx)'), '改用 productAgg');
-  assert.ok(src.includes("profit.rankProducts(agg, state.topBy, 'desc', 5)"), '畅销');
-  assert.ok(src.includes("profit.rankProducts(agg, state.topBy, 'asc', 5)"), '滞销');
+  assert.ok(src.includes("profit.rankProducts(agg, by, 'desc', 5)"), '畅销');
+  assert.ok(src.includes("profit.rankProducts(agg, by, 'asc', 5)"), '滞销');
 });
 
 /* ============ 3) 懒加载 ============ */
@@ -349,11 +349,11 @@ test('V3.58 局部刷新：app.render 优先 update，其次 patchMain，最后�
   assert.ok(src.includes('if (routeChanged) lastMainHtml = null;'), '跨路由重置基线');
 });
 
-test('V3.64 版本号三处同步：page-mine V3.64 / sw.js v93 / ui-mine 断言', () => {
+test('V3.66 版本号三处同步：page-mine V3.66 / sw.js v95 / ui-mine 断言', () => {
   const mine = fs.readFileSync(path.join(ROOT, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
   const t = fs.readFileSync(path.join(ROOT, 'tests/ui-mine.test.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.64'), '关于页 V3.64');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v93';"), 'SW 缓存版本 v93');
-  assert.ok(t.includes('版本：V3.64'), '测试断言 V3.64');
+  assert.ok(mine.includes('版本：V3.66'), '关于页 V3.65');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v95';"), 'SW 缓存版本 v94');
+  assert.ok(t.includes('版本：V3.66'), '测试断言 V3.65');
 });

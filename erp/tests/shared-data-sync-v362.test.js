@@ -123,7 +123,7 @@ test('云同步卡片显示当前账号的数据空间归属（员工可见自�
 
 /* ================= 3. 空库不得覆盖全店共享快照 ================= */
 
-test('共用本店数据 + 本机空账本：阻止上传，不发起同步', () => {
+test('共用本店数据 + 本机空账本：禁止上传（只读拉取），不发起同步', () => {
   asAccount(acct('acct1', 'admin', { username: 'pifa' }));
   const ctx = newCtx();
   ctx.currentAccount = globalThis.ERP.currentAccount;
@@ -138,8 +138,8 @@ test('共用本店数据 + 本机空账本：阻止上传，不发起同步', ()
   } finally {
     sync.syncUp = realSyncUp;
   }
-  assert.strictEqual(called, false, '空账本不得上传');
-  assert.ok(state.msg.includes('已阻止上传'), '给出明确阻止提示：' + state.msg);
+  assert.strictEqual(called, false, '只读拉取账号不得上传');
+  assert.ok(state.msg.includes('只读拉取') && state.msg.includes('不能上传'), '给出只读拉取提示：' + state.msg);
   assert.strictEqual(state.msgType, 'err');
 });
 
@@ -163,7 +163,7 @@ test('独立数据空间 + 本机空账本：允许上传（不误伤独立账�
   assert.ok(!/已阻止上传/.test(state.msg), '不应出现阻止提示：' + state.msg);
 });
 
-test('共用本店数据 + 本机有数据：上传前二次确认（提示会覆盖全店共享快照）', async () => {
+test('共用本店数据 + 本机有数据：仍禁止上传（只读拉取，不弹二次确认）', () => {
   asAccount(acct('acct1', 'admin', { username: 'pifa' }));
   const ctx = newCtx();
   ctx.currentAccount = globalThis.ERP.currentAccount;
@@ -171,28 +171,16 @@ test('共用本店数据 + 本机有数据：上传前二次确认（提示会�
   const state = mine.init(ctx);
   fullCfg(state);
 
-  const realConfirm = ui.confirm;
   const realSyncUp = sync.syncUp;
-  let confirmTitle = '';
-  let confirmBody = '';
   let called = 0;
-  ui.confirm = function (t, b) {
-    confirmTitle = String(t || '');
-    confirmBody = String(b || '');
-    return Promise.resolve(true);
-  };
   sync.syncUp = function () { called++; return Promise.resolve({ ok: true, skipped: true, reason: 'x', summaryText: '' }); };
   try {
     mine.actions['sync-up'](ctx, state);
-    await sleep(5); // 等确认 Promise + flushNow 链路走完
   } finally {
-    ui.confirm = realConfirm;
     sync.syncUp = realSyncUp;
   }
-  assert.ok(confirmBody.includes('共用全店数据') || confirmBody.includes('覆盖全店共享快照'),
-    '确认文案需说明会覆盖全店共享快照：' + confirmBody);
-  assert.strictEqual(confirmTitle, '同步到云端');
-  assert.strictEqual(called, 1, '确认后执行上传');
+  assert.strictEqual(called, 0, '共用本店数据的员工禁止上传，不应发起 syncUp');
+  assert.ok(state.msg.includes('只读拉取') && state.msg.includes('不能上传'), '给出只读拉取提示：' + state.msg);
 });
 
 /* ================= 4. 快照随行的账户档案取归属账号 ================= */
@@ -214,12 +202,12 @@ test('员工上传时快照内账户档案用老板的（不用员工店名覆�
 
 /* ================= 5. 版本号同步 ================= */
 
-test('V3.64 版本号：page-mine V3.64 / sw.js v93', () => {
+test('V3.66 版本号：page-mine V3.66 / sw.js v95', () => {
   const fs = require('node:fs');
   const mineSrc = fs.readFileSync(path.join(ROOT, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-  assert.ok(mineSrc.includes('版本：V3.64'), '关于页 V3.64');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v93';"), 'SW 缓存版本 v93');
+  assert.ok(mineSrc.includes('版本：V3.66'), '关于页 V3.65');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v95';"), 'SW 缓存版本 v94');
 });
 
 /* ---------------- 内存 localStorage 桩 ---------------- */

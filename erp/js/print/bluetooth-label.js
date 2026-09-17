@@ -357,13 +357,21 @@
     }
     // 价格
     var priceText = '';
-    if (opts.showPrice === 'wholesale' && product.priceWholesale) {
+    // V3.66：非老板打印标签时，按商品开关隐藏零售/批发价（默认 isOwner=true，仅当显式传 false 时按开关遮蔽）
+    var isOwner = opts.isOwner !== false;
+    function priceAllowed(kind) {
+      if (isOwner) return true;
+      if (kind === 'wholesale') return product.staffShowWholesale !== false;
+      if (kind === 'retail') return product.staffShowRetail !== false;
+      return true;
+    }
+    if (opts.showPrice === 'wholesale' && product.priceWholesale && priceAllowed('wholesale')) {
       priceText = '批发: ' + formatPrice(product.priceWholesale);
-    } else if (opts.showPrice === 'retail' && product.priceRetail) {
+    } else if (opts.showPrice === 'retail' && product.priceRetail && priceAllowed('retail')) {
       priceText = '零售: ' + formatPrice(product.priceRetail);
     } else if (opts.showPrice === 'both') {
-      if (product.priceWholesale) priceText += '批:' + formatPrice(product.priceWholesale) + ' ';
-      if (product.priceRetail) priceText += '零:' + formatPrice(product.priceRetail);
+      if (product.priceWholesale && priceAllowed('wholesale')) priceText += '批:' + formatPrice(product.priceWholesale) + ' ';
+      if (product.priceRetail && priceAllowed('retail')) priceText += '零:' + formatPrice(product.priceRetail);
     }
     if (priceText) {
       items.push({ text: priceText, x: 8, y: y, font: 5, size: 0 });

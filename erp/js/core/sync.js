@@ -271,7 +271,7 @@
       .then(function (ct) {
         var env = {
           app: 'appliance-erp',
-          kind: 'sync-snapshot',
+          kind: (opts && opts.kind) || 'sync-snapshot',
           v: sync.ENVELOPE_VERSION,
           alg: 'AES-GCM-256',
           kdf: 'PBKDF2-SHA256',
@@ -298,7 +298,10 @@
     if (!env || typeof env !== 'object' || Array.isArray(env)) {
       return { ok: false, error: '云端文件内容不是对象' };
     }
-    if (env.kind !== 'sync-snapshot') return { ok: false, error: '云端文件不是本软件的同步快照' };
+    // V3.65：除账本快照外，还允许 'secret' 信封（账号表内随行的"取数凭证"，见 sync.wrapPhrase）
+    if (env.kind !== 'sync-snapshot' && env.kind !== 'secret') {
+      return { ok: false, error: '云端文件不是本软件的同步快照' };
+    }
     if (env.v > sync.ENVELOPE_VERSION) {
       return { ok: false, error: '云端快照版本（v' + env.v + '）高于当前程序，请先升级软件' };
     }
@@ -361,6 +364,44 @@
   /** 把云端明文快照落地到本地（复用 backup.restore 的校验 + 迁移；opts.merge 启用记录级合并） */
   sync.applySnapshotText = function applySnapshotText(ctx, text, opts) {
     return backup.restore(ctx, text, opts);
+  };
+
+  /**
+   * V3.65 记录级：判断某账号是否「看全本账」（不过滤）。
+   *  - 管理总控：看全部
+   *  - 独立数据空间（ownerId 为空）：自己就是唯一归属者，看全部
+   *  - 共用本店数据（ownerId 非空且 ≠ 自己 id）：普通员工，只拉自己名下的单
+   */
+  sync.isDataOwner = function isDataOwner(account) {
+    var accts = (typeof globalThis !== 'undefined' && globalThis.ERP && globalThis.ERP.accounts) || null;
+    if (accts && accts.isAdmin && accts.isAdmin(account)) return true;
+    if (!account || !account.id) return false;
+    if (!account.ownerId) return true; // 独立空间
+    return String(account.id) === String(account.ownerId);
+  };
+
+  /**
+   * V3.65 记录级：按经手人过滤云端明文快照。
+   *  - 数据归属者/管理总控：原样返回（看全部）
+   *  - 共用本店数据的员工：仅保留「交易类集合」中 createdBy === 本账号 的记录；
+   *    主数据/审计类（商品/往来/库存流水/操作日志）全员可见，不过滤。
+   * 解析失败时原样返回（不阻塞恢复）。
+   */
+  sync.filterSnapshotForAccount = function filterSnapshotForAccount(text, account) {
+    if (!account || sync.isDataOwner(account)) return text;
+    var s = (typeof globalThis !== 'undefined' && globalThis.ERP && globalThis.ERP.schema) || null;
+    if (!s || !s.OWNED_STORES) return text;
+    var obj;
+    try { obj = JSON.parse(text); } catch (e) { return text; }
+    if (!obj || typeof obj !== 'object') return text;
+    var myId = String(account.id || '');
+    s.OWNED_STORES.forEach(function (store) {
+      if (!Array.isArray(obj[store])) return;
+      obj[store] = obj[store].filter(function (rec) {
+        return rec && String(rec.createdBy || '') === myId;
+      });
+    });
+    return JSON.stringify(obj);
   };
 
   /* ---------------- GitHub Contents API ---------------- */
@@ -675,7 +716,9 @@
                 reason: '本地与云端一致，无需恢复'
               };
             }
-            var r = sync.applySnapshotText(ctx, text, { merge: true });
+            // V3.65 记录级：共用本店数据的员工只把「自己名下的单」合并进本机
+            var applyText = sync.isDataOwner(account) ? text : sync.filterSnapshotForAccount(text, account);
+            var r = sync.applySnapshotText(ctx, applyText, { merge: true });
             if (!r.ok) throw new Error(r.error);
             return {
               ok: true,
@@ -770,7 +813,7 @@
    * 地址来源优先级：① 本机任意同步配置（file:// 本地版可借 owner/repo）→ ② 在线 GitHub Pages URL 推断。
    * @returns {string|null} null = 当前环境无法推断公开地址
    */
-  sync.publicAccountsUrl = function publicAccountsUrl(store) {
+  sync.publicBaseUrl = function publicBaseUrl(store) {
     var owner = '';
     var repo = '';
     if (store && store.getItem) {
@@ -786,7 +829,12 @@
       if (m) { owner = m[1]; repo = m[2]; }
     }
     if (!owner || !repo) return null;
-    return 'https://' + owner + '.github.io/' + repo + '/' + sync.ACCOUNTS_PATH;
+    return 'https://' + owner + '.github.io/' + repo + '/';
+  };
+
+  sync.publicAccountsUrl = function publicAccountsUrl(store) {
+    var base = sync.publicBaseUrl(store);
+    return base ? base + sync.ACCOUNTS_PATH : null;
   };
 
   /**
@@ -851,6 +899,93 @@
         if (c.error === 'NO_CFG') return pub; // 公开通道的真实错误（网络等）
         return c;
       });
+    });
+  };
+
+  /* ---------------- V3.65 员工零配置自助取数 ---------------- */
+
+  /**
+   * 把「老板的同步口令」用「员工登录密码」加密成信封（存进账号表的 syncPhraseEnc 字段）。
+   *
+   * 设计动机：员工账号与老板共用同一本账（同一 IndexedDB），但在**新设备**上本机是空的。
+   * 让员工「自己登录就能把本店数据拉下来、不需要先登老板账号」，员工端就必须能解开
+   * 老板加密上传的快照。直接把口令写进账号表 = 裸奔（账号表是内置密钥，公开可解）。
+   *
+   * 方案：用员工**明文登录密码**作 PBKDF2 口令，加密老板的同步口令。
+   *   - 员工登录时输入了自己的密码 → 本机可即时解开 → 自动拉取；
+   *   - 拿到云端账号表的人只看到 `syncPhraseEnc` + 密码**哈希**，没有明文密码解不开；
+   *   - 老板重置员工密码时重新生成一份即可（"换设备/忘密码 → 找老板重置"闭环）。
+   * 安全性等价于该员工的登录密码强度。
+   *
+   * @returns {Promise<object|null>} 信封对象；参数不全或环境不支持时 null（不抛错）
+   */
+  sync.wrapPhrase = function wrapPhrase(pwd, phrase, at) {
+    var p = String(pwd == null ? '' : pwd);
+    var s = String(phrase == null ? '' : phrase);
+    if (!p || !s) return Promise.resolve(null);
+    try {
+      return sync.encrypt(s, p, at, { kind: 'secret' }).catch(function () { return null; });
+    } catch (e) {
+      return Promise.resolve(null); // 环境不支持 WebCrypto（如 http 非安全上下文）
+    }
+  };
+
+  /**
+   * 用员工的明文登录密码解开 syncPhraseEnc → 老板的同步口令。
+   * 密码错误 / 信封损坏 / 环境不支持 → null（由调用方静默降级，不打扰登录流程）。
+   * @returns {Promise<string|null>}
+   */
+  sync.unwrapPhrase = function unwrapPhrase(pwd, env) {
+    var p = String(pwd == null ? '' : pwd);
+    if (!p || !env) return Promise.resolve(null);
+    try {
+      return sync.decrypt(env, p).then(function (t) { return String(t || '') || null; }, function () { return null; });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  };
+
+  /**
+   * 业务快照的公开静态地址（GitHub Pages 直接 GET，**无需 Token / 无需本机配置**）。
+   * 与 sync.publicAccountsUrl 同源同法，只是路径换成某数据归属账号的快照路径。
+   * @returns {string|null} null = 当前环境无法推断
+   */
+  sync.publicSnapshotUrl = function publicSnapshotUrl(store, ownerId) {
+    var base = sync.publicBaseUrl(store);
+    if (!base) return null;
+    return base + sync.defaultPathFor(ownerId);
+  };
+
+  /**
+   * 零配置公开拉取业务快照并解密：GET 静态文件 → 用同步口令解密 → 返回明文 JSON 字符串。
+   * 员工端没有 Token 也能取数（读公开文件不需要写权限）。
+   * @returns {Promise<{ok:boolean, text?:string, at?:string, error?:string}>}
+   */
+  sync.pullSnapshotPublic = function pullSnapshotPublic(store, ownerId, phrase, fetchImpl, account) {
+    var pw = String(phrase == null ? '' : phrase);
+    if (!pw) return Promise.resolve({ ok: false, error: 'NO_PHRASE' });
+    var url = sync.publicSnapshotUrl(store, ownerId);
+    if (!url) return Promise.resolve({ ok: false, error: 'NO_CFG_PUBLIC' });
+    var f = pickFetch(fetchImpl);
+    return f(url, { method: 'GET', cache: 'no-cache' }).then(function (res) {
+      if (res.status === 404) return { ok: false, error: 'NO_SNAPSHOT' };
+      if (!res.ok) {
+        return res.text().then(function (t) { return { ok: false, error: githubError(res, t) }; });
+      }
+      return res.text().then(function (txt) {
+        var env = null;
+        try { env = JSON.parse(txt); } catch (e) { env = null; }
+        if (!env || typeof env !== 'object') return { ok: false, error: '云端账本格式错误' };
+        return sync.decrypt(env, pw).then(function (text) {
+          // V3.65 记录级：共用本店数据的员工只取自己名下的单
+          var out = sync.filterSnapshotForAccount(text, account);
+          return { ok: true, text: out, at: env.at || '' };
+        }, function () {
+          return { ok: false, error: 'BAD_PHRASE' };
+        });
+      });
+    }).catch(function (err) {
+      return { ok: false, error: err && err.message ? err.message : String(err) };
     });
   };
 

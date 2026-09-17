@@ -817,7 +817,7 @@ test('toggle-all-check 必须返回 false：框架 actHandler 才不会触发 af
 
 test('V3.59：无「报表」权限的员工隐藏成本列；无「建档」权限隐藏操作按钮', () => {
   const ctx = newCtx();
-  ctx.currentAccount = { id: 'cashier', role: 'user', perms: { product_read: true } }; // 只读档案
+  ctx.currentAccount = { id: 'cashier', ownerId: 'admin', role: 'user', perms: { product_read: true } }; // 只读档案员工
   seed(ctx);
   const state = page.init(ctx);
   const html = page.render(ctx, state);
@@ -832,13 +832,14 @@ test('V3.59：无「报表」权限的员工隐藏成本列；无「建档」权
   assert.ok(html.includes('型号'), '只读列表正常渲染');
 });
 
-test('V3.59：有「报表」权限的员工可见成本列；有「建档」权限可见操作按钮', () => {
+test('V3.66：有「报表」权限的员工仍不可见成本列；有「建档」权限可见操作按钮', () => {
   const ctx = newCtx();
-  ctx.currentAccount = { id: 'manager', role: 'user', perms: { product_read: true, product_edit: true, report: true } };
+  ctx.currentAccount = { id: 'manager', ownerId: 'admin', role: 'user', perms: { product_read: true, product_edit: true, report: true } };
   seed(ctx);
   const state = page.init(ctx);
   const html = page.render(ctx, state);
-  assert.ok(html.includes('<th class="num">成本</th>'), '成本列表头显示');
+  assert.ok(!html.includes('<th class="num">成本</th>'), '成本列表头隐藏（V3.66：报表权限不再可见成本）');
+  assert.ok(!html.includes('>¥1000.00<'), '成本单元格隐藏');
   assert.ok(html.includes('data-act="open-new"'), '有新建商品按钮');
   assert.ok(html.includes('data-act="edit-product"'), '有编辑按钮');
   // 无 data_manage：导入/导出全部仍隐藏

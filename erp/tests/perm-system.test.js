@@ -76,11 +76,14 @@ test('canView：页面权限映射', () => {
   assert.strictEqual(accounts.canView(ADMIN, 'report'), true);
 });
 
-test('canViewCost：成本/利润可见性 = 管理总控或报表权限', () => {
+test('canViewCost：成本仅「数据归属账号（老板）」可见（V3.66 收紧）', () => {
   assert.strictEqual(accounts.canViewCost(ADMIN), true, 'admin 可见成本');
-  assert.strictEqual(accounts.canViewCost(USER), false, '默认不可见成本');
-  const boss2 = { id: 'acct5', role: 'user', perms: { report: true } };
-  assert.strictEqual(accounts.canViewCost(boss2), true, '有报表权限可见成本');
+  const staff = { id: 'acct1', ownerId: 'admin', perms: {} };
+  assert.strictEqual(accounts.canViewCost(staff), false, '共用老板库的员工不可见成本');
+  const fin = { id: 'acct5', ownerId: 'admin', perms: { report: true } };
+  assert.strictEqual(accounts.canViewCost(fin), false, '即便有报表权限的员工仍不可见成本');
+  const solo = { id: 'acct9', perms: {} }; // 独立数据空间（自身即归属账号）
+  assert.strictEqual(accounts.canViewCost(solo), true, '独立数据空间（自身即归属）可见成本');
 });
 
 test('dataOwnerId：员工 ownerId 优先，独立账号用自身 id', () => {

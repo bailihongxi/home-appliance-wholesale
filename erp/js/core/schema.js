@@ -65,6 +65,26 @@
       'logs'
     ],
 
+    /**
+     * V3.65 记录级同步：集合归属分类。
+     *  - OWNED（交易类）：按经手人 createdBy 过滤，员工只拉自己名下的单。
+     *  - SHARED（主数据/审计类）：全员可见，不过滤。
+     * 注意：products 是商品目录（共享），员工也需查看，故归 SHARED。
+     */
+    OWNED_STORES: ['sales', 'purchases', 'ledgers', 'stocktakes'],
+    SHARED_STORES: ['products', 'partners', 'stockLogs', 'logs'],
+
+    /** 某集合是否为「按经手人归属」的交易类集合 */
+    isOwnedStore: function isOwnedStore(store) {
+      return S.OWNED_STORES.indexOf(store) >= 0;
+    },
+
+    /** 某集合是否为「全员共享」的主数据/审计类集合 */
+    isSharedStore: function isSharedStore(store) {
+      return S.SHARED_STORES.indexOf(store) >= 0;
+    },
+
+
     /** 商品类型字典（可在设置里自定义；账号经营范围按此过滤） */
     CATEGORIES: ['冰箱', '洗衣机', '空调', '电视', '厨房电器', '生活小家电', '数码影音', '配件耗材', '其他'],
 
