@@ -225,8 +225,11 @@
     var today = todayStr();
     var dateObj = new Date(today + 'T00:00:00');
     var cnDate = dateObj.getFullYear() + '年' + (dateObj.getMonth() + 1) + '月' + dateObj.getDate() + '日';
-    var brandLogo = (ERP.branding ? ERP.branding.logoHref(ctx.settings) : ((ctx.settings.avatar) ? ctx.settings.avatar : 'assets/favicon.png'));
-    var shopName = (ERP.branding ? ERP.branding.shopName(ctx.settings) : (ctx.settings.shopName || '我的电器店'));
+    // V3.75：首页 banner 按「当前展示身份」显示（员工显示自己的账号名与头像，不再顶着老板店名）
+    var ident = (ERP.branding ? ERP.branding.identity(ctx.settings, ctx.currentAccount || ERP.currentAccount)
+      : { name: (ctx.settings.shopName || '我的电器店'), logo: 'assets/favicon.png' });
+    var brandLogo = ident.logo;
+    var shopName = ident.name;
 
     return (
       '<div class="page-banner">' +
@@ -248,8 +251,11 @@
     var today = todayStr();
     var dateObj = new Date(today + 'T00:00:00');
     var cnDate = dateObj.getFullYear() + '年' + (dateObj.getMonth() + 1) + '月' + dateObj.getDate() + '日';
-    var brandLogo = (ERP.branding ? ERP.branding.logoHref(ctx.settings) : ((ctx.settings.avatar) ? ctx.settings.avatar : 'assets/favicon.png'));
-    var shopName = (ERP.branding ? ERP.branding.shopName(ctx.settings) : (ctx.settings.shopName || '我的电器店'));
+    // V3.75：首页 banner 按「当前展示身份」显示（员工显示自己的账号名与头像，不再顶着老板店名）
+    var ident = (ERP.branding ? ERP.branding.identity(ctx.settings, ctx.currentAccount || ERP.currentAccount)
+      : { name: (ctx.settings.shopName || '我的电器店'), logo: 'assets/favicon.png' });
+    var brandLogo = ident.logo;
+    var shopName = ident.name;
 
     return (
       '<div class="page-banner">' +

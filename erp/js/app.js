@@ -58,9 +58,19 @@
     try { store().removeItem ? store().removeItem(CURRENT_KEY) : store().setItem(CURRENT_KEY, ''); } catch (e) { /* ignore */ }
   }
 
+  /** HTML 转义（V3.75：店名/账号名进 innerHTML 前转义，避免引号等字符破坏结构） */
+  function escHtml(s) {
+    return String(s === undefined || s === null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   /** 账号信息并入本账号 settings（店名/经营范围/头像，仅当未设置时） */
   function applyAccountToSettings(account) {
     if (!account || !app.ctx) return;
+    // V3.75：员工共用老板数据，绝不能把自己的店名/头像写进全店共享 settings
+    // （否则老板顶栏和首页 banner 会被员工的档案顶掉）
+    if (ERP.branding && ERP.branding.isStaffAccount && ERP.branding.isStaffAccount(account)) return;
     var s = app.ctx.settings;
     if (!s.shopName || s.shopName === '我的电器店') s.shopName = account.shopName || s.shopName;
     if (!s.scopeCategories || !s.scopeCategories.length) {
@@ -832,15 +842,19 @@
         })
         .join('');
     }
+    // V3.75：顶栏 / 侧栏 / 电脑端顶栏统一按「当前展示身份」显示（员工显示自己的账号名与头像）
+    var ident = (ERP.branding ? ERP.branding.identity(app.ctx.settings, ERP.currentAccount) : null)
+      || { name: (app.ctx.settings.shopName || '我的电器店'), logo: 'assets/favicon.png' };
+    var brandLogo = ident.logo;
+    var brandName = ident.name;
     var brand = document.querySelector('.app-header .brand');
-    var brandLogo = (ERP.branding ? ERP.branding.logoHref(app.ctx.settings) : ((app.ctx.settings.avatar) ? app.ctx.settings.avatar : 'assets/favicon.png'));
-    if (brand) brand.innerHTML = '<img class="brand-logo" src="' + brandLogo + '" alt="">' + (app.ctx.settings.shopName || '我的电器店');
+    if (brand) brand.innerHTML = '<img class="brand-logo" src="' + brandLogo + '" alt="">' + escHtml(brandName);
     var sbrand = document.querySelector('.app-sidebar .brand');
-    if (sbrand) sbrand.innerHTML = '<img class="logo" src="' + brandLogo + '" alt="logo"> <span>' + (app.ctx.settings.shopName || '我的电器店') + '</span>';
+    if (sbrand) sbrand.innerHTML = '<img class="logo" src="' + brandLogo + '" alt="logo"> <span>' + escHtml(brandName) + '</span>';
 
     /* 电脑端顶栏（v2）：店名 + 铃铛红点（有低库存预警时亮） */
     var topShop = document.getElementById('top-shop-name');
-    if (topShop) topShop.textContent = (ERP.branding ? ERP.branding.shopName(app.ctx.settings) : (app.ctx.settings.shopName || '我的电器店'));
+    if (topShop) topShop.textContent = brandName;
     var bellDot = document.getElementById('top-bell-dot');
     if (bellDot) {
       var alertCount = 0;
