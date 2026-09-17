@@ -92,12 +92,12 @@ test('S7 老板视图：一切照旧（同步设置 / 上传 / 数据空间 / �
   assert.ok(html.includes('电器批发管理总控'), '老板显示自己店铺名');
 });
 
-test('S8 版本号：page-mine V3.82 / sw.js v111（三处同步，防止版本走散）', () => {
+test('S8 版本号：page-mine V3.83 / sw.js v112（三处同步，防止版本走散）', () => {
   const root = path.join(__dirname, '..');
   const mine = fs.readFileSync(path.join(root, 'js/ui/page-mine.js'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert.ok(mine.includes('版本：V3.82'), '关于页应显示 V3.79');
-  assert.ok(sw.includes("var CACHE = 'appliance-erp-v111';"), 'SW 缓存版本应为 v106');
+  assert.ok(mine.includes('版本：V3.83'), '关于页应显示 V3.79');
+  assert.ok(sw.includes("var CACHE = 'appliance-erp-v112';"), 'SW 缓存版本应为 v106');
 });
 
 test('S9 V3.74 新版本自动生效：index.html 含 controllerchange 自动刷新守卫（员工无检查更新按钮，靠它换版）', () => {
