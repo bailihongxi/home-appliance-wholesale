@@ -160,14 +160,59 @@
     }
   };
 
+  /** 同步模块（浏览器读 ERP.sync；Node 下可用 opts.sync 注入） */
+  function syncRef() {
+    var g = (typeof globalThis !== 'undefined' ? globalThis : null) || (typeof self !== 'undefined' ? self : null);
+    return (g && g.ERP && g.ERP.sync) || null;
+  }
+
+  /**
+   * V3.69：员工「零配置自助取数」。
+   * 用本次登录输入的**明文密码**解开该账号的取数凭证 syncPhraseEnc → 得到老板的同步口令，
+   * 写入本机云同步配置（按「数据归属账号」存，与老板共用同一份配置）。
+   * 于是员工在新设备只要用自己的账号密码登录，就能直接「从云端恢复」拉本店数据，
+   * 全程不需要老板到场、也不需要把同步口令告诉员工。
+   *
+   * 安全边界：凭证是用员工密码加密的，云端账号表里只有密文 + 密码哈希，
+   * 拿到账号表的人没有明文密码依然解不开。
+   *
+   * 纯逻辑（Node 可测）：任何环节缺失或解密失败都返回 {ok:false}，不抛错、不影响登录本身。
+   * @returns {Promise<{ok:boolean, reason:string}>}
+   */
+  page.claimCredential = function claimCredential(store, account, pwd, opts) {
+    var s = (opts && opts.sync) || syncRef();
+    if (!s || !s.unwrapPhrase) return Promise.resolve({ ok: false, reason: 'no-sync' });
+    if (!account || !pwd) return Promise.resolve({ ok: false, reason: 'no-input' });
+    if (!account.syncPhraseEnc) return Promise.resolve({ ok: false, reason: 'no-credential' });
+    return s.unwrapPhrase(pwd, account.syncPhraseEnc).then(function (phrase) {
+      if (!phrase) return { ok: false, reason: 'unwrap-failed' };
+      if (!s.loadConfig || !s.saveConfig) return { ok: false, reason: 'no-config-api' };
+      var owner = (opts && opts.ownerId) ||
+        (accounts.dataOwnerId ? accounts.dataOwnerId(account) : '') || account.id;
+      var cfg = s.loadConfig(store, owner) || {};
+      if (cfg.passphrase) return { ok: true, reason: 'already-configured' };
+      cfg.passphrase = phrase;
+      s.saveConfig(store, cfg, owner);
+      return { ok: true, reason: 'applied' };
+    }, function () { return { ok: false, reason: 'error' }; });
+  };
+
   /** 登录成功：触发 app 登录流程（异步建库/进入） */
   page._doLoginSuccess = function _doLoginSuccess(ctx, state, account) {
     var g = (typeof globalThis !== 'undefined' ? globalThis : null) || (typeof self !== 'undefined' ? self : null);
-    if (g && g.ERP && g.ERP.app && g.ERP.app.onLogin) {
-      g.ERP.app.onLogin(account);
-    } else if (g && g.ERP) {
-      g.ERP.currentAccount = account;
-    }
+    var finish = function () {
+      if (g && g.ERP && g.ERP.app && g.ERP.app.onLogin) {
+        g.ERP.app.onLogin(account);
+      } else if (g && g.ERP) {
+        g.ERP.currentAccount = account;
+      }
+    };
+    // V3.69：先进入主流程（保持原有同步时序），再后台解凭证写入同步口令
+    finish();
+    try {
+      var p = page.claimCredential(state.store, account, state.pwd);
+      if (p && typeof p.then === 'function') p.then(null, function () {});
+    } catch (e) { /* 取数凭证失败不影响登录 */ }
   };
 
   /** 尽力重渲染（浏览器环境）；Node 测试无 app 时静默跳过 */
