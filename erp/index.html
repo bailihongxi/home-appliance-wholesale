@@ -116,6 +116,9 @@
 <script>
   // Service Worker 策略：本地开发（localhost/127.0.0.1）不启用 SW，并注销历史注册，
   // 避免旧 SW 缓存导致本地看不到最新代码；线上（https 托管）正常注册 SW 支持离线与缓存更新。
+  // V3.74：新版本自动生效 —— 页面是在旧 SW 控制下加载的（controller 存在），一旦新 SW
+  // 激活并接管（controllerchange），自动刷新一次拿到新代码。首次打开（无 controller）不刷新，
+  // 不会形成循环。员工端已无「检查更新」按钮，靠这条保证换版不被旧缓存卡住。
   if ('serviceWorker' in navigator) {
     var host = location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') {
@@ -123,6 +126,14 @@
         rs.forEach(function (r) { r.unregister(); });
       });
     } else if (location.protocol.indexOf('http') === 0) {
+      if (navigator.serviceWorker.controller) {
+        var swRefreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+          if (swRefreshing) return;
+          swRefreshing = true;
+          location.reload();
+        });
+      }
       window.addEventListener('load', function () {
         navigator.serviceWorker.register('sw.js').catch(function () {});
       });
